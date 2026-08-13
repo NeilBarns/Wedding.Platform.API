@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class EventResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'type' => $this->type->value,
+            'name' => $this->name,
+            'slug' => $this->slug,
+            'eventDate' => $this->event_date?->toDateString(),
+            'status' => $this->status->value,
+            'membershipRole' => $this->membershipRole($request),
+            'createdAt' => $this->created_at?->toISOString(),
+            'updatedAt' => $this->updated_at?->toISOString(),
+        ];
+    }
+
+    private function membershipRole(Request $request): ?string
+    {
+        if ($this->relationLoaded('memberships')) {
+            return $this->memberships->first()?->role->value;
+        }
+
+        return $this->pivot?->role;
+    }
+}
