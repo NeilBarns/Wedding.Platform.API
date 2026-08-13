@@ -3,7 +3,9 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\PlatformRole;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -12,7 +14,7 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, HasUlids, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -38,13 +40,19 @@ class User extends Authenticatable
     /**
      * Get the attributes that should be cast.
      *
-     * @return array<string, string>
+     * @return array<string, string|class-string>
      */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'platform_role' => PlatformRole::class,
         ];
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->platform_role === PlatformRole::SuperAdmin;
     }
 }
