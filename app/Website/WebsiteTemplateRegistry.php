@@ -26,6 +26,31 @@ final class WebsiteTemplateRegistry
                 'faq',
                 'rsvp',
             ],
+            designOptions: [
+                'colorThemes' => $this->options([
+                    'terracotta' => 'Terracotta',
+                    'olive' => 'Olive',
+                    'sage' => 'Sage',
+                    'burgundy' => 'Burgundy',
+                    'neutral' => 'Warm Neutral',
+                ]),
+                'fontSets' => $this->options([
+                    'editorial' => 'Editorial',
+                    'romantic' => 'Romantic',
+                    'modern' => 'Modern',
+                ]),
+                'artStyles' => $this->options([
+                    'minimal' => 'Minimal',
+                    'botanical' => 'Botanical',
+                    'woven' => 'Woven',
+                    'clean' => 'Clean',
+                ]),
+            ],
+            defaultDesignSettings: [
+                'colorTheme' => 'terracotta',
+                'fontSet' => 'editorial',
+                'artStyle' => 'minimal',
+            ],
         );
 
         return [$definition->key => $definition];
@@ -78,5 +103,18 @@ final class WebsiteTemplateRegistry
         }
 
         return true;
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     * @return list<array{key: string, displayName: string}>
+     */
+    private function options(array $values): array
+    {
+        return array_map(
+            fn (string $key, string $displayName): array => compact('key', 'displayName'),
+            array_keys($values),
+            array_values($values),
+        );
     }
 }

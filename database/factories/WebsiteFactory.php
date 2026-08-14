@@ -15,6 +15,9 @@ class WebsiteFactory extends Factory
         return [
             'event_id' => Event::factory(),
             'template_key' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
+            'design_settings' => app(WebsiteTemplateRegistry::class)
+                ->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
+                ->defaultDesignSettings,
         ];
     }
 }

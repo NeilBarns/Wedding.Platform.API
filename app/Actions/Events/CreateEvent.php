@@ -37,7 +37,10 @@ class CreateEvent
             ]);
 
             $template = $this->templateRegistry->defaultForEventType($event->type);
-            $website = $event->website()->create(['template_key' => $template?->key]);
+            $website = $event->website()->create([
+                'template_key' => $template?->key,
+                'design_settings' => $template?->defaultDesignSettings,
+            ]);
             $this->initializeWebsiteSections->handle($website);
 
             return $event;

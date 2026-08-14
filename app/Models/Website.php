@@ -16,7 +16,13 @@ class Website extends Model
 
     protected $fillable = [
         'template_key',
+        'design_settings',
     ];
+
+    protected function casts(): array
+    {
+        return ['design_settings' => 'array'];
+    }
 
     public function event(): BelongsTo
     {

@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Actions\Websites\AssignWebsiteTemplate;
 use App\Actions\Websites\ReorderWebsiteSections;
 use App\Actions\Websites\SetWebsiteSectionEnabled;
+use App\Actions\Websites\UpdateWebsiteDesignSettings;
 use App\Actions\Websites\UpdateWebsiteSectionContent;
 use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Http\Requests\ReorderWebsiteSectionsRequest;
+use App\Http\Requests\UpdateWebsiteDesignSettingsRequest;
 use App\Http\Requests\UpdateWebsiteSectionContentRequest;
 use App\Http\Requests\UpdateWebsiteSectionEnabledRequest;
 use App\Http\Requests\UpdateWebsiteTemplateRequest;
@@ -38,6 +40,17 @@ class WebsiteDraftController extends Controller
         } catch (UnknownWebsiteTemplate|IncompatibleWebsiteTemplate $exception) {
             throw ValidationException::withMessages(['templateKey' => $exception->getMessage()]);
         }
+
+        return $this->draft($website);
+    }
+
+    public function updateDesign(
+        UpdateWebsiteDesignSettingsRequest $request,
+        UpdateWebsiteDesignSettings $updateDesign,
+        string $event,
+    ): WebsiteDraftResource {
+        $website = $this->authorizedEvent($event)->website()->firstOrFail();
+        $updateDesign->handle($website, $request->validated('designSettings'));
 
         return $this->draft($website);
     }

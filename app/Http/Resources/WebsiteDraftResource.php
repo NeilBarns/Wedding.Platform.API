@@ -16,9 +16,11 @@ class WebsiteDraftResource extends JsonResource
             'id' => $this->id,
             'eventId' => $this->event_id,
             'templateKey' => $this->template_key,
+            'designSettings' => $this->design_settings,
             'template' => $template === null ? null : [
                 'key' => $template->key,
                 'displayName' => $template->displayName,
+                'designOptions' => $template->designOptions,
             ],
             'sections' => WebsiteSectionResource::collection($this->whenLoaded('sections')),
         ];
