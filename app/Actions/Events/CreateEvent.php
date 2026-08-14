@@ -2,6 +2,7 @@
 
 namespace App\Actions\Events;
 
+use App\Actions\Websites\InitializeWebsiteSections;
 use App\Enums\EventMembershipRole;
 use App\Enums\EventStatus;
 use App\Enums\EventType;
@@ -12,6 +13,8 @@ use Illuminate\Support\Str;
 
 class CreateEvent
 {
+    public function __construct(private readonly InitializeWebsiteSections $initializeWebsiteSections) {}
+
     /**
      * @param  array{name: string, type?: EventType|string, slug?: string, event_date?: mixed, status?: EventStatus|string}  $attributes
      */
@@ -29,7 +32,8 @@ class CreateEvent
                 'role' => EventMembershipRole::Owner,
             ]);
 
-            $event->website()->create();
+            $website = $event->website()->create();
+            $this->initializeWebsiteSections->handle($website);
 
             return $event;
         });

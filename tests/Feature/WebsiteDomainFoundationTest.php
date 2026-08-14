@@ -94,9 +94,9 @@ class WebsiteDomainFoundationTest extends TestCase
     public function test_sections_are_retrieved_by_sort_order_with_id_as_a_deterministic_fallback(): void
     {
         $website = Website::factory()->create();
-        $later = WebsiteSection::factory()->for($website)->create(['sort_order' => 20]);
-        $sameOrderFirst = WebsiteSection::factory()->for($website)->create(['sort_order' => 10]);
-        $sameOrderSecond = WebsiteSection::factory()->for($website)->create(['sort_order' => 10]);
+        $later = WebsiteSection::factory()->for($website)->forType('hero')->create(['sort_order' => 20]);
+        $sameOrderFirst = WebsiteSection::factory()->for($website)->forType('story')->create(['sort_order' => 10]);
+        $sameOrderSecond = WebsiteSection::factory()->for($website)->forType('venue')->create(['sort_order' => 10]);
 
         $expectedSameOrder = collect([$sameOrderFirst->id, $sameOrderSecond->id])->sort()->values()->all();
 
@@ -106,7 +106,7 @@ class WebsiteDomainFoundationTest extends TestCase
         ], $website->sections->pluck('id')->all());
     }
 
-    public function test_create_event_atomically_creates_owner_membership_and_empty_website(): void
+    public function test_create_event_atomically_creates_owner_membership_website_and_default_sections(): void
     {
         $creator = User::factory()->create();
 
@@ -114,7 +114,17 @@ class WebsiteDomainFoundationTest extends TestCase
 
         $this->assertDatabaseCount('websites', 1);
         $this->assertTrue($event->website->event->is($event));
-        $this->assertCount(0, $event->website->sections);
+        $this->assertSame([
+            'hero',
+            'date',
+            'story',
+            'schedule',
+            'venue',
+            'dressCode',
+            'gallery',
+            'faq',
+            'rsvp',
+        ], $event->website->sections->pluck('type')->all());
         $this->assertSame(EventMembershipRole::Owner, $event->memberships()->sole()->role);
     }
 
