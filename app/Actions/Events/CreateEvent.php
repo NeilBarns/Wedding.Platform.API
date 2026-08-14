@@ -29,6 +29,8 @@ class CreateEvent
                 'role' => EventMembershipRole::Owner,
             ]);
 
+            $event->website()->create();
+
             return $event;
         });
     }
