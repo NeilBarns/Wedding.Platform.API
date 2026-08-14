@@ -14,6 +14,10 @@ class Website extends Model
     /** @use HasFactory<WebsiteFactory> */
     use HasFactory, HasUlids;
 
+    protected $fillable = [
+        'template_key',
+    ];
+
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);

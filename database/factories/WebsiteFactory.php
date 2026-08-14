@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Event;
 use App\Models\Website;
+use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /** @extends Factory<Website> */
@@ -13,6 +14,7 @@ class WebsiteFactory extends Factory
     {
         return [
             'event_id' => Event::factory(),
+            'template_key' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
         ];
     }
 }

@@ -13,6 +13,7 @@ use App\Models\WebsiteSection;
 use App\Website\WebsiteSectionRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -98,7 +99,14 @@ class WebsiteSectionInitializationTest extends TestCase
         (require database_path('migrations/2026_08_14_000001_create_website_sections_table.php'))->up();
 
         $event = Event::factory()->create();
-        $website = Website::factory()->for($event)->create();
+        $websiteId = (string) Str::ulid();
+        DB::table('websites')->insert([
+            'id' => $websiteId,
+            'event_id' => $event->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $website = Website::query()->findOrFail($websiteId);
 
         (require database_path('migrations/2026_08_14_000002_initialize_wedding_website_sections.php'))->up();
 
