@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\WebsiteDraftController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -18,4 +19,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);
     Route::get('/events/{event}', [EventController::class, 'show']);
+
+    Route::get('/events/{event}/website', [WebsiteDraftController::class, 'show']);
+    Route::put('/events/{event}/website/template', [WebsiteDraftController::class, 'updateTemplate']);
+    Route::put('/events/{event}/website/sections/order', [WebsiteDraftController::class, 'reorder']);
+    Route::put('/events/{event}/website/sections/{section}/enabled', [WebsiteDraftController::class, 'updateSectionEnabled']);
+    Route::put('/events/{event}/website/sections/{section}', [WebsiteDraftController::class, 'updateSection']);
 });
