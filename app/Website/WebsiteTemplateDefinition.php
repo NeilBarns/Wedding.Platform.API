@@ -11,6 +11,7 @@ final readonly class WebsiteTemplateDefinition
      * @param  list<string>  $supportedSectionTypes
      * @param  array{colorThemes: list<array{key: string, displayName: string}>, fontSets: list<array{key: string, displayName: string}>, artStyles: list<array{key: string, displayName: string}>}  $designOptions
      * @param  array{colorTheme: string, fontSet: string, artStyle: string}  $defaultDesignSettings
+     * @param  array<string, array<string, list<array{key: string, displayName: string}>>>  $sectionAppearanceOptions
      */
     public function __construct(
         public string $key,
@@ -19,6 +20,7 @@ final readonly class WebsiteTemplateDefinition
         public array $supportedSectionTypes,
         public array $designOptions,
         public array $defaultDesignSettings,
+        public array $sectionAppearanceOptions,
     ) {}
 
     public function supportsEventType(EventType $eventType): bool
@@ -29,5 +31,11 @@ final readonly class WebsiteTemplateDefinition
     public function supportsSection(string $sectionType): bool
     {
         return in_array($sectionType, $this->supportedSectionTypes, true);
+    }
+
+    /** @return array<string, list<array{key: string, displayName: string}>>|null */
+    public function appearanceOptionsFor(string $sectionType): ?array
+    {
+        return $this->sectionAppearanceOptions[$sectionType] ?? null;
     }
 }

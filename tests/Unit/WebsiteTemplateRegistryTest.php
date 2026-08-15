@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Enums\EventType;
+use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use PHPUnit\Framework\TestCase;
@@ -45,5 +46,15 @@ class WebsiteTemplateRegistryTest extends TestCase
             $this->assertSame([], array_diff($template->supportedSectionTypes, $sectionKeys));
             $this->assertSame($template->supportedSectionTypes, array_values(array_unique($template->supportedSectionTypes)));
         }
+    }
+
+    public function test_classic_filipiniana_exposes_curated_appearance_capabilities_per_section(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+
+        foreach ($template->supportedSectionTypes as $sectionType) {
+            $this->assertSame(WebsiteSectionAppearance::OPTIONS, $template->appearanceOptionsFor($sectionType));
+        }
+        $this->assertNull($template->appearanceOptionsFor('customLegacySection'));
     }
 }

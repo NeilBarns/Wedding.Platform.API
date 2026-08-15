@@ -22,6 +22,7 @@ class WebsiteSection extends Model
         'sort_order',
         'is_enabled',
         'content',
+        'appearance',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class WebsiteSection extends Model
             'sort_order' => 'integer',
             'is_enabled' => 'boolean',
             'content' => 'array',
+            'appearance' => 'array',
         ];
     }
 

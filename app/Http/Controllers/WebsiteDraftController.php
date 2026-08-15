@@ -6,11 +6,13 @@ use App\Actions\Websites\AssignWebsiteTemplate;
 use App\Actions\Websites\ReorderWebsiteSections;
 use App\Actions\Websites\SetWebsiteSectionEnabled;
 use App\Actions\Websites\UpdateWebsiteDesignSettings;
+use App\Actions\Websites\UpdateWebsiteSectionAppearance;
 use App\Actions\Websites\UpdateWebsiteSectionContent;
 use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Http\Requests\ReorderWebsiteSectionsRequest;
 use App\Http\Requests\UpdateWebsiteDesignSettingsRequest;
+use App\Http\Requests\UpdateWebsiteSectionAppearanceRequest;
 use App\Http\Requests\UpdateWebsiteSectionContentRequest;
 use App\Http\Requests\UpdateWebsiteSectionEnabledRequest;
 use App\Http\Requests\UpdateWebsiteTemplateRequest;
@@ -68,6 +70,19 @@ class WebsiteDraftController extends Controller
         return $this->draft($website);
     }
 
+    public function updateSectionAppearance(
+        UpdateWebsiteSectionAppearanceRequest $request,
+        UpdateWebsiteSectionAppearance $updateAppearance,
+        string $event,
+        string $section,
+    ): WebsiteDraftResource {
+        $website = $this->authorizedEvent($event)->website()->firstOrFail();
+        $sectionModel = $this->section($website, $section);
+        $updateAppearance->handle($sectionModel, $request->validated('appearance'));
+
+        return $this->draft($website);
+    }
+
     public function updateSectionEnabled(
         UpdateWebsiteSectionEnabledRequest $request,
         SetWebsiteSectionEnabled $setEnabled,
@@ -112,6 +127,6 @@ class WebsiteDraftController extends Controller
 
     private function draft(Website $website): WebsiteDraftResource
     {
-        return new WebsiteDraftResource($website->refresh()->load('sections'));
+        return new WebsiteDraftResource($website->refresh()->load('sections.website'));
     }
 }

@@ -25,5 +25,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/events/{event}/website/design', [WebsiteDraftController::class, 'updateDesign']);
     Route::put('/events/{event}/website/sections/order', [WebsiteDraftController::class, 'reorder']);
     Route::put('/events/{event}/website/sections/{section}/enabled', [WebsiteDraftController::class, 'updateSectionEnabled']);
+    Route::put('/events/{event}/website/sections/{section}/appearance', [WebsiteDraftController::class, 'updateSectionAppearance']);
     Route::put('/events/{event}/website/sections/{section}', [WebsiteDraftController::class, 'updateSection']);
 });

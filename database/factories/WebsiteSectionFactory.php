@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteSectionRegistry;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -18,6 +19,7 @@ class WebsiteSectionFactory extends Factory
             'sort_order' => fake()->numberBetween(1, 20),
             'is_enabled' => true,
             'content' => [],
+            'appearance' => WebsiteSectionAppearance::DEFAULT,
         ];
     }
 

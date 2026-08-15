@@ -11,21 +11,14 @@ final class WebsiteTemplateRegistry
     /** @return array<string, WebsiteTemplateDefinition> */
     public function all(): array
     {
+        $sectionTypes = [
+            'hero', 'date', 'story', 'schedule', 'venue', 'dressCode', 'gallery', 'faq', 'rsvp',
+        ];
         $definition = new WebsiteTemplateDefinition(
             key: self::CLASSIC_FILIPINIANA_V1,
             displayName: 'Classic Filipiniana',
             supportedEventTypes: [EventType::Wedding],
-            supportedSectionTypes: [
-                'hero',
-                'date',
-                'story',
-                'schedule',
-                'venue',
-                'dressCode',
-                'gallery',
-                'faq',
-                'rsvp',
-            ],
+            supportedSectionTypes: $sectionTypes,
             designOptions: [
                 'colorThemes' => $this->options([
                     'terracotta' => 'Terracotta',
@@ -51,6 +44,7 @@ final class WebsiteTemplateRegistry
                 'fontSet' => 'editorial',
                 'artStyle' => 'minimal',
             ],
+            sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
         );
 
         return [$definition->key => $definition];

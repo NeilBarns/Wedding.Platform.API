@@ -3,6 +3,7 @@
 namespace App\Actions\Websites;
 
 use App\Models\Website;
+use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteSectionRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,6 +33,7 @@ final class InitializeWebsiteSections
                     'sort_order' => $definition->defaultOrder,
                     'is_enabled' => $definition->defaultEnabled,
                     'content' => json_encode($definition->defaultContent, JSON_THROW_ON_ERROR),
+                    'appearance' => json_encode(WebsiteSectionAppearance::DEFAULT, JSON_THROW_ON_ERROR),
                     'created_at' => $timestamp,
                     'updated_at' => $timestamp,
                 ];

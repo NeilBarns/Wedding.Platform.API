@@ -8,6 +8,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\WebsiteSectionAppearance;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -67,6 +68,7 @@ class WebsiteDomainFoundationTest extends TestCase
                 'heading' => 'Neil & Hazel',
                 'subheading' => 'December 22, 2026',
             ],
+            'appearance' => WebsiteSectionAppearance::DEFAULT,
         ])->refresh();
 
         $this->assertTrue(Str::isUlid($section->id));
@@ -85,10 +87,12 @@ class WebsiteDomainFoundationTest extends TestCase
         $section = Website::factory()->create()->sections()->create([
             'type' => 'story',
             'sort_order' => 1,
+            'appearance' => WebsiteSectionAppearance::DEFAULT,
         ])->refresh();
 
         $this->assertTrue($section->is_enabled);
         $this->assertSame([], $section->content);
+        $this->assertSame(WebsiteSectionAppearance::DEFAULT, $section->appearance);
     }
 
     public function test_sections_are_retrieved_by_sort_order_with_id_as_a_deterministic_fallback(): void
