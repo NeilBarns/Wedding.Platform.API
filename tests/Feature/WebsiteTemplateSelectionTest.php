@@ -30,12 +30,54 @@ class WebsiteTemplateSelectionTest extends TestCase
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/website/templates")
             ->assertOk()
-            ->assertJsonCount(1, 'data')
+            ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.key', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
             ->assertJsonPath('data.0.displayName', 'Classic Filipiniana')
             ->assertJsonPath('data.0.isSelected', true)
             ->assertJsonPath('data.0.styleTags.0', 'Classic')
             ->assertJsonMissingPath('data.0.designOptions');
+
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/website/templates")
+            ->assertJsonPath('data.1.key', WebsiteTemplateRegistry::MODERN_EDITORIAL_V1)
+            ->assertJsonPath('data.1.displayName', 'Modern Editorial')
+            ->assertJsonPath('data.1.styleTags', ['Modern', 'Editorial', 'Minimal'])
+            ->assertJsonPath('data.1.isSelected', false);
+    }
+
+    public function test_switching_between_production_templates_normalizes_design_and_preserves_sections(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $website = $event->website;
+        $website->update(['design_settings' => ['colorTheme' => 'olive', 'fontSet' => 'romantic', 'artStyle' => 'botanical']]);
+        $story = $website->sections()->where('type', 'story')->sole();
+        $story->update([
+            'content' => ['heading' => 'How we met', 'body' => "First line\nSecond line"],
+            'sort_order' => 7,
+            'is_enabled' => false,
+            'appearance' => ['headingAlignment' => 'right', 'bodyAlignment' => 'left', 'backgroundTreatment' => 'accent', 'emphasis' => 'featured'],
+        ]);
+        $before = $website->sections()->get()->map->only(['id', 'type', 'sort_order', 'is_enabled', 'content'])->all();
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
+            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
+        ])->assertOk()
+            ->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::MODERN_EDITORIAL_V1)
+            ->assertJsonPath('data.designSettings.colorTheme', 'ink')
+            ->assertJsonPath('data.designSettings.fontSet', 'editorial')
+            ->assertJsonPath('data.designSettings.artStyle', 'clean');
+
+        $this->assertSame($before, $website->sections()->get()->map->only(['id', 'type', 'sort_order', 'is_enabled', 'content'])->all());
+        $this->assertSame(['headingAlignment' => 'right', 'bodyAlignment' => 'left', 'backgroundTreatment' => 'accent', 'emphasis' => 'featured'], $story->refresh()->appearance);
+
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/website/templates")
+            ->assertJsonPath('data.0.isSelected', false)
+            ->assertJsonPath('data.1.isSelected', true);
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
+            'templateKey' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
+        ])->assertOk()->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+
+        $this->assertSame($before, $website->sections()->get()->map->only(['id', 'type', 'sort_order', 'is_enabled', 'content'])->all());
     }
 
     public function test_template_listing_uses_event_authorization_and_event_scope(): void

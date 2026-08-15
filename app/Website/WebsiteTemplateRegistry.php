@@ -8,6 +8,8 @@ final class WebsiteTemplateRegistry
 {
     public const CLASSIC_FILIPINIANA_V1 = 'classic-filipiniana-v1';
 
+    public const MODERN_EDITORIAL_V1 = 'modern-editorial-v1';
+
     /** @param array<string, WebsiteTemplateDefinition>|null $definitions */
     public function __construct(private readonly ?array $definitions = null) {}
 
@@ -21,7 +23,7 @@ final class WebsiteTemplateRegistry
         $sectionTypes = [
             'hero', 'date', 'story', 'schedule', 'venue', 'dressCode', 'gallery', 'faq', 'rsvp',
         ];
-        $definition = new WebsiteTemplateDefinition(
+        $classic = new WebsiteTemplateDefinition(
             key: self::CLASSIC_FILIPINIANA_V1,
             displayName: 'Classic Filipiniana',
             description: 'A classic, elegant, Filipino-inspired Wedding presentation.',
@@ -57,7 +59,43 @@ final class WebsiteTemplateRegistry
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
         );
 
-        return [$definition->key => $definition];
+        $modern = new WebsiteTemplateDefinition(
+            key: self::MODERN_EDITORIAL_V1,
+            displayName: 'Modern Editorial',
+            description: 'A clean, contemporary Wedding layout with bold editorial typography and generous whitespace.',
+            styleTags: ['Modern', 'Editorial', 'Minimal'],
+            enabled: true,
+            supportedEventTypes: [EventType::Wedding],
+            supportedSectionTypes: $sectionTypes,
+            designOptions: [
+                'colorThemes' => $this->options([
+                    'ink' => 'Ink',
+                    'stone' => 'Stone',
+                    'blush' => 'Blush',
+                    'plum' => 'Plum',
+                    'navy' => 'Navy',
+                ]),
+                'fontSets' => $this->options([
+                    'editorial' => 'Editorial',
+                    'fashion' => 'Fashion',
+                    'minimal' => 'Minimal',
+                ]),
+                'artStyles' => $this->options([
+                    'clean' => 'Clean',
+                    'rule' => 'Rule',
+                    'frame' => 'Frame',
+                    'offset' => 'Offset',
+                ]),
+            ],
+            defaultDesignSettings: [
+                'colorTheme' => 'ink',
+                'fontSet' => 'editorial',
+                'artStyle' => 'clean',
+            ],
+            sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
+        );
+
+        return [$classic->key => $classic, $modern->key => $modern];
     }
 
     public function get(string $key): ?WebsiteTemplateDefinition

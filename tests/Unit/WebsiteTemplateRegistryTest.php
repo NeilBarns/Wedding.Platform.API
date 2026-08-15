@@ -10,18 +10,37 @@ use PHPUnit\Framework\TestCase;
 
 class WebsiteTemplateRegistryTest extends TestCase
 {
-    public function test_registry_exposes_only_classic_filipiniana_v1_for_weddings(): void
+    public function test_registry_exposes_both_production_wedding_templates(): void
     {
         $registry = new WebsiteTemplateRegistry;
         $definitions = $registry->all();
         $template = $registry->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
 
-        $this->assertSame([WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1], array_keys($definitions));
+        $this->assertSame([
+            WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
+            WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
+        ], array_keys($definitions));
         $this->assertSame('Classic Filipiniana', $template->displayName);
         $this->assertSame([EventType::Wedding], $template->supportedEventTypes);
         $this->assertSame(array_keys((new WebsiteSectionRegistry)->all()), $template->supportedSectionTypes);
         $this->assertSame(array_keys($definitions), array_keys($registry->forEventType(EventType::Wedding)));
         $this->assertSame($template->key, $registry->defaultForEventType(EventType::Wedding)->key);
+    }
+
+    public function test_modern_editorial_has_product_metadata_and_complete_wedding_capabilities(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+
+        $this->assertTrue($template->enabled);
+        $this->assertSame('Modern Editorial', $template->displayName);
+        $this->assertSame(['Modern', 'Editorial', 'Minimal'], $template->styleTags);
+        $this->assertSame([EventType::Wedding], $template->supportedEventTypes);
+        $this->assertSame(array_keys((new WebsiteSectionRegistry)->all()), $template->supportedSectionTypes);
+        $this->assertSame(['colorTheme' => 'ink', 'fontSet' => 'editorial', 'artStyle' => 'clean'], $template->defaultDesignSettings);
+
+        foreach ($template->supportedSectionTypes as $sectionType) {
+            $this->assertSame(WebsiteSectionAppearance::OPTIONS, $template->appearanceOptionsFor($sectionType));
+        }
     }
 
     public function test_registry_support_checks_fail_safely_for_unknown_templates_and_sections(): void
