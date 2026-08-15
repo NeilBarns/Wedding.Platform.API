@@ -20,6 +20,8 @@ use App\Http\Resources\WebsiteDraftResource;
 use App\Models\Event;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\WebsiteTemplateRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -28,6 +30,29 @@ class WebsiteDraftController extends Controller
     public function show(string $event): WebsiteDraftResource
     {
         return $this->draft($this->authorizedEvent($event)->website()->firstOrFail());
+    }
+
+    public function templates(WebsiteTemplateRegistry $templates, string $event): JsonResponse
+    {
+        $website = $this->authorizedEvent($event)->website()->firstOrFail();
+        $website->loadMissing('event');
+        $sectionTypes = $website->sections()->where('is_enabled', true)->pluck('type');
+
+        $compatible = array_filter(
+            $templates->forEventType($website->event->type),
+            fn ($template): bool => $templates->isCompatible($template->key, $website->event->type, $sectionTypes),
+        );
+
+        return response()->json(['data' => array_values(array_map(
+            fn ($template): array => [
+                'key' => $template->key,
+                'displayName' => $template->displayName,
+                'description' => $template->description,
+                'styleTags' => $template->styleTags,
+                'isSelected' => $template->key === $website->template_key,
+            ],
+            $compatible,
+        ))]);
     }
 
     public function updateTemplate(

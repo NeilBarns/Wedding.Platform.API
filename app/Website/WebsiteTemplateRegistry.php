@@ -8,15 +8,25 @@ final class WebsiteTemplateRegistry
 {
     public const CLASSIC_FILIPINIANA_V1 = 'classic-filipiniana-v1';
 
+    /** @param array<string, WebsiteTemplateDefinition>|null $definitions */
+    public function __construct(private readonly ?array $definitions = null) {}
+
     /** @return array<string, WebsiteTemplateDefinition> */
     public function all(): array
     {
+        if ($this->definitions !== null) {
+            return $this->definitions;
+        }
+
         $sectionTypes = [
             'hero', 'date', 'story', 'schedule', 'venue', 'dressCode', 'gallery', 'faq', 'rsvp',
         ];
         $definition = new WebsiteTemplateDefinition(
             key: self::CLASSIC_FILIPINIANA_V1,
             displayName: 'Classic Filipiniana',
+            description: 'A classic, elegant, Filipino-inspired Wedding presentation.',
+            styleTags: ['Classic', 'Elegant', 'Filipino-inspired'],
+            enabled: true,
             supportedEventTypes: [EventType::Wedding],
             supportedSectionTypes: $sectionTypes,
             designOptions: [
@@ -60,7 +70,7 @@ final class WebsiteTemplateRegistry
     {
         return array_filter(
             $this->all(),
-            fn (WebsiteTemplateDefinition $definition): bool => $definition->supportsEventType($eventType),
+            fn (WebsiteTemplateDefinition $definition): bool => $definition->enabled && $definition->supportsEventType($eventType),
         );
     }
 

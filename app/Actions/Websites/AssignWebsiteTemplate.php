@@ -6,6 +6,7 @@ use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Models\Website;
 use App\Website\WebsiteTemplateRegistry;
+use Illuminate\Support\Facades\DB;
 
 final class AssignWebsiteTemplate
 {
@@ -15,7 +16,7 @@ final class AssignWebsiteTemplate
     {
         $definition = $this->registry->get($templateKey);
 
-        if ($definition === null) {
+        if ($definition === null || ! $definition->enabled) {
             throw new UnknownWebsiteTemplate($templateKey);
         }
 
@@ -36,8 +37,18 @@ final class AssignWebsiteTemplate
             throw IncompatibleWebsiteTemplate::forSections($templateKey, $unsupportedSections);
         }
 
-        $website->template_key = $definition->key;
-        $website->save();
+        DB::transaction(function () use ($website, $definition): void {
+            $website->template_key = $definition->key;
+            $website->design_settings = $definition->normalizeDesignSettings($website->design_settings ?? []);
+            $website->save();
+
+            $website->sections()->get()->each(function ($section) use ($definition): void {
+                $normalized = $definition->normalizeSectionAppearance($section->type, $section->appearance ?? []);
+                if ($normalized !== $section->appearance) {
+                    $section->update(['appearance' => $normalized]);
+                }
+            });
+        });
 
         return $website;
     }

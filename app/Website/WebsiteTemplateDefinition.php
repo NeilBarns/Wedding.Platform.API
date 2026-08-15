@@ -16,12 +16,55 @@ final readonly class WebsiteTemplateDefinition
     public function __construct(
         public string $key,
         public string $displayName,
+        public string $description,
+        public array $styleTags,
+        public bool $enabled,
         public array $supportedEventTypes,
         public array $supportedSectionTypes,
         public array $designOptions,
         public array $defaultDesignSettings,
         public array $sectionAppearanceOptions,
     ) {}
+
+    /** @param array<string, mixed> $settings */
+    public function normalizeDesignSettings(array $settings): array
+    {
+        $groups = ['colorTheme' => 'colorThemes', 'fontSet' => 'fontSets', 'artStyle' => 'artStyles'];
+        $normalized = [];
+
+        foreach ($groups as $setting => $group) {
+            $allowed = array_column($this->designOptions[$group] ?? [], 'key');
+            $current = $settings[$setting] ?? null;
+            $normalized[$setting] = is_string($current) && in_array($current, $allowed, true)
+                ? $current
+                : $this->defaultDesignSettings[$setting];
+        }
+
+        return $normalized;
+    }
+
+    /** @param array<string, mixed> $appearance */
+    public function normalizeSectionAppearance(string $sectionType, array $appearance): array
+    {
+        $groups = [
+            'headingAlignment' => 'headingAlignments',
+            'bodyAlignment' => 'bodyAlignments',
+            'backgroundTreatment' => 'backgroundTreatments',
+            'emphasis' => 'emphasisOptions',
+        ];
+        $options = $this->appearanceOptionsFor($sectionType) ?? [];
+        $normalized = [];
+
+        foreach ($groups as $setting => $group) {
+            $allowed = array_column($options[$group] ?? [], 'key');
+            $current = $appearance[$setting] ?? null;
+            $normalized[$setting] = is_string($current) && in_array($current, $allowed, true)
+                ? $current
+                : (in_array('inherit', $allowed, true) ? 'inherit' : ($allowed[0] ?? 'inherit'));
+        }
+
+        return $normalized;
+    }
 
     public function supportsEventType(EventType $eventType): bool
     {
