@@ -80,11 +80,12 @@ class WebsiteSectionInitializationTest extends TestCase
         $this->assertSame(app(WebsiteSectionRegistry::class)->get('venue')->defaultContent, $venue->content);
     }
 
-    public function test_create_event_keeps_product_roles_and_builds_the_complete_wedding_foundation(): void
+    public function test_explicit_initialization_keeps_product_roles_and_builds_the_complete_wedding_foundation(): void
     {
         $creator = User::factory()->create();
 
         $event = app(CreateEvent::class)->handle($creator, ['name' => 'A Wedding']);
+        $this->initializeWebsite($event);
 
         $this->assertSame(PlatformRole::User, $creator->platform_role);
         $this->assertSame(EventMembershipRole::Owner, $event->memberships()->sole()->role);

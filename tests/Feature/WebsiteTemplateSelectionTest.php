@@ -167,6 +167,9 @@ class WebsiteTemplateSelectionTest extends TestCase
     {
         $owner = User::factory()->create();
 
-        return [app(CreateEvent::class)->handle($owner, ['name' => fake()->words(3, true)]), $owner];
+        $event = app(CreateEvent::class)->handle($owner, ['name' => fake()->words(3, true)]);
+        $this->initializeWebsite($event);
+
+        return [$event->refresh(), $owner];
     }
 }

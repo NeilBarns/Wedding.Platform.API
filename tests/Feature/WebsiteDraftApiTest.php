@@ -245,7 +245,8 @@ class WebsiteDraftApiTest extends TestCase
     {
         $owner = User::factory()->create();
         $event = app(CreateEvent::class)->handle($owner, ['name' => fake()->words(3, true)]);
+        $this->initializeWebsite($event);
 
-        return [$event, $owner];
+        return [$event->refresh(), $owner];
     }
 }

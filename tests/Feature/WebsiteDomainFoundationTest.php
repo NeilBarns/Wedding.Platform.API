@@ -110,25 +110,15 @@ class WebsiteDomainFoundationTest extends TestCase
         ], $website->sections->pluck('id')->all());
     }
 
-    public function test_create_event_atomically_creates_owner_membership_website_and_default_sections(): void
+    public function test_create_event_creates_owner_membership_without_a_website(): void
     {
         $creator = User::factory()->create();
 
         $event = app(CreateEvent::class)->handle($creator, ['name' => 'Neil & Hazel']);
 
-        $this->assertDatabaseCount('websites', 1);
-        $this->assertTrue($event->website->event->is($event));
-        $this->assertSame([
-            'hero',
-            'date',
-            'story',
-            'schedule',
-            'venue',
-            'dressCode',
-            'gallery',
-            'faq',
-            'rsvp',
-        ], $event->website->sections->pluck('type')->all());
+        $this->assertDatabaseCount('websites', 0);
+        $this->assertDatabaseCount('website_sections', 0);
+        $this->assertNull($event->website);
         $this->assertSame(EventMembershipRole::Owner, $event->memberships()->sole()->role);
     }
 

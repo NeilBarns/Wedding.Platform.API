@@ -21,6 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}', [EventController::class, 'show']);
 
     Route::get('/events/{event}/website', [WebsiteDraftController::class, 'show']);
+    Route::post('/events/{event}/website', [WebsiteDraftController::class, 'store']);
     Route::get('/events/{event}/website/templates', [WebsiteDraftController::class, 'templates']);
     Route::put('/events/{event}/website/template', [WebsiteDraftController::class, 'updateTemplate']);
     Route::put('/events/{event}/website/design', [WebsiteDraftController::class, 'updateDesign']);

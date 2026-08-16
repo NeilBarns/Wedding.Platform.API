@@ -26,11 +26,11 @@ class WebsiteDesignSettingsTest extends TestCase
         $this->withHeaders(['Accept' => 'application/json', 'Origin' => 'http://localhost']);
     }
 
-    public function test_create_event_receives_template_default_design_settings(): void
+    public function test_explicit_website_initialization_receives_template_default_design_settings(): void
     {
         $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
 
-        $this->assertSame($this->defaults(), $event->website->design_settings);
+        $this->assertSame($this->defaults(), $this->initializeWebsite($event)->design_settings);
     }
 
     public function test_database_requires_explicit_design_settings_without_a_default(): void
@@ -132,7 +132,10 @@ class WebsiteDesignSettingsTest extends TestCase
     {
         $owner = User::factory()->create();
 
-        return [app(CreateEvent::class)->handle($owner, ['name' => 'A Wedding']), $owner];
+        $event = app(CreateEvent::class)->handle($owner, ['name' => 'A Wedding']);
+        $this->initializeWebsite($event);
+
+        return [$event->refresh(), $owner];
     }
 
     /** @return array{colorTheme: string, fontSet: string, artStyle: string} */

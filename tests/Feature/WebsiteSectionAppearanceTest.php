@@ -27,6 +27,7 @@ class WebsiteSectionAppearanceTest extends TestCase
     public function test_new_sections_receive_explicit_default_appearance(): void
     {
         $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
+        $this->initializeWebsite($event);
 
         $this->assertCount(9, $event->website->sections);
         $event->website->sections->each(fn ($section) => $this->assertSame(WebsiteSectionAppearance::DEFAULT, $section->appearance));
@@ -145,7 +146,10 @@ class WebsiteSectionAppearanceTest extends TestCase
     {
         $owner = User::factory()->create();
 
-        return [app(CreateEvent::class)->handle($owner, ['name' => 'A Wedding']), $owner];
+        $event = app(CreateEvent::class)->handle($owner, ['name' => 'A Wedding']);
+        $this->initializeWebsite($event);
+
+        return [$event->refresh(), $owner];
     }
 
     /** @return array<int, array<string, mixed>> */

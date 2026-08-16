@@ -77,11 +77,12 @@ class WebsiteTemplateAssignmentTest extends TestCase
         $this->assertDatabaseHas('website_sections', ['id' => $legacy->id, 'is_enabled' => false]);
     }
 
-    public function test_create_event_assigns_default_template_with_sections_and_owner_membership(): void
+    public function test_explicit_initialization_assigns_requested_template_with_sections_and_owner_membership(): void
     {
         $creator = User::factory()->create();
 
         $event = app(CreateEvent::class)->handle($creator, ['name' => 'A Wedding']);
+        $this->initializeWebsite($event);
 
         $this->assertSame(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, $event->website->template_key);
         $this->assertSame(9, $event->website->sections()->count());

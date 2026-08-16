@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Websites\AssignWebsiteTemplate;
+use App\Actions\Websites\InitializeEventWebsite;
 use App\Actions\Websites\ReorderWebsiteSections;
 use App\Actions\Websites\SetWebsiteSectionEnabled;
 use App\Actions\Websites\UpdateWebsiteDesignSettings;
@@ -10,6 +11,8 @@ use App\Actions\Websites\UpdateWebsiteSectionAppearance;
 use App\Actions\Websites\UpdateWebsiteSectionContent;
 use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
+use App\Exceptions\WebsiteAlreadyInitialized;
+use App\Http\Requests\InitializeWebsiteRequest;
 use App\Http\Requests\ReorderWebsiteSectionsRequest;
 use App\Http\Requests\UpdateWebsiteDesignSettingsRequest;
 use App\Http\Requests\UpdateWebsiteSectionAppearanceRequest;
@@ -20,6 +23,7 @@ use App\Http\Resources\WebsiteDraftResource;
 use App\Models\Event;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
@@ -32,15 +36,38 @@ class WebsiteDraftController extends Controller
         return $this->draft($this->authorizedEvent($event)->website()->firstOrFail());
     }
 
-    public function templates(WebsiteTemplateRegistry $templates, string $event): JsonResponse
+    public function store(
+        InitializeWebsiteRequest $request,
+        InitializeEventWebsite $initializeWebsite,
+        string $event,
+    ): WebsiteDraftResource|JsonResponse {
+        $eventModel = $this->authorizedEvent($event);
+
+        try {
+            $website = $initializeWebsite->handle($eventModel, $request->validated('templateKey'));
+        } catch (WebsiteAlreadyInitialized $exception) {
+            return response()->json(['message' => $exception->getMessage()], 409);
+        } catch (UnknownWebsiteTemplate|IncompatibleWebsiteTemplate $exception) {
+            throw ValidationException::withMessages(['templateKey' => $exception->getMessage()]);
+        }
+
+        return $this->draft($website)->response()->setStatusCode(201);
+    }
+
+    public function templates(WebsiteTemplateRegistry $templates, WebsiteSectionRegistry $sections, string $event): JsonResponse
     {
-        $website = $this->authorizedEvent($event)->website()->firstOrFail();
-        $website->loadMissing('event');
-        $sectionTypes = $website->sections()->where('is_enabled', true)->pluck('type');
+        $eventModel = $this->authorizedEvent($event);
+        $website = $eventModel->website()->first();
+        $sectionTypes = $website
+            ? $website->sections()->where('is_enabled', true)->pluck('type')
+            : array_keys(array_filter(
+                $sections->defaultCompositionFor($eventModel->type),
+                fn ($definition): bool => $definition->defaultEnabled,
+            ));
 
         $compatible = array_filter(
-            $templates->forEventType($website->event->type),
-            fn ($template): bool => $templates->isCompatible($template->key, $website->event->type, $sectionTypes),
+            $templates->forEventType($eventModel->type),
+            fn ($template): bool => $templates->isCompatible($template->key, $eventModel->type, $sectionTypes),
         );
 
         return response()->json(['data' => array_values(array_map(
@@ -49,7 +76,7 @@ class WebsiteDraftController extends Controller
                 'displayName' => $template->displayName,
                 'description' => $template->description,
                 'styleTags' => $template->styleTags,
-                'isSelected' => $template->key === $website->template_key,
+                'isSelected' => $website !== null && $template->key === $website->template_key,
             ],
             $compatible,
         ))]);

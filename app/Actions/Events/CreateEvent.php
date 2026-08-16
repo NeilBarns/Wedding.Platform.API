@@ -2,23 +2,16 @@
 
 namespace App\Actions\Events;
 
-use App\Actions\Websites\InitializeWebsiteSections;
 use App\Enums\EventMembershipRole;
 use App\Enums\EventStatus;
 use App\Enums\EventType;
 use App\Models\Event;
 use App\Models\User;
-use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CreateEvent
 {
-    public function __construct(
-        private readonly InitializeWebsiteSections $initializeWebsiteSections,
-        private readonly WebsiteTemplateRegistry $templateRegistry,
-    ) {}
-
     /**
      * @param  array{name: string, type?: EventType|string, slug?: string, event_date?: mixed, status?: EventStatus|string}  $attributes
      */
@@ -35,13 +28,6 @@ class CreateEvent
                 'user_id' => $creator->getKey(),
                 'role' => EventMembershipRole::Owner,
             ]);
-
-            $template = $this->templateRegistry->defaultForEventType($event->type);
-            $website = $event->website()->create([
-                'template_key' => $template?->key,
-                'design_settings' => $template?->defaultDesignSettings,
-            ]);
-            $this->initializeWebsiteSections->handle($website);
 
             return $event;
         });
