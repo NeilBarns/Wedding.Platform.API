@@ -153,6 +153,12 @@ class WebsiteTemplateSelectionTest extends TestCase
             ],
             defaultDesignSettings: ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'woven'],
             sectionAppearanceOptions: array_fill_keys($production->supportedSectionTypes, $appearance),
+            sectionAppearanceDefaults: array_fill_keys($production->supportedSectionTypes, [
+                'headingAlignment' => 'inherit',
+                'bodyAlignment' => 'inherit',
+                'backgroundTreatment' => 'plain',
+                'emphasis' => 'inherit',
+            ]),
         );
     }
 

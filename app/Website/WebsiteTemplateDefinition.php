@@ -12,6 +12,7 @@ final readonly class WebsiteTemplateDefinition
      * @param  array{colorThemes: list<array{key: string, displayName: string}>, fontSets: list<array{key: string, displayName: string}>, artStyles: list<array{key: string, displayName: string}>}  $designOptions
      * @param  array{colorTheme: string, fontSet: string, artStyle: string}  $defaultDesignSettings
      * @param  array<string, array<string, list<array{key: string, displayName: string}>>>  $sectionAppearanceOptions
+     * @param  array<string, array{headingAlignment: string, bodyAlignment: string, backgroundTreatment: string, emphasis: string}>  $sectionAppearanceDefaults
      */
     public function __construct(
         public string $key,
@@ -24,6 +25,7 @@ final readonly class WebsiteTemplateDefinition
         public array $designOptions,
         public array $defaultDesignSettings,
         public array $sectionAppearanceOptions,
+        public array $sectionAppearanceDefaults,
     ) {}
 
     /** @param array<string, mixed> $settings */
@@ -58,9 +60,10 @@ final readonly class WebsiteTemplateDefinition
         foreach ($groups as $setting => $group) {
             $allowed = array_column($options[$group] ?? [], 'key');
             $current = $appearance[$setting] ?? null;
+            $fallback = $this->sectionAppearanceDefaults[$sectionType][$setting] ?? null;
             $normalized[$setting] = is_string($current) && in_array($current, $allowed, true)
                 ? $current
-                : (in_array('inherit', $allowed, true) ? 'inherit' : ($allowed[0] ?? 'inherit'));
+                : $fallback;
         }
 
         return $normalized;
@@ -80,5 +83,11 @@ final readonly class WebsiteTemplateDefinition
     public function appearanceOptionsFor(string $sectionType): ?array
     {
         return $this->sectionAppearanceOptions[$sectionType] ?? null;
+    }
+
+    /** @return array{headingAlignment: string, bodyAlignment: string, backgroundTreatment: string, emphasis: string}|null */
+    public function appearanceDefaultsFor(string $sectionType): ?array
+    {
+        return $this->sectionAppearanceDefaults[$sectionType] ?? null;
     }
 }

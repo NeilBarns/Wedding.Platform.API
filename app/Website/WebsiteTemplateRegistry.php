@@ -3,6 +3,7 @@
 namespace App\Website;
 
 use App\Enums\EventType;
+use LogicException;
 
 final class WebsiteTemplateRegistry
 {
@@ -57,6 +58,7 @@ final class WebsiteTemplateRegistry
                 'artStyle' => 'minimal',
             ],
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
+            sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
         );
 
         $modern = new WebsiteTemplateDefinition(
@@ -93,6 +95,7 @@ final class WebsiteTemplateRegistry
                 'artStyle' => 'clean',
             ],
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
+            sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
         );
 
         return [$classic->key => $classic, $modern->key => $modern];
@@ -147,6 +150,52 @@ final class WebsiteTemplateRegistry
         return true;
     }
 
+    public function assertValid(): void
+    {
+        $canonicalSections = array_keys((new WebsiteSectionRegistry)->all());
+        $seenKeys = [];
+        $designGroups = ['colorTheme' => 'colorThemes', 'fontSet' => 'fontSets', 'artStyle' => 'artStyles'];
+        $appearanceGroups = [
+            'headingAlignment' => 'headingAlignments',
+            'bodyAlignment' => 'bodyAlignments',
+            'backgroundTreatment' => 'backgroundTreatments',
+            'emphasis' => 'emphasisOptions',
+        ];
+
+        foreach ($this->all() as $registeredKey => $definition) {
+            if (trim($definition->key) === '' || $registeredKey !== $definition->key || in_array($definition->key, $seenKeys, true)) {
+                throw new LogicException('Template keys must be non-empty, unique, and match their registry keys.');
+            }
+            $seenKeys[] = $definition->key;
+
+            if (trim($definition->displayName) === '' || $definition->supportedEventTypes === []) {
+                throw new LogicException("Template [{$definition->key}] requires a display name and supported Event type.");
+            }
+            if ($definition->supportedSectionTypes === [] || array_diff($definition->supportedSectionTypes, $canonicalSections) !== [] || count($definition->supportedSectionTypes) !== count(array_unique($definition->supportedSectionTypes))) {
+                throw new LogicException("Template [{$definition->key}] has invalid supported Sections.");
+            }
+
+            foreach ($designGroups as $setting => $group) {
+                $this->assertOptionGroup($definition->key, $group, $definition->designOptions[$group] ?? []);
+                $allowed = array_column($definition->designOptions[$group], 'key');
+                if (! in_array($definition->defaultDesignSettings[$setting] ?? null, $allowed, true)) {
+                    throw new LogicException("Template [{$definition->key}] has an invalid default [{$setting}].");
+                }
+            }
+
+            foreach ($definition->supportedSectionTypes as $sectionType) {
+                $options = $definition->appearanceOptionsFor($sectionType) ?? [];
+                $defaults = $definition->appearanceDefaultsFor($sectionType) ?? [];
+                foreach ($appearanceGroups as $setting => $group) {
+                    $this->assertOptionGroup($definition->key, "{$sectionType}.{$group}", $options[$group] ?? []);
+                    if (! in_array($defaults[$setting] ?? null, array_column($options[$group], 'key'), true)) {
+                        throw new LogicException("Template [{$definition->key}] has an invalid Appearance default [{$sectionType}.{$setting}].");
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * @param  array<string, string>  $values
      * @return list<array{key: string, displayName: string}>
@@ -158,5 +207,19 @@ final class WebsiteTemplateRegistry
             array_keys($values),
             array_values($values),
         );
+    }
+
+    /** @param list<array{key: string, displayName: string}> $options */
+    private function assertOptionGroup(string $templateKey, string $group, array $options): void
+    {
+        $keys = array_column($options, 'key');
+        if ($options === [] || count($keys) !== count(array_unique($keys))) {
+            throw new LogicException("Template [{$templateKey}] has an empty or duplicate option group [{$group}].");
+        }
+        foreach ($options as $option) {
+            if (trim($option['key'] ?? '') === '' || trim($option['displayName'] ?? '') === '') {
+                throw new LogicException("Template [{$templateKey}] has invalid option metadata in [{$group}].");
+            }
+        }
     }
 }

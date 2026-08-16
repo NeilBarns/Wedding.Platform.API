@@ -5,7 +5,9 @@ namespace Tests\Unit;
 use App\Enums\EventType;
 use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteSectionRegistry;
+use App\Website\WebsiteTemplateDefinition;
 use App\Website\WebsiteTemplateRegistry;
+use LogicException;
 use PHPUnit\Framework\TestCase;
 
 class WebsiteTemplateRegistryTest extends TestCase
@@ -25,6 +27,74 @@ class WebsiteTemplateRegistryTest extends TestCase
         $this->assertSame(array_keys((new WebsiteSectionRegistry)->all()), $template->supportedSectionTypes);
         $this->assertSame(array_keys($definitions), array_keys($registry->forEventType(EventType::Wedding)));
         $this->assertSame($template->key, $registry->defaultForEventType(EventType::Wedding)->key);
+        $registry->assertValid();
+    }
+
+    public function test_appearance_normalization_uses_explicit_defaults_when_inherit_is_unavailable(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $options = $template->sectionAppearanceOptions;
+        $defaults = $template->sectionAppearanceDefaults;
+        $options['hero']['backgroundTreatments'] = [
+            ['key' => 'soft', 'displayName' => 'Soft'],
+            ['key' => 'plain', 'displayName' => 'Plain'],
+        ];
+        $defaults['hero']['backgroundTreatment'] = 'plain';
+        $fixture = new WebsiteTemplateDefinition(
+            key: 'explicit-fallback-test',
+            displayName: 'Explicit fallback test',
+            description: 'Test only.',
+            styleTags: ['Test'],
+            enabled: true,
+            supportedEventTypes: $template->supportedEventTypes,
+            supportedSectionTypes: $template->supportedSectionTypes,
+            designOptions: $template->designOptions,
+            defaultDesignSettings: $template->defaultDesignSettings,
+            sectionAppearanceOptions: $options,
+            sectionAppearanceDefaults: $defaults,
+        );
+
+        $normalized = $fixture->normalizeSectionAppearance('hero', [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'backgroundTreatment' => 'accent',
+        ]);
+
+        $this->assertSame('plain', $normalized['backgroundTreatment']);
+    }
+
+    public function test_design_normalization_is_target_driven_for_shared_missing_and_invalid_values(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+
+        $this->assertSame([
+            'colorTheme' => 'ink',
+            'fontSet' => 'editorial',
+            'artStyle' => 'clean',
+        ], $template->normalizeDesignSettings([
+            'colorTheme' => '',
+            'fontSet' => 'editorial',
+        ]));
+    }
+
+    public function test_registry_validation_rejects_a_default_outside_its_option_group(): void
+    {
+        $valid = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $invalid = new WebsiteTemplateDefinition(
+            key: 'invalid-test-template',
+            displayName: 'Invalid test Template',
+            description: 'Test only.',
+            styleTags: ['Test'],
+            enabled: true,
+            supportedEventTypes: $valid->supportedEventTypes,
+            supportedSectionTypes: $valid->supportedSectionTypes,
+            designOptions: $valid->designOptions,
+            defaultDesignSettings: [...$valid->defaultDesignSettings, 'colorTheme' => 'missing'],
+            sectionAppearanceOptions: $valid->sectionAppearanceOptions,
+            sectionAppearanceDefaults: $valid->sectionAppearanceDefaults,
+        );
+
+        $this->expectException(LogicException::class);
+        (new WebsiteTemplateRegistry([$invalid->key => $invalid]))->assertValid();
     }
 
     public function test_modern_editorial_has_product_metadata_and_complete_wedding_capabilities(): void

@@ -43,6 +43,9 @@ final class AssignWebsiteTemplate
             $website->save();
 
             $website->sections()->get()->each(function ($section) use ($definition): void {
+                if (! $definition->supportsSection($section->type)) {
+                    return;
+                }
                 $normalized = $definition->normalizeSectionAppearance($section->type, $section->appearance ?? []);
                 if ($normalized !== $section->appearance) {
                     $section->update(['appearance' => $normalized]);
