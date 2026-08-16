@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\TimeZoneController;
 use App\Http\Controllers\WebsiteDraftController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);
     Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::put('/events/{event}/timing', [EventController::class, 'updateTiming']);
+    Route::get('/time-zones', [TimeZoneController::class, 'index']);
 
     Route::get('/events/{event}/website', [WebsiteDraftController::class, 'show']);
     Route::post('/events/{event}/website', [WebsiteDraftController::class, 'store']);

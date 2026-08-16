@@ -12,4 +12,9 @@ class EventPolicy
         return $user->isSuperAdmin()
             || $event->memberships()->where('user_id', $user->id)->exists();
     }
+
+    public function update(User $user, Event $event): bool
+    {
+        return $this->view($user, $event);
+    }
 }

@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Enums\EventStatus;
 use App\Enums\EventType;
+use Carbon\CarbonImmutable;
 use Database\Factories\EventFactory;
+use DateTimeZone;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +24,8 @@ class Event extends Model
         'name',
         'slug',
         'event_date',
+        'start_time',
+        'time_zone',
         'status',
     ];
 
@@ -32,6 +36,21 @@ class Event extends Model
             'event_date' => 'date',
             'status' => EventStatus::class,
         ];
+    }
+
+    public function startsAtUtc(): ?CarbonImmutable
+    {
+        if ($this->event_date === null || $this->start_time === null || $this->time_zone === null) {
+            return null;
+        }
+
+        $local = CarbonImmutable::createFromFormat(
+            '!Y-m-d H:i',
+            $this->event_date->toDateString().' '.substr($this->start_time, 0, 5),
+            new DateTimeZone($this->time_zone),
+        );
+
+        return $local === false ? null : $local->utc();
     }
 
     public function memberships(): HasMany

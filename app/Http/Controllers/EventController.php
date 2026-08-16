@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Events\CreateEvent;
+use App\Actions\Events\UpdateEventTiming;
 use App\Http\Requests\StoreEventRequest;
+use App\Http\Requests\UpdateEventTimingRequest;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
 use Illuminate\Http\Request;
@@ -36,6 +38,19 @@ class EventController extends Controller
 
         Gate::authorize('view', $model);
 
+        $model->load(['memberships' => fn ($query) => $query->where('user_id', $request->user()->id)]);
+
+        return new EventResource($model);
+    }
+
+    public function updateTiming(
+        UpdateEventTimingRequest $request,
+        UpdateEventTiming $updateTiming,
+        string $event,
+    ): EventResource {
+        $model = Event::query()->findOrFail($event);
+        Gate::authorize('update', $model);
+        $updateTiming->handle($model, $request->timingAttributes());
         $model->load(['memberships' => fn ($query) => $query->where('user_id', $request->user()->id)]);
 
         return new EventResource($model);
