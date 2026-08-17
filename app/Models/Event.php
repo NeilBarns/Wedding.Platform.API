@@ -69,4 +69,9 @@ class Event extends Model
     {
         return $this->hasOne(Website::class);
     }
+
+    public function mediaAssets(): HasMany
+    {
+        return $this->hasMany(MediaAsset::class);
+    }
 }
