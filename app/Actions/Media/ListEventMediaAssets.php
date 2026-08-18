@@ -8,6 +8,8 @@ use Illuminate\Support\Carbon;
 
 final class ListEventMediaAssets
 {
+    public function __construct(private readonly MediaAssetUsageChecker $usage) {}
+
     public function handle(Event $event, array $filters): LengthAwarePaginator
     {
         $query = $event->mediaAssets()->with('variants');
@@ -36,7 +38,10 @@ final class ListEventMediaAssets
             $query->where('created_at', '>=', $this->uploadedCutoff($filters['uploaded']));
         }
 
-        return $query->latest('created_at')->latest('id')->paginate(24)->withQueryString();
+        $assets = $query->latest('created_at')->latest('id')->paginate(24)->withQueryString();
+        $this->usage->attach($assets->getCollection());
+
+        return $assets;
     }
 
     private function uploadedCutoff(string $uploaded): Carbon

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Actions\Media\MediaAssetUsage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,6 +29,7 @@ class MediaAssetResource extends JsonResource
                     ]),
                 ],
             ])->all(),
+            'usage' => ($this->resource->getRelation('resolvedUsage') ?? MediaAssetUsage::empty())->toArray(),
         ];
     }
 }

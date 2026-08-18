@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Media\DeleteMediaAsset;
 use App\Actions\Media\ListEventMediaAssets;
+use App\Actions\Media\MediaAssetUsageChecker;
 use App\Actions\Media\UploadMediaAsset;
 use App\Http\Requests\ListMediaAssetsRequest;
 use App\Http\Requests\StoreMediaAssetRequest;
@@ -26,19 +27,23 @@ class MediaAssetController extends Controller
         return MediaAssetResource::collection($list->handle($eventModel, $request->validated()));
     }
 
-    public function store(StoreMediaAssetRequest $request, UploadMediaAsset $upload, string $event): JsonResponse
+    public function store(StoreMediaAssetRequest $request, UploadMediaAsset $upload, MediaAssetUsageChecker $usage, string $event): JsonResponse
     {
         $eventModel = $this->authorizedEvent($event, 'update');
         $asset = $upload->handle($eventModel, $request->user(), $request->file('file'));
+        $usage->attach(collect([$asset]));
 
         return (new MediaAssetResource($asset))->response()->setStatusCode(201);
     }
 
-    public function show(string $event, string $asset): MediaAssetResource
+    public function show(MediaAssetUsageChecker $usage, string $event, string $asset): MediaAssetResource
     {
         $eventModel = $this->authorizedEvent($event);
 
-        return new MediaAssetResource($this->asset($eventModel, $asset)->load('variants'));
+        $mediaAsset = $this->asset($eventModel, $asset)->load('variants');
+        $usage->attach(collect([$mediaAsset]));
+
+        return new MediaAssetResource($mediaAsset);
     }
 
     public function destroy(DeleteMediaAsset $delete, string $event, string $asset): Response

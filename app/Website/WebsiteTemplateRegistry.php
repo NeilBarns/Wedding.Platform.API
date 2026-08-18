@@ -59,6 +59,7 @@ final class WebsiteTemplateRegistry
             ],
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
+            sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
         );
 
         $modern = new WebsiteTemplateDefinition(
@@ -96,6 +97,7 @@ final class WebsiteTemplateRegistry
             ],
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
+            sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
         );
 
         return [$classic->key => $classic, $modern->key => $modern];
@@ -191,6 +193,11 @@ final class WebsiteTemplateRegistry
                     if (! in_array($defaults[$setting] ?? null, array_column($options[$group], 'key'), true)) {
                         throw new LogicException("Template [{$definition->key}] has an invalid Appearance default [{$sectionType}.{$setting}].");
                     }
+                }
+            }
+            foreach ($definition->sectionMediaCapabilities as $sectionType => $capability) {
+                if (! $definition->supportsSection($sectionType) || ! in_array($capability['mode'] ?? null, ['single', 'multiple'], true)) {
+                    throw new LogicException("Template [{$definition->key}] has invalid Media capability [{$sectionType}].");
                 }
             }
         }

@@ -22,8 +22,8 @@ final class WebsiteSectionContentValidator
         }
 
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        array_walk_recursive($validated, function (mixed &$value): void {
-            if ($value === null) {
+        array_walk_recursive($validated, function (mixed &$value, string|int $key): void {
+            if ($value === null && $key !== 'media') {
                 $value = '';
             }
         });
@@ -35,15 +35,15 @@ final class WebsiteSectionContentValidator
     private function rulesFor(string $sectionType): ?array
     {
         return match ($sectionType) {
-            'hero' => $this->stringContentRules(['headline' => 255, 'subheadline' => 500]),
+            'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
             'date', 'dressCode' => $this->stringContentRules(['heading' => 255, 'description' => 5000]),
-            'story' => $this->stringContentRules(['heading' => 255, 'body' => 10000]),
-            'venue' => $this->stringContentRules([
+            'story' => $this->singleMediaRules($this->stringContentRules(['heading' => 255, 'body' => 10000])),
+            'venue' => $this->singleMediaRules($this->stringContentRules([
                 'heading' => 255,
                 'name' => 255,
                 'address' => 1000,
                 'description' => 5000,
-            ]),
+            ])),
             'rsvp' => $this->stringContentRules([
                 'heading' => 255,
                 'description' => 5000,
@@ -88,6 +88,19 @@ final class WebsiteSectionContentValidator
         foreach ($fields as $field => $maximum) {
             $rules["content.{$field}"] = ['present', 'nullable', 'string', "max:{$maximum}"];
         }
+
+        return $rules;
+    }
+
+    /** @param array<string, list<string>> $rules */
+    private function singleMediaRules(array $rules): array
+    {
+        $rules['content'][1] .= ',media';
+        $rules['content.media'] = ['sometimes', 'nullable', 'array:assetId,focalPoint'];
+        $rules['content.media.assetId'] = ['required_with:content.media', 'string', 'ulid'];
+        $rules['content.media.focalPoint'] = ['sometimes', 'array:x,y'];
+        $rules['content.media.focalPoint.x'] = ['required_with:content.media.focalPoint', 'numeric', 'between:0,1'];
+        $rules['content.media.focalPoint.y'] = ['required_with:content.media.focalPoint', 'numeric', 'between:0,1'];
 
         return $rules;
     }
