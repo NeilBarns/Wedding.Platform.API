@@ -28,6 +28,7 @@ final readonly class WebsiteTemplateDefinition
         public array $sectionAppearanceDefaults,
         public array $sectionMediaCapabilities = [],
         public array $sectionItemMediaCapabilities = [],
+        public array $sectionPresentationCapabilities = [],
     ) {}
 
     /** @param array<string, mixed> $settings */
@@ -68,6 +69,15 @@ final readonly class WebsiteTemplateDefinition
                 : $fallback;
         }
 
+        $presentation = $this->presentationCapabilityFor($sectionType);
+        if ($presentation !== null) {
+            $allowed = array_column($presentation['options'], 'key');
+            $current = $appearance['presentation'] ?? null;
+            $normalized['presentation'] = is_string($current) && in_array($current, $allowed, true)
+                ? $current
+                : $presentation['default'];
+        }
+
         return $normalized;
     }
 
@@ -103,5 +113,11 @@ final readonly class WebsiteTemplateDefinition
     public function itemMediaCapabilityFor(string $sectionType): ?array
     {
         return $this->sectionItemMediaCapabilities[$sectionType] ?? null;
+    }
+
+    /** @return array{default: string, options: list<array{key: string, displayName: string, description: string, preview: string}>}|null */
+    public function presentationCapabilityFor(string $sectionType): ?array
+    {
+        return $this->sectionPresentationCapabilities[$sectionType] ?? null;
     }
 }

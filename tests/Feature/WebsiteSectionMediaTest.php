@@ -6,6 +6,7 @@ use App\Enums\EventMembershipRole;
 use App\Models\Event;
 use App\Models\MediaAsset;
 use App\Models\User;
+use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -195,6 +196,10 @@ class WebsiteSectionMediaTest extends TestCase
             ->assertJsonPath("data.media.{$asset->id}.id", $asset->id)
             ->assertJsonMissingPath("data.media.{$unused->id}")
             ->assertJsonMissingPath("data.media.{$asset->id}.storagePath");
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$people->id}/appearance", [
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'namesOnly'],
+        ])->assertOk()->assertJsonPath("data.media.{$asset->id}.id", $asset->id);
+        $this->assertSame($content, $people->refresh()->content);
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
             'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
         ])->assertOk();

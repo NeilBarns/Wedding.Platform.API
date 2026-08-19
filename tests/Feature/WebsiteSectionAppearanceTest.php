@@ -60,7 +60,10 @@ class WebsiteSectionAppearanceTest extends TestCase
             ->assertJsonCount(4, 'data.sections.0.appearanceOptions.headingAlignments')
             ->assertJsonCount(4, 'data.sections.0.appearanceOptions.bodyAlignments')
             ->assertJsonCount(4, 'data.sections.0.appearanceOptions.backgroundTreatments')
-            ->assertJsonCount(4, 'data.sections.0.appearanceOptions.emphasisOptions');
+            ->assertJsonCount(4, 'data.sections.0.appearanceOptions.emphasisOptions')
+            ->assertJsonPath('data.sections.0.presentationCapability.default', 'classic')
+            ->assertJsonPath('data.sections.0.presentationCapability.options.1.key', 'immersive')
+            ->assertJsonPath('data.sections.1.presentationCapability', null);
     }
 
     public function test_valid_update_returns_authoritative_draft_and_preserves_section_data(): void
@@ -82,6 +85,30 @@ class WebsiteSectionAppearanceTest extends TestCase
 
         $this->assertSame($appearance, $section->refresh()->appearance);
         $this->assertSame($before, $section->only(['content', 'sort_order', 'is_enabled']));
+    }
+
+    public function test_presentation_is_optional_template_defined_and_strictly_validated(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $hero = $event->website->sections()->where('type', 'hero')->sole();
+        $faq = $event->website->sections()->where('type', 'faq')->sole();
+        $base = WebsiteSectionAppearance::DEFAULT;
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
+            'appearance' => [...$base, 'presentation' => 'immersive'],
+        ])->assertOk()->assertJsonPath('data.sections.0.appearance.presentation', 'immersive');
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
+            'appearance' => $base,
+        ])->assertOk()->assertJsonMissingPath('data.sections.0.appearance.presentation');
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
+            'appearance' => [...$base, 'presentation' => 'editorial'],
+        ])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$faq->id}/appearance", [
+            'appearance' => [...$base, 'presentation' => 'anything'],
+        ])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
     }
 
     public function test_invalid_missing_and_extra_appearance_values_are_rejected(): void

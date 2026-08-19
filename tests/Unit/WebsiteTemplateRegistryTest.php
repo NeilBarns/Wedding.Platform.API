@@ -146,4 +146,35 @@ class WebsiteTemplateRegistryTest extends TestCase
         }
         $this->assertNull($template->appearanceOptionsFor('customLegacySection'));
     }
+
+    public function test_templates_expose_valid_section_specific_presentation_capabilities(): void
+    {
+        $registry = new WebsiteTemplateRegistry;
+        $expected = [
+            WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 => [
+                'hero' => ['classic', 'immersive', 'framed'],
+                'story' => ['textFirst', 'portraitStory', 'framed'],
+                'venue' => ['detailsFirst', 'scenic', 'framed'],
+                'people' => ['medallions', 'portraitCards', 'framed', 'namesOnly'],
+            ],
+            WebsiteTemplateRegistry::MODERN_EDITORIAL_V1 => [
+                'hero' => ['editorial', 'immersive', 'framed'],
+                'story' => ['textFirst', 'editorial', 'framed'],
+                'venue' => ['detailsFirst', 'scenic', 'framed'],
+                'people' => ['editorialPortraits', 'squareGrid', 'minimal', 'namesOnly'],
+            ],
+        ];
+
+        foreach ($expected as $templateKey => $sections) {
+            $template = $registry->get($templateKey);
+            foreach ($sections as $sectionType => $keys) {
+                $capability = $template->presentationCapabilityFor($sectionType);
+                $this->assertSame($keys, array_column($capability['options'], 'key'));
+                $this->assertContains($capability['default'], $keys);
+            }
+            $this->assertNull($template->presentationCapabilityFor('faq'));
+        }
+
+        $registry->assertValid();
+    }
 }

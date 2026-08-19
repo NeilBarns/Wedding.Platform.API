@@ -61,6 +61,29 @@ final class WebsiteTemplateRegistry
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
             sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
+            sectionPresentationCapabilities: [
+                'hero' => $this->presentation('classic', [
+                    'classic' => ['Classic', 'Elegant centered composition with a restrained image.', 'contained'],
+                    'immersive' => ['Immersive', 'Image-forward composition with closely integrated text.', 'overlay'],
+                    'framed' => ['Framed', 'Formal framed image with generous breathing room.', 'frame'],
+                ]),
+                'story' => $this->presentation('framed', [
+                    'textFirst' => ['Text First', 'Story-led composition with supporting photography.', 'text'],
+                    'portraitStory' => ['Portrait Story', 'Portrait and narrative share the composition.', 'split'],
+                    'framed' => ['Framed', 'A restrained photograph introduces the story.', 'frame'],
+                ]),
+                'venue' => $this->presentation('framed', [
+                    'detailsFirst' => ['Details First', 'Venue information leads with supporting imagery.', 'text'],
+                    'scenic' => ['Scenic', 'The venue photograph becomes the visual focus.', 'overlay'],
+                    'framed' => ['Framed', 'Formal image treatment above the venue details.', 'frame'],
+                ]),
+                'people' => $this->presentation('medallions', [
+                    'medallions' => ['Medallions', 'Formal circular portraits with ceremonial character.', 'circles'],
+                    'portraitCards' => ['Portrait Cards', 'Elegant vertical portraits with names beneath.', 'cards'],
+                    'framed' => ['Framed', 'Structured formal portraits in restrained frames.', 'grid'],
+                    'namesOnly' => ['Names Only', 'A polished text-only Wedding Party composition.', 'text'],
+                ]),
+            ],
         );
 
         $modern = new WebsiteTemplateDefinition(
@@ -100,6 +123,29 @@ final class WebsiteTemplateRegistry
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
             sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
+            sectionPresentationCapabilities: [
+                'hero' => $this->presentation('immersive', [
+                    'editorial' => ['Editorial', 'Asymmetric magazine-style image and typography.', 'split'],
+                    'immersive' => ['Immersive', 'A large image-led opening composition.', 'overlay'],
+                    'framed' => ['Framed', 'A controlled art-directed image block.', 'frame'],
+                ]),
+                'story' => $this->presentation('framed', [
+                    'textFirst' => ['Text First', 'Narrative typography leads the composition.', 'text'],
+                    'editorial' => ['Editorial', 'Image and story form an asymmetric spread.', 'split'],
+                    'framed' => ['Framed', 'A strong image block introduces the story.', 'frame'],
+                ]),
+                'venue' => $this->presentation('framed', [
+                    'detailsFirst' => ['Details First', 'Location details lead in an editorial layout.', 'text'],
+                    'scenic' => ['Scenic', 'A broad venue image anchors the Section.', 'overlay'],
+                    'framed' => ['Framed', 'A precise image block pairs with venue details.', 'frame'],
+                ]),
+                'people' => $this->presentation('editorialPortraits', [
+                    'editorialPortraits' => ['Editorial Portraits', 'Vertical portraits with bold editorial rhythm.', 'cards'],
+                    'squareGrid' => ['Square Grid', 'Structured square portraits in a clean grid.', 'grid'],
+                    'minimal' => ['Minimal', 'Restrained, image-light portraits with generous space.', 'minimal'],
+                    'namesOnly' => ['Names Only', 'A typographic Wedding Party composition.', 'text'],
+                ]),
+            ],
         );
 
         return [$classic->key => $classic, $modern->key => $modern];
@@ -207,6 +253,20 @@ final class WebsiteTemplateRegistry
                     throw new LogicException("Template [{$definition->key}] has invalid item Media capability [{$sectionType}].");
                 }
             }
+            foreach ($definition->sectionPresentationCapabilities as $sectionType => $capability) {
+                if (! $definition->supportsSection($sectionType)) {
+                    throw new LogicException("Template [{$definition->key}] has invalid presentation capability [{$sectionType}].");
+                }
+                $this->assertOptionGroup($definition->key, "{$sectionType}.presentations", $capability['options'] ?? []);
+                if (! in_array($capability['default'] ?? null, array_column($capability['options'] ?? [], 'key'), true)) {
+                    throw new LogicException("Template [{$definition->key}] has an invalid presentation default [{$sectionType}].");
+                }
+                foreach ($capability['options'] as $option) {
+                    if (trim($option['description'] ?? '') === '' || trim($option['preview'] ?? '') === '') {
+                        throw new LogicException("Template [{$definition->key}] has invalid presentation metadata [{$sectionType}].");
+                    }
+                }
+            }
         }
     }
 
@@ -221,6 +281,27 @@ final class WebsiteTemplateRegistry
             array_keys($values),
             array_values($values),
         );
+    }
+
+    /**
+     * @param  array<string, array{string, string, string}>  $values
+     * @return array{default: string, options: list<array{key: string, displayName: string, description: string, preview: string}>}
+     */
+    private function presentation(string $default, array $values): array
+    {
+        return [
+            'default' => $default,
+            'options' => array_map(
+                fn (string $key, array $metadata): array => [
+                    'key' => $key,
+                    'displayName' => $metadata[0],
+                    'description' => $metadata[1],
+                    'preview' => $metadata[2],
+                ],
+                array_keys($values),
+                array_values($values),
+            ),
+        ];
     }
 
     /** @param list<array{key: string, displayName: string}> $options */

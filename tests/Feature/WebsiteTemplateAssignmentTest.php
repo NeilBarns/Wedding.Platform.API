@@ -12,6 +12,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,6 +42,28 @@ class WebsiteTemplateAssignmentTest extends TestCase
 
         $this->assertSame(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, $assigned->template_key);
         $this->assertSame($before, $website->sections()->get()->map->only(['id', 'type', 'sort_order', 'is_enabled', 'content'])->all());
+    }
+
+    public function test_template_switch_normalizes_presentations_without_remembering_template_state_or_mutating_content(): void
+    {
+        $website = Website::factory()->create(['template_key' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1]);
+        $content = ['heading' => 'Wedding Party', 'groups' => [[
+            'id' => 'friends', 'name' => 'Friends', 'people' => [[
+                'id' => 'jane', 'name' => 'Jane', 'media' => ['assetId' => (string) Str::ulid(), 'focalPoint' => ['x' => 0.3, 'y' => 0.7]],
+            ]],
+        ]]];
+        $people = WebsiteSection::factory()->for($website)->forType('people')->create([
+            'content' => $content,
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'portraitCards'],
+        ]);
+
+        app(AssignWebsiteTemplate::class)->handle($website, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $this->assertSame('editorialPortraits', $people->refresh()->appearance['presentation']);
+        $this->assertSame($content, $people->content);
+
+        app(AssignWebsiteTemplate::class)->handle($website, WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $this->assertSame('medallions', $people->refresh()->appearance['presentation']);
+        $this->assertSame($content, $people->content);
     }
 
     public function test_unknown_template_is_rejected_without_changing_assignment(): void

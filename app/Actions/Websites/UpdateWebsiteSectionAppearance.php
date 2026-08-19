@@ -31,12 +31,21 @@ final class UpdateWebsiteSectionAppearance
         ];
         $expectedKeys = array_keys($optionGroups);
         $actualKeys = array_keys($appearance);
+        $presentation = $template->presentationCapabilityFor($section->type);
+        if (array_key_exists('presentation', $appearance)) {
+            if ($presentation === null || ! in_array($appearance['presentation'], array_column($presentation['options'], 'key'), true)) {
+                throw ValidationException::withMessages([
+                    'appearance.presentation' => 'The selected presentation is invalid for this Section.',
+                ]);
+            }
+            $expectedKeys[] = 'presentation';
+        }
         sort($expectedKeys);
         sort($actualKeys);
 
         if ($actualKeys !== $expectedKeys) {
             throw ValidationException::withMessages([
-                'appearance' => 'Provide exactly headingAlignment, bodyAlignment, backgroundTreatment, and emphasis.',
+                'appearance' => 'Provide the complete supported Section appearance.',
             ]);
         }
 
