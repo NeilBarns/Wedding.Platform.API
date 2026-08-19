@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\MediaAsset;
+use App\Website\WebsiteSectionMediaReferences;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -34,7 +35,9 @@ class WebsiteDraftResource extends JsonResource
         if (! $this->relationLoaded('sections')) {
             return [];
         }
-        $ids = $this->sections->map(fn ($section) => $section->content['media']['assetId'] ?? null)->filter()->unique()->values();
+        $references = app(WebsiteSectionMediaReferences::class);
+        $ids = $this->sections->flatMap(fn ($section) => $references->extract($section->type, $section->content))
+            ->pluck('assetId')->unique()->values();
         if ($ids->isEmpty()) {
             return [];
         }

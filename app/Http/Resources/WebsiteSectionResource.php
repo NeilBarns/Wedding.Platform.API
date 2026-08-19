@@ -26,6 +26,7 @@ class WebsiteSectionResource extends JsonResource
             'appearance' => $this->appearance,
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),
+            'itemMediaCapability' => $template?->itemMediaCapabilityFor($this->type),
         ];
     }
 }

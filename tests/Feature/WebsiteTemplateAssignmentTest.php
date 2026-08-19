@@ -85,7 +85,7 @@ class WebsiteTemplateAssignmentTest extends TestCase
         $this->initializeWebsite($event);
 
         $this->assertSame(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, $event->website->template_key);
-        $this->assertSame(9, $event->website->sections()->count());
+        $this->assertSame(10, $event->website->sections()->count());
         $this->assertSame(EventMembershipRole::Owner, $event->memberships()->sole()->role);
         $this->assertSame(PlatformRole::User, $creator->platform_role);
     }

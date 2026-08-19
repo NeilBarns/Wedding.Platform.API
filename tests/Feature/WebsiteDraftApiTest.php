@@ -63,7 +63,7 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.displayName', 'Classic Filipiniana')
             ->assertJsonPath('data.sections.0.id', $story->id)
             ->assertJsonPath('data.sections.0.displayName', 'Story')
-            ->assertJsonCount(9, 'data.sections');
+            ->assertJsonCount(10, 'data.sections');
         $this->assertSame('Hero', $heroPayload['displayName']);
         $this->assertFalse($heroPayload['isEnabled']);
         $this->assertSame('A heading', $heroPayload['content']['headline']);
@@ -81,6 +81,7 @@ class WebsiteDraftApiTest extends TestCase
             ]]],
             'venue' => ['heading' => '', 'name' => 'Venue', 'address' => '', 'description' => ''],
             'dressCode' => ['heading' => '', 'description' => 'Formal'],
+            'people' => ['heading' => 'Wedding Party', 'groups' => []],
             'gallery' => ['heading' => 'Gallery', 'items' => []],
             'faq' => ['heading' => '', 'items' => [['question' => 'When?', 'answer' => 'Soon']]],
             'rsvp' => ['heading' => '', 'description' => '', 'buttonLabel' => 'Respond'],
@@ -204,7 +205,7 @@ class WebsiteDraftApiTest extends TestCase
 
         $this->actingAs($owner)->putJson($url, ['sectionIds' => $reversed])
             ->assertOk()->assertJsonPath('data.sections.0.id', $reversed[0]);
-        $this->assertSame(range(10, 90, 10), $event->website->sections()->pluck('sort_order')->all());
+        $this->assertSame(range(10, 100, 10), $event->website->sections()->pluck('sort_order')->all());
 
         $this->actingAs($owner)->putJson($url, ['sectionIds' => array_slice($reversed, 1)])
             ->assertUnprocessable()->assertJsonValidationErrors('sectionIds');

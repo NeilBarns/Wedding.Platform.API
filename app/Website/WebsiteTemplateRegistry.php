@@ -22,7 +22,7 @@ final class WebsiteTemplateRegistry
         }
 
         $sectionTypes = [
-            'hero', 'date', 'story', 'schedule', 'venue', 'dressCode', 'gallery', 'faq', 'rsvp',
+            'hero', 'date', 'story', 'schedule', 'venue', 'dressCode', 'people', 'gallery', 'faq', 'rsvp',
         ];
         $classic = new WebsiteTemplateDefinition(
             key: self::CLASSIC_FILIPINIANA_V1,
@@ -60,6 +60,7 @@ final class WebsiteTemplateRegistry
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
+            sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
         );
 
         $modern = new WebsiteTemplateDefinition(
@@ -98,6 +99,7 @@ final class WebsiteTemplateRegistry
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
+            sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
         );
 
         return [$classic->key => $classic, $modern->key => $modern];
@@ -198,6 +200,11 @@ final class WebsiteTemplateRegistry
             foreach ($definition->sectionMediaCapabilities as $sectionType => $capability) {
                 if (! $definition->supportsSection($sectionType) || ! in_array($capability['mode'] ?? null, ['single', 'multiple'], true)) {
                     throw new LogicException("Template [{$definition->key}] has invalid Media capability [{$sectionType}].");
+                }
+            }
+            foreach ($definition->sectionItemMediaCapabilities as $sectionType => $capability) {
+                if (! $definition->supportsSection($sectionType) || ($capability['itemType'] ?? null) !== 'person' || ($capability['mode'] ?? null) !== 'single') {
+                    throw new LogicException("Template [{$definition->key}] has invalid item Media capability [{$sectionType}].");
                 }
             }
         }

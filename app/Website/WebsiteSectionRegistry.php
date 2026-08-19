@@ -16,6 +16,7 @@ final class WebsiteSectionRegistry
             'schedule' => $this->definition('schedule', 'Schedule', 40, ['heading' => '', 'items' => []]),
             'venue' => $this->definition('venue', 'Venue', 50, ['heading' => '', 'name' => '', 'address' => '', 'description' => '']),
             'dressCode' => $this->definition('dressCode', 'Dress Code', 60, ['heading' => '', 'description' => '']),
+            'people' => $this->definition('people', 'Wedding Party', 65, ['heading' => 'Wedding Party', 'groups' => []]),
             'gallery' => $this->definition('gallery', 'Gallery', 70, ['heading' => '', 'items' => []]),
             'faq' => $this->definition('faq', 'FAQ', 80, ['heading' => '', 'items' => []]),
             'rsvp' => $this->definition('rsvp', 'RSVP', 90, ['heading' => '', 'description' => '', 'buttonLabel' => '']),

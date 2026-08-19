@@ -27,6 +27,7 @@ final readonly class WebsiteTemplateDefinition
         public array $sectionAppearanceOptions,
         public array $sectionAppearanceDefaults,
         public array $sectionMediaCapabilities = [],
+        public array $sectionItemMediaCapabilities = [],
     ) {}
 
     /** @param array<string, mixed> $settings */
@@ -96,5 +97,11 @@ final readonly class WebsiteTemplateDefinition
     public function mediaCapabilityFor(string $sectionType): ?array
     {
         return $this->sectionMediaCapabilities[$sectionType] ?? null;
+    }
+
+    /** @return array{itemType: string, mode: 'single'}|null */
+    public function itemMediaCapabilityFor(string $sectionType): ?array
+    {
+        return $this->sectionItemMediaCapabilities[$sectionType] ?? null;
     }
 }

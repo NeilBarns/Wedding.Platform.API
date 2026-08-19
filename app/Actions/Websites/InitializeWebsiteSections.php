@@ -16,9 +16,9 @@ final class InitializeWebsiteSections
         private readonly WebsiteTemplateRegistry $templates,
     ) {}
 
-    public function handle(Website $website): void
+    public function handle(Website $website, bool $enableMissingSections = true): void
     {
-        DB::transaction(function () use ($website): void {
+        DB::transaction(function () use ($website, $enableMissingSections): void {
             $website->loadMissing('event');
             $definitions = $this->registry->defaultCompositionFor($website->event->type);
             $template = $this->templates->get($website->template_key);
@@ -36,7 +36,7 @@ final class InitializeWebsiteSections
                     'website_id' => $website->getKey(),
                     'type' => $definition->key,
                     'sort_order' => $definition->defaultOrder,
-                    'is_enabled' => $definition->defaultEnabled,
+                    'is_enabled' => $enableMissingSections && $definition->defaultEnabled,
                     'content' => json_encode($definition->defaultContent, JSON_THROW_ON_ERROR),
                     'appearance' => json_encode(
                         $template?->appearanceDefaultsFor($definition->key) ?? WebsiteSectionAppearance::DEFAULT,

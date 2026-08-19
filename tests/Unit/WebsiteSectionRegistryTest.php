@@ -20,11 +20,12 @@ class WebsiteSectionRegistryTest extends TestCase
             'schedule',
             'venue',
             'dressCode',
+            'people',
             'gallery',
             'faq',
             'rsvp',
         ], array_keys($definitions));
-        $this->assertSame(range(10, 90, 10), array_column($definitions, 'defaultOrder'));
+        $this->assertSame([10, 20, 30, 40, 50, 60, 65, 70, 80, 90], array_column($definitions, 'defaultOrder'));
         $this->assertSame(array_keys($definitions), array_keys($registry->forEventType(EventType::Wedding)));
         $this->assertSame(array_keys($definitions), array_keys($registry->defaultCompositionFor(EventType::Wedding)));
         $this->assertCount(count($definitions), array_unique(array_map(

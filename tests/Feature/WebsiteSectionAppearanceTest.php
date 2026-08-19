@@ -29,7 +29,7 @@ class WebsiteSectionAppearanceTest extends TestCase
         $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
         $this->initializeWebsite($event);
 
-        $this->assertCount(9, $event->website->sections);
+        $this->assertCount(10, $event->website->sections);
         $event->website->sections->each(fn ($section) => $this->assertSame(WebsiteSectionAppearance::DEFAULT, $section->appearance));
     }
 

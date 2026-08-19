@@ -22,8 +22,8 @@ final class WebsiteSectionContentValidator
         }
 
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        array_walk_recursive($validated, function (mixed &$value, string|int $key): void {
-            if ($value === null && $key !== 'media') {
+        array_walk_recursive($validated, function (mixed &$value, string|int $key) use ($sectionType): void {
+            if ($value === null && $key !== 'media' && ! ($sectionType === 'people' && $key === 'role')) {
                 $value = '';
             }
         });
@@ -62,6 +62,24 @@ final class WebsiteSectionContentValidator
                 'content' => ['required', 'array:heading,items'],
                 'content.heading' => ['present', 'nullable', 'string', 'max:255'],
                 'content.items' => ['present', 'array', 'size:0'],
+            ],
+            'people' => [
+                'content' => ['required', 'array:heading,groups'],
+                'content.heading' => ['present', 'nullable', 'string', 'max:255'],
+                'content.groups' => ['present', 'array', 'max:30'],
+                'content.groups.*' => ['required', 'array:id,name,people'],
+                'content.groups.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
+                'content.groups.*.name' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'],
+                'content.groups.*.people' => ['present', 'array', 'max:100'],
+                'content.groups.*.people.*' => ['required', 'array:id,name,role,media'],
+                'content.groups.*.people.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
+                'content.groups.*.people.*.name' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'],
+                'content.groups.*.people.*.role' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'content.groups.*.people.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint'],
+                'content.groups.*.people.*.media.assetId' => ['required_with:content.groups.*.people.*.media', 'string', 'ulid'],
+                'content.groups.*.people.*.media.focalPoint' => ['sometimes', 'array:x,y'],
+                'content.groups.*.people.*.media.focalPoint.x' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
+                'content.groups.*.people.*.media.focalPoint.y' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
             ],
             'faq' => [
                 'content' => ['required', 'array:heading,items'],

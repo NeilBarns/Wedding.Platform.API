@@ -4,7 +4,7 @@ namespace App\Actions\Media;
 
 final readonly class MediaAssetUsage
 {
-    /** @param list<array{sectionId: string, type: string, displayName: string}> $websiteSections */
+    /** @param list<array{sectionId: string, type: string, displayName: string, context?: array{groupId: string, groupName: string, personId: string, personName: string}}> $websiteSections */
     public function __construct(public array $websiteSections) {}
 
     public static function empty(): self

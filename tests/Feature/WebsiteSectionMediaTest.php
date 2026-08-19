@@ -144,6 +144,77 @@ class WebsiteSectionMediaTest extends TestCase
         $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertNoContent();
     }
 
+    public function test_people_media_validates_event_scope_focal_points_and_optional_legacy_shape(): void
+    {
+        [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
+        $people = $this->initializeWebsite($event)->sections()->where('type', 'people')->sole();
+        $asset = $this->assetFor($event);
+        $otherAsset = $this->assetFor(Event::factory()->create());
+        $url = "/api/events/{$event->id}/website/sections/{$people->id}";
+        $person = fn (array $media): array => ['id' => 'person', 'name' => 'Jane Doe', 'role' => null, 'media' => $media];
+        $content = fn (array $person): array => ['heading' => 'Wedding Party', 'groups' => [[
+            'id' => 'group', 'name' => 'Friends', 'people' => [$person],
+        ]]];
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content($person(['assetId' => $asset->id]))])->assertOk();
+        $this->assertSame($asset->id, $people->refresh()->content['groups'][0]['people'][0]['media']['assetId']);
+
+        foreach ([
+            ['assetId' => $asset->id, 'focalPoint' => ['x' => -0.1, 'y' => 0.5]],
+            ['assetId' => $asset->id, 'focalPoint' => ['x' => 0.5]],
+        ] as $invalidMedia) {
+            $this->actingAs($owner)->putJson($url, ['content' => $content($person($invalidMedia))])->assertUnprocessable();
+        }
+        $this->actingAs($owner)->putJson($url, ['content' => $content($person(['assetId' => $otherAsset->id]))])
+            ->assertUnprocessable()->assertJsonValidationErrors('content.groups');
+        $this->actingAs($owner)->putJson($url, ['content' => $content($person(['assetId' => (string) Str::ulid()]))])
+            ->assertUnprocessable()->assertJsonValidationErrors('content.groups');
+
+        $legacy = ['heading' => 'Wedding Party', 'groups' => [[
+            'id' => 'legacy-group', 'name' => 'Family', 'people' => [['id' => 'legacy-person', 'name' => 'Alex', 'role' => null]],
+        ]]];
+        $this->actingAs($owner)->putJson($url, ['content' => $legacy])->assertOk();
+        $this->assertArrayNotHasKey('media', $people->refresh()->content['groups'][0]['people'][0]);
+    }
+
+    public function test_people_media_is_batch_resolved_reported_with_context_and_blocks_deletion(): void
+    {
+        [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
+        $people = $this->initializeWebsite($event)->sections()->where('type', 'people')->sole();
+        $asset = $this->assetFor($event);
+        $unused = $this->assetFor($event);
+        $content = ['heading' => 'Wedding Party', 'groups' => [[
+            'id' => 'friends', 'name' => 'Best Friends', 'people' => [
+                ['id' => 'jane', 'name' => 'Jane Doe', 'role' => 'Maid of Honor', 'media' => ['assetId' => $asset->id, 'focalPoint' => ['x' => 0.4, 'y' => 0.3]]],
+                ['id' => 'alex', 'name' => 'Alex Cruz', 'role' => null, 'media' => ['assetId' => $asset->id]],
+            ],
+        ]]];
+        $url = "/api/events/{$event->id}/website/sections/{$people->id}";
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
+            ->assertJsonPath("data.media.{$asset->id}.id", $asset->id)
+            ->assertJsonMissingPath("data.media.{$unused->id}")
+            ->assertJsonMissingPath("data.media.{$asset->id}.storagePath");
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
+            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
+        ])->assertOk();
+        $this->assertSame($content, $people->refresh()->content);
+
+        $usage = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/media")->assertOk()->json('data'))
+            ->firstWhere('id', $asset->id)['usage'];
+        $this->assertTrue($usage['isInUse']);
+        $this->assertSame([
+            ['groupId' => 'friends', 'groupName' => 'Best Friends', 'personId' => 'jane', 'personName' => 'Jane Doe'],
+            ['groupId' => 'friends', 'groupName' => 'Best Friends', 'personId' => 'alex', 'personName' => 'Alex Cruz'],
+        ], collect($usage['website']['sections'])->pluck('context')->all());
+
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertUnprocessable();
+        $withoutMedia = $content;
+        $withoutMedia['groups'][0]['people'] = array_map(fn (array $person): array => [...$person, 'media' => null], $withoutMedia['groups'][0]['people']);
+        $this->actingAs($owner)->putJson($url, ['content' => $withoutMedia])->assertOk();
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertNoContent();
+    }
+
     private function eventFor(EventMembershipRole $role): array
     {
         $user = User::factory()->create();
