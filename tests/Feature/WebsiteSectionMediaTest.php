@@ -129,6 +129,40 @@ class WebsiteSectionMediaTest extends TestCase
         $this->assertNull($story->refresh()->content['media']);
     }
 
+    public function test_section_media_zoom_is_optional_bounded_and_preserved_across_presentations_and_templates(): void
+    {
+        [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
+        $website = $this->initializeWebsite($event);
+        $asset = $this->assetFor($event);
+
+        foreach (['hero', 'story', 'venue'] as $type) {
+            $section = $website->sections()->where('type', $type)->sole();
+            $content = $section->content;
+            $content['media'] = ['assetId' => $asset->id, 'zoom' => 1.4];
+            $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $content])->assertOk();
+            $this->assertSame(1.4, $section->refresh()->content['media']['zoom']);
+        }
+
+        $hero = $website->sections()->where('type', 'hero')->sole();
+        $base = [...$hero->content, 'media' => ['assetId' => $asset->id]];
+        foreach ([1, 1.5, 3] as $zoom) {
+            $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => [...$base, 'media' => [...$base['media'], 'zoom' => $zoom]]])->assertOk();
+        }
+        foreach ([0.9, 3.1, 'close'] as $zoom) {
+            $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => [...$base, 'media' => [...$base['media'], 'zoom' => $zoom]]])->assertUnprocessable();
+        }
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => $base])->assertOk();
+        $this->assertArrayNotHasKey('zoom', $hero->refresh()->content['media']);
+
+        $zoomed = [...$base, 'media' => [...$base['media'], 'zoom' => 1.8]];
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => $zoomed])->assertOk();
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'framed'],
+        ])->assertOk();
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", ['templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1])->assertOk();
+        $this->assertSame(1.8, $hero->refresh()->content['media']['zoom']);
+    }
+
     public function test_referenced_asset_cannot_be_deleted_until_reference_is_removed(): void
     {
         [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
@@ -163,9 +197,15 @@ class WebsiteSectionMediaTest extends TestCase
         foreach ([
             ['assetId' => $asset->id, 'focalPoint' => ['x' => -0.1, 'y' => 0.5]],
             ['assetId' => $asset->id, 'focalPoint' => ['x' => 0.5]],
+            ['assetId' => $asset->id, 'zoom' => 0.9],
+            ['assetId' => $asset->id, 'zoom' => 3.1],
+            ['assetId' => $asset->id, 'zoom' => 'close'],
         ] as $invalidMedia) {
             $this->actingAs($owner)->putJson($url, ['content' => $content($person($invalidMedia))])->assertUnprocessable();
         }
+        $zoomed = $content($person(['assetId' => $asset->id, 'focalPoint' => ['x' => 0.4, 'y' => 0.6], 'zoom' => 2.2]));
+        $this->actingAs($owner)->putJson($url, ['content' => $zoomed])->assertOk();
+        $this->assertSame(2.2, $people->refresh()->content['groups'][0]['people'][0]['media']['zoom']);
         $this->actingAs($owner)->putJson($url, ['content' => $content($person(['assetId' => $otherAsset->id]))])
             ->assertUnprocessable()->assertJsonValidationErrors('content.groups');
         $this->actingAs($owner)->putJson($url, ['content' => $content($person(['assetId' => (string) Str::ulid()]))])

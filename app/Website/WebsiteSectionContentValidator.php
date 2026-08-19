@@ -75,11 +75,12 @@ final class WebsiteSectionContentValidator
                 'content.groups.*.people.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
                 'content.groups.*.people.*.name' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'],
                 'content.groups.*.people.*.role' => ['sometimes', 'nullable', 'string', 'max:255'],
-                'content.groups.*.people.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint'],
+                'content.groups.*.people.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint,zoom'],
                 'content.groups.*.people.*.media.assetId' => ['required_with:content.groups.*.people.*.media', 'string', 'ulid'],
                 'content.groups.*.people.*.media.focalPoint' => ['sometimes', 'array:x,y'],
                 'content.groups.*.people.*.media.focalPoint.x' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
                 'content.groups.*.people.*.media.focalPoint.y' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
+                'content.groups.*.people.*.media.zoom' => ['sometimes', 'numeric', 'between:1,3'],
             ],
             'faq' => [
                 'content' => ['required', 'array:heading,items'],
@@ -114,11 +115,12 @@ final class WebsiteSectionContentValidator
     private function singleMediaRules(array $rules): array
     {
         $rules['content'][1] .= ',media';
-        $rules['content.media'] = ['sometimes', 'nullable', 'array:assetId,focalPoint'];
+        $rules['content.media'] = ['sometimes', 'nullable', 'array:assetId,focalPoint,zoom'];
         $rules['content.media.assetId'] = ['required_with:content.media', 'string', 'ulid'];
         $rules['content.media.focalPoint'] = ['sometimes', 'array:x,y'];
         $rules['content.media.focalPoint.x'] = ['required_with:content.media.focalPoint', 'numeric', 'between:0,1'];
         $rules['content.media.focalPoint.y'] = ['required_with:content.media.focalPoint', 'numeric', 'between:0,1'];
+        $rules['content.media.zoom'] = ['sometimes', 'numeric', 'between:1,3'];
 
         return $rules;
     }
