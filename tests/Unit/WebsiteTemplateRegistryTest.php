@@ -30,6 +30,227 @@ class WebsiteTemplateRegistryTest extends TestCase
         $registry->assertValid();
     }
 
+    public function test_classic_hero_supports_four_placements_and_normalization_preserves_them(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $controls = $template->mediaControlsFor('hero', 'classic');
+
+        $this->assertSame(
+            ['top', 'right', 'bottom', 'left'],
+            array_column($controls['mediaPlacements']['options'], 'key'),
+        );
+
+        foreach (['top', 'right', 'bottom', 'left'] as $placement) {
+            $normalized = $template->normalizeSectionAppearance('hero', [
+                ...WebsiteSectionAppearance::DEFAULT,
+                'presentation' => 'classic',
+                'mediaPlacement' => $placement,
+            ]);
+
+            $this->assertSame($placement, $normalized['mediaPlacement']);
+        }
+    }
+
+    public function test_effective_viewport_appearance_resolves_base_then_sparse_override(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+            'mediaPlacement' => 'left',
+            'responsive' => [
+                'tablet' => ['headingAlignment' => 'right'],
+                'mobile' => ['mediaPlacement' => 'bottom', 'mediaSize' => 'feature'],
+            ],
+        ];
+
+        $desktop = $template->resolveSectionAppearanceForViewport('hero', $appearance, 'desktop');
+        $tablet = $template->resolveSectionAppearanceForViewport('hero', $appearance, 'tablet');
+        $mobile = $template->resolveSectionAppearanceForViewport('hero', $appearance, 'mobile');
+
+        $this->assertSame('left', $desktop['mediaPlacement']);
+        $this->assertArrayNotHasKey('responsive', $desktop);
+        $this->assertSame('top', $tablet['mediaPlacement']);
+        $this->assertSame('right', $tablet['headingAlignment']);
+        $this->assertSame('bottom', $mobile['mediaPlacement']);
+        $this->assertSame('feature', $mobile['mediaSize']);
+    }
+
+    public function test_viewport_resolution_uses_base_then_viewport_default_then_explicit_override(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $capabilities = $template->sectionPresentationCapabilities;
+        foreach ($capabilities['hero']['options'] as &$option) {
+            if ($option['key'] === 'classic') {
+                $option['mediaControls']['responsive']['mobile']['mediaPlacement'] = [
+                    'default' => 'bottom',
+                    'options' => [
+                        ['key' => 'top', 'displayName' => 'Top'],
+                        ['key' => 'bottom', 'displayName' => 'Bottom'],
+                    ],
+                ];
+            }
+        }
+        unset($option);
+        $fixture = new WebsiteTemplateDefinition(
+            key: $template->key,
+            displayName: $template->displayName,
+            description: $template->description,
+            styleTags: $template->styleTags,
+            enabled: $template->enabled,
+            supportedEventTypes: $template->supportedEventTypes,
+            supportedSectionTypes: $template->supportedSectionTypes,
+            designOptions: $template->designOptions,
+            defaultDesignSettings: $template->defaultDesignSettings,
+            sectionAppearanceOptions: $template->sectionAppearanceOptions,
+            sectionAppearanceDefaults: $template->sectionAppearanceDefaults,
+            sectionMediaCapabilities: $template->sectionMediaCapabilities,
+            sectionItemMediaCapabilities: $template->sectionItemMediaCapabilities,
+            sectionPresentationCapabilities: $capabilities,
+            sectionPresentationFallbacks: $template->sectionPresentationFallbacks,
+        );
+
+        $base = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+            'mediaPlacement' => 'right',
+            'mediaSize' => 'feature',
+        ];
+        $desktop = $fixture->resolveSectionAppearanceForViewport('hero', $base, 'desktop');
+        $mobile = $fixture->resolveSectionAppearanceForViewport('hero', $base, 'mobile');
+        $mobileOverride = $fixture->resolveSectionAppearanceForViewport('hero', [
+            ...$base,
+            'responsive' => ['mobile' => ['mediaPlacement' => 'top']],
+        ], 'mobile');
+        $normalized = $fixture->normalizeSectionAppearance('hero', [
+            ...$base,
+            'responsive' => ['mobile' => ['mediaPlacement' => 'left']],
+        ]);
+
+        $this->assertSame('right', $desktop['mediaPlacement']);
+        $this->assertSame('bottom', $mobile['mediaPlacement']);
+        $this->assertSame('feature', $mobile['mediaSize']);
+        $this->assertSame('top', $mobileOverride['mediaPlacement']);
+        $this->assertArrayNotHasKey('responsive', $normalized);
+    }
+
+    public function test_contained_media_presentations_expose_deliberate_tablet_and_mobile_placement_defaults(): void
+    {
+        $registry = new WebsiteTemplateRegistry;
+        $cases = [
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'hero', 'classic', 'top'],
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'story', 'textFirst', 'bottom'],
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'story', 'portraitStory', 'top'],
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'venue', 'detailsFirst', 'top'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'hero', 'editorial', 'top'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'story', 'textFirst', 'bottom'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'story', 'editorial', 'top'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'venue', 'detailsFirst', 'top'],
+        ];
+
+        foreach ($cases as [$templateKey, $sectionType, $presentation, $default]) {
+            foreach (['tablet', 'mobile'] as $viewport) {
+                $control = $registry->get($templateKey)->responsiveControlFor($sectionType, $presentation, $viewport, 'mediaPlacement');
+                $this->assertSame($default, $control['default']);
+                $classicTabletHorizontal = $templateKey === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
+                    && (($sectionType === 'story' && $presentation === 'portraitStory') || ($sectionType === 'venue' && $presentation === 'detailsFirst'));
+                $expectedOptions = $viewport === 'tablet' && $classicTabletHorizontal
+                    ? ['top', 'bottom', 'left', 'right']
+                    : ['top', 'bottom'];
+                $this->assertSame($expectedOptions, array_column($control['options'], 'key'));
+            }
+        }
+
+        $registry->assertValid();
+    }
+
+    public function test_tablet_placement_normalization_drops_historical_horizontal_overrides(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $base = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+            'mediaPlacement' => 'right',
+        ];
+
+        foreach (['left', 'right'] as $historicalPlacement) {
+            $normalized = $template->normalizeSectionAppearance('hero', [
+                ...$base,
+                'responsive' => ['tablet' => ['mediaPlacement' => $historicalPlacement]],
+            ]);
+
+            $this->assertArrayNotHasKey('responsive', $normalized);
+            $this->assertSame('top', $template->resolveSectionAppearanceForViewport('hero', $normalized, 'tablet')['mediaPlacement']);
+        }
+
+        foreach (['top', 'bottom'] as $placement) {
+            $normalized = $template->normalizeSectionAppearance('hero', [
+                ...$base,
+                'responsive' => ['tablet' => ['mediaPlacement' => $placement]],
+            ]);
+
+            $this->assertSame($placement, $normalized['responsive']['tablet']['mediaPlacement']);
+            $this->assertSame($placement, $template->resolveSectionAppearanceForViewport('hero', $normalized, 'tablet')['mediaPlacement']);
+        }
+
+        $this->assertSame('right', $template->resolveSectionAppearanceForViewport('hero', $base, 'desktop')['mediaPlacement']);
+        $this->assertSame('top', $template->resolveSectionAppearanceForViewport('hero', $base, 'tablet')['mediaPlacement']);
+    }
+
+    public function test_classic_portrait_story_tablet_supports_all_semantic_placements(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $control = $template->responsiveControlFor('story', 'portraitStory', 'tablet', 'mediaPlacement');
+
+        $this->assertSame('top', $control['default']);
+        $this->assertSame(['top', 'bottom', 'left', 'right'], array_column($control['options'], 'key'));
+
+        foreach (['top', 'bottom', 'left', 'right'] as $placement) {
+            $normalized = $template->normalizeSectionAppearance('story', [
+                ...WebsiteSectionAppearance::DEFAULT,
+                'presentation' => 'portraitStory',
+                'mediaPlacement' => 'left',
+                'responsive' => ['tablet' => ['mediaPlacement' => $placement]],
+            ]);
+
+            $this->assertSame($placement, $normalized['responsive']['tablet']['mediaPlacement']);
+            $this->assertSame($placement, $template->resolveSectionAppearanceForViewport('story', $normalized, 'tablet')['mediaPlacement']);
+            $this->assertSame('left', $template->resolveSectionAppearanceForViewport('story', $normalized, 'desktop')['mediaPlacement']);
+        }
+
+        $mobile = $template->responsiveControlFor('story', 'portraitStory', 'mobile', 'mediaPlacement');
+        $this->assertSame('top', $mobile['default']);
+        $this->assertSame(['top', 'bottom'], array_column($mobile['options'], 'key'));
+        $this->assertSame(['top', 'bottom'], array_column($template->responsiveControlFor('hero', 'classic', 'tablet', 'mediaPlacement')['options'], 'key'));
+    }
+
+    public function test_classic_venue_details_first_tablet_supports_all_semantic_placements(): void
+    {
+        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $control = $template->responsiveControlFor('venue', 'detailsFirst', 'tablet', 'mediaPlacement');
+
+        $this->assertSame('top', $control['default']);
+        $this->assertSame(['top', 'bottom', 'left', 'right'], array_column($control['options'], 'key'));
+
+        foreach (['top', 'bottom', 'left', 'right'] as $placement) {
+            $normalized = $template->normalizeSectionAppearance('venue', [
+                ...WebsiteSectionAppearance::DEFAULT,
+                'presentation' => 'detailsFirst',
+                'mediaPlacement' => 'right',
+                'responsive' => ['tablet' => ['mediaPlacement' => $placement]],
+            ]);
+
+            $this->assertSame($placement, $normalized['responsive']['tablet']['mediaPlacement']);
+            $this->assertSame($placement, $template->resolveSectionAppearanceForViewport('venue', $normalized, 'tablet')['mediaPlacement']);
+            $this->assertSame('right', $template->resolveSectionAppearanceForViewport('venue', $normalized, 'desktop')['mediaPlacement']);
+        }
+
+        $mobile = $template->responsiveControlFor('venue', 'detailsFirst', 'mobile', 'mediaPlacement');
+        $this->assertSame('top', $mobile['default']);
+        $this->assertSame(['top', 'bottom'], array_column($mobile['options'], 'key'));
+        $this->assertSame(['top', 'bottom'], array_column($template->responsiveControlFor('hero', 'classic', 'tablet', 'mediaPlacement')['options'], 'key'));
+    }
+
     public function test_appearance_normalization_uses_explicit_defaults_when_inherit_is_unavailable(): void
     {
         $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
@@ -152,15 +373,15 @@ class WebsiteTemplateRegistryTest extends TestCase
         $registry = new WebsiteTemplateRegistry;
         $expected = [
             WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 => [
-                'hero' => ['classic', 'immersive', 'framed'],
-                'story' => ['textFirst', 'portraitStory', 'framed'],
-                'venue' => ['detailsFirst', 'scenic', 'framed'],
-                'people' => ['medallions', 'portraitCards', 'framed', 'namesOnly'],
+                'hero' => ['classic', 'immersive'],
+                'story' => ['textFirst', 'portraitStory'],
+                'venue' => ['detailsFirst', 'scenic'],
+                'people' => ['medallions', 'portraitCards', 'namesOnly'],
             ],
             WebsiteTemplateRegistry::MODERN_EDITORIAL_V1 => [
-                'hero' => ['editorial', 'immersive', 'framed'],
-                'story' => ['textFirst', 'editorial', 'framed'],
-                'venue' => ['detailsFirst', 'scenic', 'framed'],
+                'hero' => ['editorial', 'immersive'],
+                'story' => ['textFirst', 'editorial'],
+                'venue' => ['detailsFirst', 'scenic'],
                 'people' => ['editorialPortraits', 'squareGrid', 'minimal', 'namesOnly'],
             ],
         ];
@@ -176,5 +397,59 @@ class WebsiteTemplateRegistryTest extends TestCase
         }
 
         $registry->assertValid();
+    }
+
+    public function test_legacy_framed_presentations_normalize_to_layout_presentations_with_frame_intent(): void
+    {
+        $registry = new WebsiteTemplateRegistry;
+        $cases = [
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'hero', 'classic', 'fineLine'],
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'story', 'textFirst', 'fineLine'],
+            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'venue', 'detailsFirst', 'fineLine'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'hero', 'editorial', 'hairline'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'story', 'textFirst', 'hairline'],
+            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'venue', 'detailsFirst', 'hairline'],
+        ];
+
+        foreach ($cases as [$templateKey, $sectionType, $presentation, $frameStyle]) {
+            $normalized = $registry->get($templateKey)->normalizeSectionAppearance($sectionType, [
+                ...WebsiteSectionAppearance::DEFAULT,
+                'presentation' => 'framed',
+                'cornerStyle' => 'rounded',
+                'shadowStyle' => 'soft',
+                'mediaContentGap' => 'spacious',
+                'mediaSpacing' => ['top' => 'small', 'right' => 'medium', 'bottom' => 'large', 'left' => 'none'],
+            ]);
+            $this->assertSame($presentation, $normalized['presentation']);
+            $this->assertSame($frameStyle, $normalized['frameStyle']);
+            $this->assertSame('rounded', $normalized['cornerStyle']);
+            $this->assertSame('soft', $normalized['shadowStyle']);
+            $this->assertSame('spacious', $normalized['mediaContentGap']);
+        }
+
+        $people = $registry->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)->normalizeSectionAppearance('people', [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'framed',
+        ]);
+        $this->assertSame('portraitCards', $people['presentation']);
+        $this->assertArrayNotHasKey('frameStyle', $people);
+    }
+
+    public function test_templates_expose_distinct_semantic_frame_catalogs_without_framed_presentations(): void
+    {
+        $registry = new WebsiteTemplateRegistry;
+        $classic = $registry->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $modern = $registry->get(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+
+        $this->assertSame(
+            ['none', 'fineLine', 'doubleLine', 'inset', 'outset', 'heritage', 'ornamental'],
+            array_column($classic->mediaControlsFor('story', 'portraitStory')['frameStyles']['options'], 'key'),
+        );
+        $this->assertSame(
+            ['none', 'hairline', 'offset', 'gallery', 'boldEdge', 'outset', 'editorialFrame'],
+            array_column($modern->mediaControlsFor('story', 'editorial')['frameStyles']['options'], 'key'),
+        );
+        $this->assertNotContains('framed', array_column($classic->presentationCapabilityFor('story')['options'], 'key'));
+        $this->assertNotContains('framed', array_column($modern->presentationCapabilityFor('story')['options'], 'key'));
     }
 }

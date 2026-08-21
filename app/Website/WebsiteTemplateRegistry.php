@@ -65,24 +65,26 @@ final class WebsiteTemplateRegistry
                 'hero' => $this->presentation('classic', [
                     'classic' => ['Classic', 'Elegant centered composition with a restrained image.', 'contained'],
                     'immersive' => ['Immersive', 'Image-forward composition with closely integrated text.', 'overlay'],
-                    'framed' => ['Framed', 'Formal framed image with generous breathing room.', 'frame'],
-                ]),
-                'story' => $this->presentation('framed', [
+                ], $this->mediaControls('classic', 'hero')),
+                'story' => $this->presentation('portraitStory', [
                     'textFirst' => ['Text First', 'Story-led composition with supporting photography.', 'text'],
                     'portraitStory' => ['Portrait Story', 'Portrait and narrative share the composition.', 'split'],
-                    'framed' => ['Framed', 'A restrained photograph introduces the story.', 'frame'],
-                ]),
-                'venue' => $this->presentation('framed', [
+                ], $this->mediaControls('classic', 'story')),
+                'venue' => $this->presentation('detailsFirst', [
                     'detailsFirst' => ['Details First', 'Venue information leads with supporting imagery.', 'text'],
                     'scenic' => ['Scenic', 'The venue photograph becomes the visual focus.', 'overlay'],
-                    'framed' => ['Framed', 'Formal image treatment above the venue details.', 'frame'],
-                ]),
+                ], $this->mediaControls('classic', 'venue')),
                 'people' => $this->presentation('medallions', [
                     'medallions' => ['Medallions', 'Formal circular portraits with ceremonial character.', 'circles'],
                     'portraitCards' => ['Portrait Cards', 'Elegant vertical portraits with names beneath.', 'cards'],
-                    'framed' => ['Framed', 'Structured formal portraits in restrained frames.', 'grid'],
                     'namesOnly' => ['Names Only', 'A polished text-only Wedding Party composition.', 'text'],
                 ]),
+            ],
+            sectionPresentationFallbacks: [
+                'hero' => ['framed' => ['presentation' => 'classic', 'frameStyle' => 'fineLine']],
+                'story' => ['framed' => ['presentation' => 'textFirst', 'frameStyle' => 'fineLine']],
+                'venue' => ['framed' => ['presentation' => 'detailsFirst', 'frameStyle' => 'fineLine']],
+                'people' => ['framed' => ['presentation' => 'portraitCards']],
             ],
         );
 
@@ -127,24 +129,26 @@ final class WebsiteTemplateRegistry
                 'hero' => $this->presentation('immersive', [
                     'editorial' => ['Editorial', 'Asymmetric magazine-style image and typography.', 'split'],
                     'immersive' => ['Immersive', 'A large image-led opening composition.', 'overlay'],
-                    'framed' => ['Framed', 'A controlled art-directed image block.', 'frame'],
-                ]),
-                'story' => $this->presentation('framed', [
+                ], $this->mediaControls('modern', 'hero')),
+                'story' => $this->presentation('editorial', [
                     'textFirst' => ['Text First', 'Narrative typography leads the composition.', 'text'],
                     'editorial' => ['Editorial', 'Image and story form an asymmetric spread.', 'split'],
-                    'framed' => ['Framed', 'A strong image block introduces the story.', 'frame'],
-                ]),
-                'venue' => $this->presentation('framed', [
+                ], $this->mediaControls('modern', 'story')),
+                'venue' => $this->presentation('detailsFirst', [
                     'detailsFirst' => ['Details First', 'Location details lead in an editorial layout.', 'text'],
                     'scenic' => ['Scenic', 'A broad venue image anchors the Section.', 'overlay'],
-                    'framed' => ['Framed', 'A precise image block pairs with venue details.', 'frame'],
-                ]),
+                ], $this->mediaControls('modern', 'venue')),
                 'people' => $this->presentation('editorialPortraits', [
                     'editorialPortraits' => ['Editorial Portraits', 'Vertical portraits with bold editorial rhythm.', 'cards'],
                     'squareGrid' => ['Square Grid', 'Structured square portraits in a clean grid.', 'grid'],
                     'minimal' => ['Minimal', 'Restrained, image-light portraits with generous space.', 'minimal'],
                     'namesOnly' => ['Names Only', 'A typographic Wedding Party composition.', 'text'],
                 ]),
+            ],
+            sectionPresentationFallbacks: [
+                'hero' => ['framed' => ['presentation' => 'editorial', 'frameStyle' => 'hairline']],
+                'story' => ['framed' => ['presentation' => 'textFirst', 'frameStyle' => 'hairline']],
+                'venue' => ['framed' => ['presentation' => 'detailsFirst', 'frameStyle' => 'hairline']],
             ],
         );
 
@@ -265,6 +269,64 @@ final class WebsiteTemplateRegistry
                     if (trim($option['description'] ?? '') === '' || trim($option['preview'] ?? '') === '') {
                         throw new LogicException("Template [{$definition->key}] has invalid presentation metadata [{$sectionType}].");
                     }
+                    $controls = $option['mediaControls'] ?? [];
+                    foreach (['mediaPlacements', 'mediaSizes', 'frameStyles', 'cornerStyles', 'shadowStyles', 'foregroundColors', 'mediaContentGaps'] as $group) {
+                        if (! isset($controls[$group])) {
+                            continue;
+                        }
+                        $this->assertOptionGroup($definition->key, "{$sectionType}.{$option['key']}.{$group}", $controls[$group]['options'] ?? []);
+                        if (! in_array($controls[$group]['default'] ?? null, array_column($controls[$group]['options'] ?? [], 'key'), true)) {
+                            throw new LogicException("Template [{$definition->key}] has an invalid Media control default [{$sectionType}.{$option['key']}.{$group}].");
+                        }
+                    }
+                    if (isset($controls['mediaSpacing'])) {
+                        $this->assertOptionGroup($definition->key, "{$sectionType}.{$option['key']}.mediaSpacing", $controls['mediaSpacing']['options'] ?? []);
+                        $allowed = array_column($controls['mediaSpacing']['options'] ?? [], 'key');
+                        foreach (['top', 'right', 'bottom', 'left'] as $side) {
+                            if (! in_array($controls['mediaSpacing']['default'][$side] ?? null, $allowed, true)) {
+                                throw new LogicException("Template [{$definition->key}] has an invalid Media spacing default [{$sectionType}.{$option['key']}.{$side}].");
+                            }
+                        }
+                    }
+                    if (isset($controls['overlayStrength']) && (($controls['overlayStrength']['min'] ?? 1) >= ($controls['overlayStrength']['max'] ?? 0) || ($controls['overlayStrength']['default'] ?? -1) < $controls['overlayStrength']['min'] || $controls['overlayStrength']['default'] > $controls['overlayStrength']['max'])) {
+                        throw new LogicException("Template [{$definition->key}] has an invalid overlay control [{$sectionType}.{$option['key']}].");
+                    }
+                    foreach ($controls['responsive'] ?? [] as $viewport => $responsiveControls) {
+                        if (! in_array($viewport, WebsiteSectionAppearance::RESPONSIVE_VIEWPORTS, true)) {
+                            throw new LogicException("Template [{$definition->key}] has an invalid responsive viewport [{$sectionType}.{$option['key']}.{$viewport}].");
+                        }
+                        foreach ($responsiveControls as $setting => $control) {
+                            if (! in_array($setting, WebsiteSectionAppearance::RESPONSIVE_SETTINGS, true)) {
+                                throw new LogicException("Template [{$definition->key}] has an invalid responsive control [{$sectionType}.{$option['key']}.{$setting}].");
+                            }
+                            $this->assertOptionGroup($definition->key, "{$sectionType}.{$option['key']}.{$viewport}.{$setting}", $control['options'] ?? []);
+                            $allowed = array_column($control['options'] ?? [], 'key');
+                            if ($setting === 'mediaSpacing') {
+                                foreach (['top', 'right', 'bottom', 'left'] as $side) {
+                                    if (! in_array($control['default'][$side] ?? null, $allowed, true)) {
+                                        throw new LogicException("Template [{$definition->key}] has an invalid responsive Media spacing default [{$sectionType}.{$option['key']}.{$viewport}.{$side}].");
+                                    }
+                                }
+                            } elseif (! in_array($control['default'] ?? null, $allowed, true)) {
+                                throw new LogicException("Template [{$definition->key}] has an invalid responsive control default [{$sectionType}.{$option['key']}.{$viewport}.{$setting}].");
+                            }
+                        }
+                    }
+                }
+            }
+            foreach ($definition->sectionPresentationFallbacks as $sectionType => $fallbacks) {
+                foreach ($fallbacks as $legacyPresentation => $fallback) {
+                    $capability = $definition->presentationCapabilityFor($sectionType);
+                    $target = $fallback['presentation'] ?? null;
+                    if ($capability === null || in_array($legacyPresentation, array_column($capability['options'], 'key'), true) || ! in_array($target, array_column($capability['options'], 'key'), true)) {
+                        throw new LogicException("Template [{$definition->key}] has an invalid legacy presentation fallback [{$sectionType}.{$legacyPresentation}].");
+                    }
+                    if (isset($fallback['frameStyle'])) {
+                        $allowedFrames = array_column($definition->mediaControlsFor($sectionType, $target)['frameStyles']['options'] ?? [], 'key');
+                        if (! in_array($fallback['frameStyle'], $allowedFrames, true)) {
+                            throw new LogicException("Template [{$definition->key}] has an invalid legacy frame fallback [{$sectionType}.{$legacyPresentation}].");
+                        }
+                    }
                 }
             }
         }
@@ -287,7 +349,7 @@ final class WebsiteTemplateRegistry
      * @param  array<string, array{string, string, string}>  $values
      * @return array{default: string, options: list<array{key: string, displayName: string, description: string, preview: string}>}
      */
-    private function presentation(string $default, array $values): array
+    private function presentation(string $default, array $values, array $controls = []): array
     {
         return [
             'default' => $default,
@@ -297,11 +359,54 @@ final class WebsiteTemplateRegistry
                     'displayName' => $metadata[0],
                     'description' => $metadata[1],
                     'preview' => $metadata[2],
+                    'mediaControls' => $controls[$key] ?? null,
                 ],
                 array_keys($values),
                 array_values($values),
             ),
         ];
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function mediaControls(string $template, string $section): array
+    {
+        $frames = $template === 'classic'
+            ? $this->options(['none' => 'None', 'fineLine' => 'Fine Line', 'doubleLine' => 'Double Line', 'inset' => 'Inset', 'outset' => 'Outset', 'heritage' => 'Heritage', 'ornamental' => 'Ornamental'])
+            : $this->options(['none' => 'None', 'hairline' => 'Hairline', 'offset' => 'Offset', 'gallery' => 'Gallery', 'boldEdge' => 'Bold Edge', 'outset' => 'Outset', 'editorialFrame' => 'Editorial Frame']);
+        $styles = fn (string $placement, string $frame = 'none', ?array $placements = null, ?string $mobilePlacement = null, ?array $tabletPlacements = null): array => [
+            'mediaPlacements' => ['default' => $placement, 'options' => $this->options($placements ?? (in_array($placement, ['left', 'right'], true) ? ['left' => 'Left', 'right' => 'Right'] : ['top' => 'Top', 'bottom' => 'Bottom']))],
+            'mediaSizes' => ['default' => 'balanced', 'options' => $this->options(['compact' => 'Compact', 'balanced' => 'Balanced', 'feature' => 'Feature'])],
+            'frameStyles' => ['default' => $frame, 'options' => $frames],
+            'cornerStyles' => ['default' => 'square', 'options' => $this->options(['square' => 'Square', 'soft' => 'Soft', 'rounded' => 'Rounded'])],
+            'shadowStyles' => ['default' => 'none', 'options' => $this->options(['none' => 'None', 'subtle' => 'Subtle', 'soft' => 'Soft', 'elevated' => 'Elevated'])],
+            'mediaSpacing' => [
+                'default' => ['top' => 'medium', 'right' => 'medium', 'bottom' => 'medium', 'left' => 'medium'],
+                'options' => $this->options(['none' => 'None', 'small' => 'Small', 'medium' => 'Medium', 'large' => 'Large']),
+            ],
+            'mediaContentGaps' => ['default' => 'comfortable', 'options' => $this->options(['tight' => 'Tight', 'comfortable' => 'Comfortable', 'spacious' => 'Spacious', 'generous' => 'Generous'])],
+            ...($mobilePlacement === null ? [] : ['responsive' => [
+                'tablet' => [
+                    'mediaPlacement' => ['default' => $mobilePlacement, 'options' => $this->options($tabletPlacements ?? ['top' => 'Top', 'bottom' => 'Bottom'])],
+                ],
+                'mobile' => [
+                    'mediaPlacement' => ['default' => $mobilePlacement, 'options' => $this->options(['top' => 'Top', 'bottom' => 'Bottom'])],
+                ],
+            ]]),
+        ];
+        $immersive = [
+            'overlayStrength' => ['default' => 0.5, 'min' => 0.2, 'max' => 0.8, 'step' => 0.1],
+            'foregroundColors' => ['default' => '#FFFFFF', 'options' => $this->options(['#FFFFFF' => 'Light', '#1F1713' => 'Dark'])],
+        ];
+
+        return match ([$section, $template]) {
+            ['hero', 'classic'] => ['classic' => $styles('top', 'none', ['top' => 'Top', 'right' => 'Right', 'bottom' => 'Bottom', 'left' => 'Left'], 'top'), 'immersive' => $immersive],
+            ['story', 'classic'] => ['textFirst' => $styles('bottom', 'none', null, 'bottom'), 'portraitStory' => $styles('left', 'none', null, 'top', ['top' => 'Top', 'bottom' => 'Bottom', 'left' => 'Left', 'right' => 'Right'])],
+            ['venue', 'classic'] => ['detailsFirst' => $styles('right', 'none', null, 'top', ['top' => 'Top', 'bottom' => 'Bottom', 'left' => 'Left', 'right' => 'Right']), 'scenic' => $immersive],
+            ['hero', 'modern'] => ['editorial' => $styles('left', 'none', null, 'top'), 'immersive' => $immersive],
+            ['story', 'modern'] => ['textFirst' => $styles('bottom', 'none', null, 'bottom'), 'editorial' => $styles('left', 'none', null, 'top')],
+            ['venue', 'modern'] => ['detailsFirst' => $styles('right', 'none', null, 'top'), 'scenic' => $immersive],
+            default => [],
+        };
     }
 
     /** @param list<array{key: string, displayName: string}> $options */

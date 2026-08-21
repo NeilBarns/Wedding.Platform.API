@@ -66,6 +66,47 @@ class WebsiteTemplateAssignmentTest extends TestCase
         $this->assertSame($content, $people->content);
     }
 
+    public function test_template_switch_normalizes_media_styling_for_the_target_presentation(): void
+    {
+        $website = Website::factory()->create(['template_key' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1]);
+        $hero = WebsiteSection::factory()->for($website)->forType('hero')->create([
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'classic', 'mediaPlacement' => 'bottom', 'mediaSize' => 'compact', 'frameStyle' => 'heritage', 'cornerStyle' => 'rounded', 'shadowStyle' => 'soft'],
+        ]);
+
+        app(AssignWebsiteTemplate::class)->handle($website, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+
+        $appearance = $hero->refresh()->appearance;
+        $this->assertSame('immersive', $appearance['presentation']);
+        $this->assertSame(0.5, $appearance['overlayStrength']);
+        $this->assertSame('#FFFFFF', $appearance['foregroundColor']);
+        $this->assertArrayNotHasKey('frameStyle', $appearance);
+        $this->assertArrayNotHasKey('mediaPlacement', $appearance);
+    }
+
+    public function test_template_switch_preserves_compatible_semantic_media_spacing_and_removes_it_when_unsupported(): void
+    {
+        $website = Website::factory()->create(['template_key' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1]);
+        $spacing = ['top' => 'small', 'right' => 'medium', 'bottom' => 'large', 'left' => 'none'];
+        $story = WebsiteSection::factory()->for($website)->forType('story')->create([
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'framed', 'mediaSpacing' => $spacing, 'mediaContentGap' => 'spacious'],
+        ]);
+
+        app(AssignWebsiteTemplate::class)->handle($website, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $this->assertSame('textFirst', $story->refresh()->appearance['presentation']);
+        $this->assertSame('hairline', $story->appearance['frameStyle']);
+        $this->assertSame($spacing, $story->refresh()->appearance['mediaSpacing']);
+        $this->assertSame('spacious', $story->appearance['mediaContentGap']);
+
+        $hero = WebsiteSection::factory()->for($website)->forType('hero')->create([
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'editorial', 'mediaSpacing' => $spacing, 'mediaContentGap' => 'generous'],
+        ]);
+        app(AssignWebsiteTemplate::class)->handle($website, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $hero->update(['appearance' => [...$hero->appearance, 'presentation' => 'immersive']]);
+        app(AssignWebsiteTemplate::class)->handle($website, WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $this->assertArrayNotHasKey('mediaSpacing', $hero->refresh()->appearance);
+        $this->assertArrayNotHasKey('mediaContentGap', $hero->appearance);
+    }
+
     public function test_unknown_template_is_rejected_without_changing_assignment(): void
     {
         $website = Website::factory()->create();

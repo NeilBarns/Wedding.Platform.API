@@ -157,7 +157,7 @@ class WebsiteSectionMediaTest extends TestCase
         $zoomed = [...$base, 'media' => [...$base['media'], 'zoom' => 1.8]];
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => $zoomed])->assertOk();
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
-            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'framed'],
+            'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'classic'],
         ])->assertOk();
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", ['templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1])->assertOk();
         $this->assertSame(1.8, $hero->refresh()->content['media']['zoom']);

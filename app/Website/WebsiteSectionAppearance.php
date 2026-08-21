@@ -4,6 +4,17 @@ namespace App\Website;
 
 final class WebsiteSectionAppearance
 {
+    public const RESPONSIVE_VIEWPORTS = ['tablet', 'mobile'];
+
+    public const RESPONSIVE_SETTINGS = [
+        'mediaPlacement',
+        'mediaSize',
+        'mediaContentGap',
+        'headingAlignment',
+        'bodyAlignment',
+        'mediaSpacing',
+    ];
+
     public const DEFAULT = [
         'headingAlignment' => 'inherit',
         'bodyAlignment' => 'inherit',

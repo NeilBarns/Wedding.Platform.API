@@ -67,7 +67,20 @@ class WebsiteTemplateSelectionTest extends TestCase
             ->assertJsonPath('data.designSettings.artStyle', 'clean');
 
         $this->assertSame($before, $website->sections()->get()->map->only(['id', 'type', 'sort_order', 'is_enabled', 'content'])->all());
-        $this->assertSame(['headingAlignment' => 'right', 'bodyAlignment' => 'left', 'backgroundTreatment' => 'accent', 'emphasis' => 'featured', 'presentation' => 'framed'], $story->refresh()->appearance);
+        $this->assertSame([
+            'headingAlignment' => 'right',
+            'bodyAlignment' => 'left',
+            'backgroundTreatment' => 'accent',
+            'emphasis' => 'featured',
+            'presentation' => 'editorial',
+            'mediaPlacement' => 'left',
+            'mediaSize' => 'balanced',
+            'frameStyle' => 'none',
+            'cornerStyle' => 'square',
+            'shadowStyle' => 'none',
+            'mediaContentGap' => 'comfortable',
+            'mediaSpacing' => ['top' => 'medium', 'right' => 'medium', 'bottom' => 'medium', 'left' => 'medium'],
+        ], $story->refresh()->appearance);
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/website/templates")
             ->assertJsonPath('data.0.isSelected', false)

@@ -16,6 +16,11 @@ class WebsiteSectionResource extends JsonResource
             ? app(WebsiteTemplateRegistry::class)->get($this->website->template_key)
             : null;
 
+        $appearance = $this->appearance;
+        if ($template?->presentationFallbackFor($this->type, $appearance['presentation'] ?? '') !== null) {
+            $appearance = $template->normalizeSectionAppearance($this->type, $appearance);
+        }
+
         return [
             'id' => $this->id,
             'type' => $this->type,
@@ -23,7 +28,7 @@ class WebsiteSectionResource extends JsonResource
             'sortOrder' => $this->sort_order,
             'isEnabled' => $this->is_enabled,
             'content' => $this->content,
-            'appearance' => $this->appearance,
+            'appearance' => $appearance,
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),
             'itemMediaCapability' => $template?->itemMediaCapabilityFor($this->type),
