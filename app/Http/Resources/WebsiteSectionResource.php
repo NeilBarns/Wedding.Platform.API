@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Website\StoryContentNormalizer;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\Request;
@@ -21,13 +22,17 @@ class WebsiteSectionResource extends JsonResource
             $appearance = $template->normalizeSectionAppearance($this->type, $appearance);
         }
 
+        $content = $this->type === 'story'
+            ? app(StoryContentNormalizer::class)->normalize($this->id, $this->content)
+            : $this->content;
+
         return [
             'id' => $this->id,
             'type' => $this->type,
             'displayName' => $definition?->displayName ?? $this->type,
             'sortOrder' => $this->sort_order,
             'isEnabled' => $this->is_enabled,
-            'content' => $this->content,
+            'content' => $content,
             'appearance' => $appearance,
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),

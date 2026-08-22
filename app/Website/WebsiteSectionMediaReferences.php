@@ -6,7 +6,7 @@ final class WebsiteSectionMediaReferences
 {
     /**
      * @param  array<string, mixed>  $content
-     * @return list<array{assetId: string, context?: array{groupId: string, groupName: string, personId: string, personName: string}}>
+     * @return list<array{assetId: string, context?: array<string, string>}>
      */
     public function extract(string $sectionType, array $content): array
     {
@@ -14,6 +14,22 @@ final class WebsiteSectionMediaReferences
         $sectionAssetId = $content['media']['assetId'] ?? null;
         if (is_string($sectionAssetId)) {
             $references[] = ['assetId' => $sectionAssetId];
+        }
+
+        if ($sectionType === 'story') {
+            foreach ($content['blocks'] ?? [] as $block) {
+                $assetId = $block['media']['assetId'] ?? null;
+                if (! is_string($assetId)) {
+                    continue;
+                }
+                $references[] = [
+                    'assetId' => $assetId,
+                    'context' => [
+                        'blockId' => (string) ($block['id'] ?? ''),
+                        'blockHeading' => (string) ($block['heading'] ?? ''),
+                    ],
+                ];
+            }
         }
 
         if ($sectionType !== 'people') {

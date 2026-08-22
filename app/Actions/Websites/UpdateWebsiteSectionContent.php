@@ -24,7 +24,7 @@ final class UpdateWebsiteSectionContent
         $currentMedia = $section->content['media'] ?? null;
         $nextMedia = $validated['media'] ?? null;
         $website = $section->website()->firstOrFail();
-        if ($currentMedia !== $nextMedia && $this->templates->get($website->template_key)?->mediaCapabilityFor($section->type) === null) {
+        if ($section->type !== 'story' && $currentMedia !== $nextMedia && $this->templates->get($website->template_key)?->mediaCapabilityFor($section->type) === null) {
             throw ValidationException::withMessages(['content.media' => 'This Template does not support Media for this Section.']);
         }
         if (is_array($nextMedia) && ! MediaAsset::query()->whereKey($nextMedia['assetId'])->where('event_id', $website->event_id)
@@ -32,13 +32,18 @@ final class UpdateWebsiteSectionContent
             throw ValidationException::withMessages(['content.media.assetId' => 'Select a valid image from this Event Media Library.']);
         }
         $nextItemReferences = $this->mediaReferences->extract($section->type, $validated);
+        $currentReferences = $this->mediaReferences->extract($section->type, $section->content);
+        if ($section->type === 'story' && $currentReferences !== $nextItemReferences && $this->templates->get($website->template_key)?->mediaCapabilityFor('story') === null) {
+            throw ValidationException::withMessages(['content.blocks' => 'This Template does not support Media for Story blocks.']);
+        }
         if ($section->type === 'people' && $this->personMedia($section->content) !== $this->personMedia($validated) && $this->templates->get($website->template_key)?->itemMediaCapabilityFor($section->type) === null) {
             throw ValidationException::withMessages(['content.groups' => 'This Template does not support images for people in this Section.']);
         }
         $assetIds = collect($nextItemReferences)->pluck('assetId')->unique()->values();
         if ($assetIds->isNotEmpty() && MediaAsset::query()->where('event_id', $website->event_id)->whereKey($assetIds)
             ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/webp'])->count() !== $assetIds->count()) {
-            throw ValidationException::withMessages(['content.groups' => 'Select valid images from this Event Media Library.']);
+            $path = $section->type === 'story' ? 'content.blocks' : 'content.groups';
+            throw ValidationException::withMessages([$path => 'Select valid images from this Event Media Library.']);
         }
         $section->content = $validated;
         $section->save();

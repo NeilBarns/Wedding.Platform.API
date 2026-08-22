@@ -59,7 +59,11 @@ final class WebsiteTemplateRegistry
             ],
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
-            sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
+            sectionMediaCapabilities: [
+                'hero' => ['mode' => 'single'],
+                'story' => ['mode' => 'multiple'],
+                'venue' => ['mode' => 'single'],
+            ],
             sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
             sectionPresentationCapabilities: [
                 'hero' => $this->presentation('classic', [
@@ -123,7 +127,11 @@ final class WebsiteTemplateRegistry
             ],
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
-            sectionMediaCapabilities: array_fill_keys(['hero', 'story', 'venue'], ['mode' => 'single']),
+            sectionMediaCapabilities: [
+                'hero' => ['mode' => 'single'],
+                'story' => ['mode' => 'multiple'],
+                'venue' => ['mode' => 'single'],
+            ],
             sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
             sectionPresentationCapabilities: [
                 'hero' => $this->presentation('immersive', [

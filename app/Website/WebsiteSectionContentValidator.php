@@ -22,6 +22,16 @@ final class WebsiteSectionContentValidator
         }
 
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
+        if ($sectionType === 'story') {
+            $validated['heading'] ??= '';
+            $validated['blocks'] = array_map(function (array $block): array {
+                $block['body'] ??= '';
+
+                return $block;
+            }, $validated['blocks']);
+
+            return $validated;
+        }
         array_walk_recursive($validated, function (mixed &$value, string|int $key) use ($sectionType): void {
             if ($value === null && $key !== 'media' && ! ($sectionType === 'people' && $key === 'role')) {
                 $value = '';
@@ -37,7 +47,22 @@ final class WebsiteSectionContentValidator
         return match ($sectionType) {
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
             'date', 'dressCode' => $this->stringContentRules(['heading' => 255, 'description' => 5000]),
-            'story' => $this->singleMediaRules($this->stringContentRules(['heading' => 255, 'body' => 10000])),
+            'story' => [
+                'content' => ['required', 'array:heading,intro,blocks'],
+                'content.heading' => ['present', 'nullable', 'string', 'max:255'],
+                'content.intro' => ['sometimes', 'nullable', 'string', 'max:5000'],
+                'content.blocks' => ['present', 'array', 'max:20'],
+                'content.blocks.*' => ['required', 'array:id,heading,body,media'],
+                'content.blocks.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
+                'content.blocks.*.heading' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'content.blocks.*.body' => ['present', 'nullable', 'string', 'max:10000'],
+                'content.blocks.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint,zoom'],
+                'content.blocks.*.media.assetId' => ['required_with:content.blocks.*.media', 'string', 'ulid'],
+                'content.blocks.*.media.focalPoint' => ['sometimes', 'array:x,y'],
+                'content.blocks.*.media.focalPoint.x' => ['required_with:content.blocks.*.media.focalPoint', 'numeric', 'between:0,1'],
+                'content.blocks.*.media.focalPoint.y' => ['required_with:content.blocks.*.media.focalPoint', 'numeric', 'between:0,1'],
+                'content.blocks.*.media.zoom' => ['sometimes', 'numeric', 'between:1,3'],
+            ],
             'venue' => $this->singleMediaRules($this->stringContentRules([
                 'heading' => 255,
                 'name' => 255,

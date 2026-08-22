@@ -11,10 +11,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Website extends Model
 {
+    public const DEFAULT_NAME = 'Website';
+
+    public const MAX_NAME_LENGTH = 100;
+
     /** @use HasFactory<WebsiteFactory> */
     use HasFactory, HasUlids;
 
     protected $fillable = [
+        'name',
         'template_key',
         'design_settings',
     ];

@@ -47,6 +47,7 @@ final class InitializeEventWebsite
                 }
 
                 $website = $lockedEvent->website()->create([
+                    'name' => Website::DEFAULT_NAME,
                     'template_key' => $template->key,
                     'design_settings' => $template->defaultDesignSettings,
                 ]);

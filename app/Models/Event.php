@@ -70,6 +70,11 @@ class Event extends Model
         return $this->hasOne(Website::class);
     }
 
+    public function websiteProjects(): HasMany
+    {
+        return $this->hasMany(Website::class);
+    }
+
     public function mediaAssets(): HasMany
     {
         return $this->hasMany(MediaAsset::class);

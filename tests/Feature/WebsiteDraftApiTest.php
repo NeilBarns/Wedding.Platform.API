@@ -63,6 +63,8 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.displayName', 'Classic Filipiniana')
             ->assertJsonPath('data.sections.0.id', $story->id)
             ->assertJsonPath('data.sections.0.displayName', 'Story')
+            ->assertJsonPath('data.sections.0.content.blocks', [])
+            ->assertJsonPath('data.sections.0.mediaCapability.mode', 'multiple')
             ->assertJsonCount(10, 'data.sections');
         $this->assertSame('Hero', $heroPayload['displayName']);
         $this->assertFalse($heroPayload['isEnabled']);
@@ -75,7 +77,9 @@ class WebsiteDraftApiTest extends TestCase
         $payloads = [
             'hero' => ['headline' => '', 'subheadline' => 'Together'],
             'date' => ['heading' => '', 'description' => 'Save the date'],
-            'story' => ['heading' => 'Our Story', 'body' => 'Plain text'],
+            'story' => ['heading' => 'Our Story', 'intro' => null, 'blocks' => [[
+                'id' => 'story-one', 'heading' => null, 'body' => 'Plain text', 'media' => null,
+            ]]],
             'schedule' => ['heading' => '', 'items' => [[
                 'time' => '3:00 PM', 'title' => 'Ceremony', 'description' => '',
             ]]],
@@ -98,6 +102,52 @@ class WebsiteDraftApiTest extends TestCase
                 );
             $this->assertSame($content, $section->refresh()->content);
         }
+    }
+
+    public function test_story_blocks_round_trip_in_order_and_reject_invalid_structures(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
+        $blocks = [
+            ['id' => 'first', 'heading' => null, 'body' => 'First chapter', 'media' => null],
+            ['id' => 'second', 'heading' => 'The proposal', 'body' => 'Second chapter', 'media' => null],
+        ];
+        $content = ['heading' => 'Our Story', 'intro' => 'How it began', 'blocks' => $blocks];
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
+            ->assertJsonPath('data.sections.2.content.blocks.0.id', 'first')
+            ->assertJsonPath('data.sections.2.content.blocks.1.id', 'second');
+        $this->assertSame($content, $story->refresh()->content);
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
+            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
+        ])->assertOk();
+        $this->assertSame($content, $story->refresh()->content);
+
+        $duplicate = [...$content, 'blocks' => [$blocks[0], [...$blocks[1], 'id' => 'first']]];
+        $this->actingAs($owner)->putJson($url, ['content' => $duplicate])->assertUnprocessable();
+        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'blocks' => array_fill(0, 21, $blocks[0])]])
+            ->assertUnprocessable()->assertJsonValidationErrors('content.blocks');
+        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'unexpected' => true]])->assertUnprocessable();
+        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'blocks' => [['id' => 'broken', 'body' => [], 'media' => null]]]])->assertUnprocessable();
+    }
+
+    public function test_historical_story_content_is_read_as_one_stable_block_without_mutating_storage(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $legacy = ['heading' => 'Our Story', 'body' => 'The original narrative'];
+        $story->update(['content' => $legacy]);
+
+        $first = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk();
+        $second = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk();
+        $firstStory = collect($first->json('data.sections'))->firstWhere('id', $story->id);
+        $secondStory = collect($second->json('data.sections'))->firstWhere('id', $story->id);
+
+        $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['blocks'][0]['id']);
+        $this->assertSame('The original narrative', $firstStory['content']['blocks'][0]['body']);
+        $this->assertSame($firstStory['content'], $secondStory['content']);
+        $this->assertSame($legacy, $story->refresh()->content);
     }
 
     public function test_content_update_rejects_unknown_keys_wrong_types_and_event_or_presentation_data(): void
