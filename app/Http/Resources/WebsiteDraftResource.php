@@ -17,6 +17,7 @@ class WebsiteDraftResource extends JsonResource
         return [
             'id' => $this->id,
             'eventId' => $this->event_id,
+            'name' => $this->name,
             'templateKey' => $this->template_key,
             'designSettings' => $this->design_settings,
             'template' => $template === null ? null : [
