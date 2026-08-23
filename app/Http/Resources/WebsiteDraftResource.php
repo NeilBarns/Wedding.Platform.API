@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\MediaAsset;
 use App\Models\WebsiteSection;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteDraftNormalizer;
 use App\Website\WebsiteSectionMediaReferences;
 use App\Website\WebsiteTemplateRegistry;
@@ -16,6 +17,7 @@ class WebsiteDraftResource extends JsonResource
     {
         $draft = app(WebsiteDraftNormalizer::class)->normalize($this->resource);
         $template = app(WebsiteTemplateRegistry::class)->get($draft['templateKey']);
+        $capabilities = $template === null ? null : app(WebsiteCapabilityResolver::class)->template($template);
 
         return [
             'schemaVersion' => $draft['schemaVersion'],
@@ -28,6 +30,7 @@ class WebsiteDraftResource extends JsonResource
                 'key' => $template->key,
                 'displayName' => $template->displayName,
                 'designOptions' => $template->designOptions,
+                'capabilities' => new WebsiteTemplateCapabilitiesResource($capabilities),
             ],
             'sections' => array_map(
                 fn (array $item): WebsiteSectionResource => new WebsiteSectionResource($item['section'], $item['content']),

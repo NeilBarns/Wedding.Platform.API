@@ -72,6 +72,29 @@ class WebsiteDraftApiTest extends TestCase
         $this->assertSame('A heading', $heroPayload['content']['headline']);
     }
 
+    public function test_draft_exposes_deterministic_template_capabilities_without_changing_compatibility_metadata_or_storage(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $website = $event->website;
+        $beforeWebsite = $website->updated_at->toJSON();
+        $beforeSections = $website->sections()->pluck('updated_at', 'id')->map->toJSON()->all();
+
+        $legacy = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
+            ->assertJsonPath('data.schemaVersion', 2)
+            ->assertJsonPath('data.template.capabilities.elements', ['narrativeBlock'])
+            ->assertJsonPath('data.template.capabilities.sections.2.id', 'story')
+            ->assertJsonPath('data.template.capabilities.sections.2.elements.allowedTypes', ['narrativeBlock'])
+            ->assertJsonPath('data.template.capabilities.sections.2.elements.maxCount', 20)
+            ->assertJsonPath('data.template.capabilities.sections.2.elements.compositionGroups', null)
+            ->assertJsonPath('data.sections.2.presentationCapability.default', 'portraitStory')
+            ->assertJsonPath('data.sections.2.mediaCapability.mode', 'multiple');
+        $project = $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$website->id}")->assertOk();
+
+        $this->assertSame($legacy->json('data.template.capabilities'), $project->json('data.template.capabilities'));
+        $this->assertSame($beforeWebsite, $website->refresh()->updated_at->toJSON());
+        $this->assertSame($beforeSections, $website->sections()->pluck('updated_at', 'id')->map->toJSON()->all());
+    }
+
     public function test_canonical_section_content_contracts_accept_valid_draft_payloads(): void
     {
         [$event, $owner] = $this->createEvent();
