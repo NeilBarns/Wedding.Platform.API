@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Event;
 use App\Models\Website;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -19,6 +20,7 @@ class WebsiteFactory extends Factory
             'design_settings' => app(WebsiteTemplateRegistry::class)
                 ->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
                 ->defaultDesignSettings,
+            'schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
         ];
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Website\StoryContentNormalizer;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\Request;
@@ -10,6 +9,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class WebsiteSectionResource extends JsonResource
 {
+    /** @param array<string, mixed> $normalizedContent */
+    public function __construct($resource, private readonly array $normalizedContent)
+    {
+        parent::__construct($resource);
+    }
+
     public function toArray(Request $request): array
     {
         $definition = app(WebsiteSectionRegistry::class)->get($this->type);
@@ -22,17 +27,13 @@ class WebsiteSectionResource extends JsonResource
             $appearance = $template->normalizeSectionAppearance($this->type, $appearance);
         }
 
-        $content = $this->type === 'story'
-            ? app(StoryContentNormalizer::class)->normalize($this->id, $this->content)
-            : $this->content;
-
         return [
             'id' => $this->id,
             'type' => $this->type,
             'displayName' => $definition?->displayName ?? $this->type,
             'sortOrder' => $this->sort_order,
             'isEnabled' => $this->is_enabled,
-            'content' => $content,
+            'content' => $this->normalizedContent,
             'appearance' => $appearance,
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),

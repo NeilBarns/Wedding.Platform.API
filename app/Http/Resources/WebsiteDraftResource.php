@@ -3,6 +3,8 @@
 namespace App\Http\Resources;
 
 use App\Models\MediaAsset;
+use App\Models\WebsiteSection;
+use App\Website\WebsiteDraftNormalizer;
 use App\Website\WebsiteSectionMediaReferences;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\Request;
@@ -12,32 +14,37 @@ class WebsiteDraftResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $template = app(WebsiteTemplateRegistry::class)->get($this->template_key);
+        $draft = app(WebsiteDraftNormalizer::class)->normalize($this->resource);
+        $template = app(WebsiteTemplateRegistry::class)->get($draft['templateKey']);
 
         return [
-            'id' => $this->id,
-            'eventId' => $this->event_id,
-            'name' => $this->name,
-            'templateKey' => $this->template_key,
-            'designSettings' => $this->design_settings,
+            'schemaVersion' => $draft['schemaVersion'],
+            'id' => $draft['id'],
+            'eventId' => $draft['eventId'],
+            'name' => $draft['name'],
+            'templateKey' => $draft['templateKey'],
+            'designSettings' => $draft['designSettings'],
             'template' => $template === null ? null : [
                 'key' => $template->key,
                 'displayName' => $template->displayName,
                 'designOptions' => $template->designOptions,
             ],
-            'sections' => WebsiteSectionResource::collection($this->whenLoaded('sections')),
-            'media' => (object) $this->resolvedMedia(),
+            'sections' => array_map(
+                fn (array $item): WebsiteSectionResource => new WebsiteSectionResource($item['section'], $item['content']),
+                $draft['sections'],
+            ),
+            'media' => (object) $this->resolvedMedia($draft['sections']),
         ];
     }
 
-    /** @return array<string, array<string, mixed>> */
-    private function resolvedMedia(): array
+    /**
+     * @param  list<array{section: WebsiteSection, content: array<string, mixed>}>  $sections
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolvedMedia(array $sections): array
     {
-        if (! $this->relationLoaded('sections')) {
-            return [];
-        }
         $references = app(WebsiteSectionMediaReferences::class);
-        $ids = $this->sections->flatMap(fn ($section) => $references->extract($section->type, $section->content))
+        $ids = collect($sections)->flatMap(fn (array $item) => $references->extract($item['section']->type, $item['content']))
             ->pluck('assetId')->unique()->values();
         if ($ids->isEmpty()) {
             return [];

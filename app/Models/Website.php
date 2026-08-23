@@ -23,11 +23,15 @@ class Website extends Model
         'name',
         'template_key',
         'design_settings',
+        'schema_version',
     ];
 
     protected function casts(): array
     {
-        return ['design_settings' => 'array'];
+        return [
+            'design_settings' => 'array',
+            'schema_version' => 'integer',
+        ];
     }
 
     protected static function booted(): void

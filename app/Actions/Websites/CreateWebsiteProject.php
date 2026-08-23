@@ -7,6 +7,7 @@ use App\Exceptions\UnknownWebsiteTemplate;
 use App\Models\Event;
 use App\Models\Website;
 use App\Website\WebsiteCreationTemplateCatalog;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +41,7 @@ final class CreateWebsiteProject
                 'name' => trim($name),
                 'template_key' => $template->key,
                 'design_settings' => $template->defaultDesignSettings,
+                'schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
             ]);
             $this->initializeSections->handle($website);
 

@@ -7,6 +7,7 @@ use App\Exceptions\UnknownWebsiteTemplate;
 use App\Exceptions\WebsiteAlreadyInitialized;
 use App\Models\Event;
 use App\Models\Website;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
@@ -50,6 +51,7 @@ final class InitializeEventWebsite
                     'name' => Website::DEFAULT_NAME,
                     'template_key' => $template->key,
                     'design_settings' => $template->defaultDesignSettings,
+                    'schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
                 ]);
                 $this->initializeSections->handle($website);
 
