@@ -10,6 +10,9 @@ use App\Website\WebsiteTemplateRegistry;
 
 final class WebsiteCapabilityResolver
 {
+    /** @var array<string, TemplateCapabilities> */
+    private array $resolvedTemplates = [];
+
     public function __construct(
         private readonly WebsiteTemplateRegistry $templates,
         private readonly WebsiteSectionRegistry $sections,
@@ -17,6 +20,11 @@ final class WebsiteCapabilityResolver
 
     public function template(string|WebsiteTemplateDefinition $template): ?TemplateCapabilities
     {
+        if (is_string($template) && isset($this->resolvedTemplates[$template])) {
+            return $this->resolvedTemplates[$template];
+        }
+
+        $requestedKey = is_string($template) ? $template : null;
         $definition = is_string($template) ? $this->templates->get($template) : $template;
         if ($definition === null) {
             return null;
@@ -32,7 +40,12 @@ final class WebsiteCapabilityResolver
         $elements = collect($sections)->flatMap(fn (SectionCapability $section): array => $section->allowedElementTypes ?? [])
             ->unique()->values()->all();
 
-        return new TemplateCapabilities(elements: $elements, sections: $sections);
+        $capabilities = new TemplateCapabilities(elements: $elements, sections: $sections);
+        if ($requestedKey !== null) {
+            $this->resolvedTemplates[$requestedKey] = $capabilities;
+        }
+
+        return $capabilities;
     }
 
     public function section(string|WebsiteTemplateDefinition $template, string $sectionId): ?SectionCapability

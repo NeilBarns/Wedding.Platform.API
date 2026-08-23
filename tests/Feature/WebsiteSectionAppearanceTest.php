@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
 use App\Website\WebsiteSectionAppearance;
+use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -272,6 +273,35 @@ class WebsiteSectionAppearanceTest extends TestCase
         )->assertOk()->assertJsonMissingPath('data.sections.0.appearance.responsive');
 
         $this->assertArrayNotHasKey('responsive', $hero->refresh()->appearance);
+    }
+
+    public function test_modern_project_updates_use_resolved_presentation_and_viewport_capabilities(): void
+    {
+        $owner = User::factory()->create();
+        $event = app(CreateEvent::class)->handle($owner, ['name' => 'A Modern Wedding']);
+        $website = $this->initializeWebsite($event, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $hero = $website->sections()->where('type', 'hero')->sole();
+        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$hero->id}/appearance";
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'editorial',
+            'mediaPlacement' => 'left',
+            'responsive' => ['tablet' => ['mediaPlacement' => 'bottom']],
+        ];
+
+        $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
+            ->assertJsonPath('data.sections.0.appearance.responsive.tablet.mediaPlacement', 'bottom');
+        $this->actingAs($owner)->putJson($url, ['appearance' => [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+        ]])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
+        $this->actingAs($owner)->putJson($url, ['appearance' => [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'editorial',
+            'responsive' => ['mobile' => ['mediaPlacement' => 'left']],
+        ]])->assertUnprocessable()->assertJsonValidationErrors('appearance.responsive.mobile.mediaPlacement');
+
+        $this->assertSame($appearance, $hero->refresh()->appearance);
     }
 
     public function test_responsive_overrides_reject_unknown_keys_and_unsupported_values(): void

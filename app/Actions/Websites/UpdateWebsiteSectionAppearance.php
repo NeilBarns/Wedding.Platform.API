@@ -3,126 +3,91 @@
 namespace App\Actions\Websites;
 
 use App\Models\WebsiteSection;
+use App\Website\Capabilities\AppearanceControlCapability;
+use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteSectionAppearance;
-use App\Website\WebsiteTemplateDefinition;
-use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Validation\ValidationException;
 
 final class UpdateWebsiteSectionAppearance
 {
-    public function __construct(private readonly WebsiteTemplateRegistry $templates) {}
+    private const ROOT_OPTION_CONTROLS = ['mediaPlacement', 'mediaSize', 'frameStyle', 'cornerStyle', 'shadowStyle', 'foregroundColor', 'mediaContentGap'];
+
+    public function __construct(private readonly WebsiteCapabilityResolver $capabilities) {}
 
     /** @param array<string, mixed> $appearance */
     public function handle(WebsiteSection $section, array $appearance): WebsiteSection
     {
         $section->loadMissing('website');
-        $template = $this->templates->get($section->website->template_key);
-        $options = $template?->appearanceOptionsFor($section->type);
-
-        if ($options === null) {
-            throw ValidationException::withMessages([
-                'appearance' => 'Section appearance is not supported by the assigned Template.',
-            ]);
+        $templateKey = $section->website->template_key;
+        $sectionCapability = $this->capabilities->section($templateKey, $section->type);
+        if ($sectionCapability === null) {
+            throw ValidationException::withMessages(['appearance' => 'Section appearance is not supported by the assigned Template.']);
         }
 
-        $optionGroups = [
-            'headingAlignment' => 'headingAlignments',
-            'bodyAlignment' => 'bodyAlignments',
-            'backgroundTreatment' => 'backgroundTreatments',
-            'emphasis' => 'emphasisOptions',
-        ];
-        $expectedKeys = array_keys($optionGroups);
+        $expectedKeys = ['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'emphasis'];
         $actualKeys = array_keys($appearance);
-        $presentation = $template->presentationCapabilityFor($section->type);
+        $activePresentation = $sectionCapability->defaultPresentation;
         if (array_key_exists('presentation', $appearance)) {
-            if ($presentation === null || ! in_array($appearance['presentation'], array_column($presentation['options'], 'key'), true)) {
-                throw ValidationException::withMessages([
-                    'appearance.presentation' => 'The selected presentation is invalid for this Section.',
-                ]);
+            if (! is_string($appearance['presentation']) || $this->capabilities->presentation($templateKey, $section->type, $appearance['presentation']) === null) {
+                throw ValidationException::withMessages(['appearance.presentation' => 'The selected presentation is invalid for this Section.']);
             }
+            $activePresentation = $appearance['presentation'];
             $expectedKeys[] = 'presentation';
         }
-        $activePresentation = $appearance['presentation'] ?? $presentation['default'] ?? null;
-        $controls = is_string($activePresentation) ? $template->mediaControlsFor($section->type, $activePresentation) : [];
-        foreach ($template->mediaControlSettings() as $setting => $group) {
+
+        $desktopControls = $this->controlsById($templateKey, $section->type, $activePresentation, 'desktop');
+        foreach (self::ROOT_OPTION_CONTROLS as $setting) {
             if (! array_key_exists($setting, $appearance)) {
                 continue;
             }
-            $allowed = array_column($controls[$group]['options'] ?? [], 'key');
-            if (! is_string($appearance[$setting]) || ! in_array($appearance[$setting], $allowed, true)) {
-                throw ValidationException::withMessages([
-                    "appearance.{$setting}" => "The selected {$setting} is not supported by this presentation.",
-                ]);
+            if (! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
+                throw ValidationException::withMessages(["appearance.{$setting}" => "The selected {$setting} is not supported by this presentation."]);
             }
             $expectedKeys[] = $setting;
         }
+
         if (array_key_exists('mediaSpacing', $appearance)) {
-            $spacing = $controls['mediaSpacing'] ?? null;
-            $sides = ['top', 'right', 'bottom', 'left'];
-            $actualSides = is_array($appearance['mediaSpacing']) ? array_keys($appearance['mediaSpacing']) : [];
-            sort($actualSides);
-            $expectedSides = $sides;
-            sort($expectedSides);
-            $allowed = array_column($spacing['options'] ?? [], 'key');
-            if ($spacing === null || ! is_array($appearance['mediaSpacing']) || $actualSides !== $expectedSides) {
-                throw ValidationException::withMessages([
-                    'appearance.mediaSpacing' => 'Provide all supported media spacing sides without extra properties.',
-                ]);
-            }
-            foreach ($sides as $side) {
-                if (! is_string($appearance['mediaSpacing'][$side]) || ! in_array($appearance['mediaSpacing'][$side], $allowed, true)) {
-                    throw ValidationException::withMessages([
-                        "appearance.mediaSpacing.{$side}" => "The selected {$side} media spacing is not supported by this presentation.",
-                    ]);
-                }
-            }
+            $this->validateSpacing($desktopControls['mediaSpacing'] ?? null, $appearance['mediaSpacing'], 'appearance.mediaSpacing', false);
             $expectedKeys[] = 'mediaSpacing';
         }
         if (array_key_exists('overlayStrength', $appearance)) {
-            $overlay = $controls['overlayStrength'] ?? null;
-            if ($overlay === null || ! is_numeric($appearance['overlayStrength']) || $appearance['overlayStrength'] < $overlay['min'] || $appearance['overlayStrength'] > $overlay['max']) {
-                throw ValidationException::withMessages([
-                    'appearance.overlayStrength' => 'The selected overlay strength is not supported by this presentation.',
-                ]);
+            $control = $desktopControls['overlayStrength'] ?? null;
+            if ($control?->type !== AppearanceControlType::Number || ! is_numeric($appearance['overlayStrength'])
+                || $appearance['overlayStrength'] < $control->minimum || $appearance['overlayStrength'] > $control->maximum) {
+                throw ValidationException::withMessages(['appearance.overlayStrength' => 'The selected overlay strength is not supported by this presentation.']);
             }
             $appearance['overlayStrength'] = (float) $appearance['overlayStrength'];
             $expectedKeys[] = 'overlayStrength';
         }
         if (array_key_exists('responsive', $appearance)) {
-            $this->validateResponsiveOverrides($template, $section->type, $activePresentation, $appearance['responsive'], $options, $controls);
+            $this->validateResponsiveOverrides($templateKey, $section->type, $activePresentation, $appearance['responsive']);
             $expectedKeys[] = 'responsive';
         }
+
         sort($expectedKeys);
         sort($actualKeys);
-
         if ($actualKeys !== $expectedKeys) {
-            throw ValidationException::withMessages([
-                'appearance' => 'Provide the complete supported Section appearance.',
-            ]);
+            throw ValidationException::withMessages(['appearance' => 'Provide the complete supported Section appearance.']);
         }
 
-        foreach ($optionGroups as $setting => $group) {
-            $allowed = array_column($options[$group], 'key');
-            if (! is_string($appearance[$setting]) || ! in_array($appearance[$setting], $allowed, true)) {
-                throw ValidationException::withMessages([
-                    "appearance.{$setting}" => "The selected {$setting} is invalid for this Section.",
-                ]);
+        foreach (['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'emphasis'] as $setting) {
+            if (! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
+                throw ValidationException::withMessages(["appearance.{$setting}" => "The selected {$setting} is invalid for this Section."]);
             }
         }
 
         if (isset($appearance['responsive'])) {
             foreach ($appearance['responsive'] as $viewport => &$override) {
+                $viewportControls = $this->controlsById($templateKey, $section->type, $activePresentation, $viewport);
                 foreach ($override as $setting => $value) {
-                    if ($value === $template->responsiveDefaultFor($section->type, $activePresentation, $viewport, $setting)) {
+                    if ($value === ($viewportControls[$setting]->default ?? null)) {
                         unset($override[$setting]);
                     }
                 }
             }
             unset($override);
-            $appearance['responsive'] = array_filter(
-                $appearance['responsive'],
-                fn (array $override): bool => $override !== [],
-            );
+            $appearance['responsive'] = array_filter($appearance['responsive'], fn (array $override): bool => $override !== []);
             if ($appearance['responsive'] === []) {
                 unset($appearance['responsive']);
             }
@@ -134,75 +99,61 @@ final class UpdateWebsiteSectionAppearance
         return $section;
     }
 
-    /**
-     * @param  array<string, mixed>  $responsive
-     * @param  array<string, mixed>  $options
-     * @param  array<string, mixed>  $controls
-     */
-    private function validateResponsiveOverrides(WebsiteTemplateDefinition $template, string $sectionType, ?string $presentation, array $responsive, array $options, array $controls): void
+    /** @param array<string, mixed> $responsive */
+    private function validateResponsiveOverrides(string $templateKey, string $sectionType, ?string $presentation, array $responsive): void
     {
         foreach ($responsive as $viewport => $override) {
             if (! in_array($viewport, WebsiteSectionAppearance::RESPONSIVE_VIEWPORTS, true) || ! is_array($override)) {
-                throw ValidationException::withMessages([
-                    "appearance.responsive.{$viewport}" => 'The selected responsive viewport is invalid.',
-                ]);
+                throw ValidationException::withMessages(["appearance.responsive.{$viewport}" => 'The selected responsive viewport is invalid.']);
             }
-
+            $controls = $this->controlsById($templateKey, $sectionType, $presentation, $viewport);
             foreach ($override as $setting => $value) {
                 if (! in_array($setting, WebsiteSectionAppearance::RESPONSIVE_SETTINGS, true)) {
-                    throw ValidationException::withMessages([
-                        "appearance.responsive.{$viewport}.{$setting}" => 'This responsive appearance property is not supported.',
-                    ]);
+                    throw ValidationException::withMessages(["appearance.responsive.{$viewport}.{$setting}" => 'This responsive appearance property is not supported.']);
                 }
-
                 if ($setting === 'mediaSpacing') {
-                    $this->validateResponsiveSpacing($template, $sectionType, $presentation, $viewport, $value, $controls);
-
-                    continue;
-                }
-
-                $baseOptions = match ($setting) {
-                    'headingAlignment' => $options['headingAlignments'] ?? [],
-                    'bodyAlignment' => $options['bodyAlignments'] ?? [],
-                    'mediaPlacement' => $controls['mediaPlacements']['options'] ?? [],
-                    'mediaSize' => $controls['mediaSizes']['options'] ?? [],
-                    'mediaContentGap' => $controls['mediaContentGaps']['options'] ?? [],
-                };
-                $viewportControl = $template->responsiveControlFor($sectionType, $presentation, $viewport, $setting);
-                $allowed = array_column($viewportControl['options'] ?? $baseOptions, 'key');
-                if (! is_string($value) || ! in_array($value, $allowed, true)) {
-                    throw ValidationException::withMessages([
-                        "appearance.responsive.{$viewport}.{$setting}" => "The selected {$setting} is not supported for this viewport.",
-                    ]);
+                    $this->validateSpacing($controls[$setting] ?? null, $value, "appearance.responsive.{$viewport}.mediaSpacing", true);
+                } elseif (! $this->validOption($controls[$setting] ?? null, $value)) {
+                    throw ValidationException::withMessages(["appearance.responsive.{$viewport}.{$setting}" => "The selected {$setting} is not supported for this viewport."]);
                 }
             }
         }
     }
 
-    /** @param array<string, mixed> $controls */
-    private function validateResponsiveSpacing(WebsiteTemplateDefinition $template, string $sectionType, ?string $presentation, string $viewport, mixed $value, array $controls): void
+    private function validateSpacing(?AppearanceControlCapability $control, mixed $value, string $path, bool $responsive): void
     {
         $sides = ['top', 'right', 'bottom', 'left'];
         $actualSides = is_array($value) ? array_keys($value) : [];
         sort($actualSides);
         $expectedSides = $sides;
         sort($expectedSides);
-        $viewportControl = $template->responsiveControlFor($sectionType, $presentation, $viewport, 'mediaSpacing');
-        $baseControl = $controls['mediaSpacing'] ?? null;
-        $allowed = array_column($viewportControl['options'] ?? $baseControl['options'] ?? [], 'key');
-
-        if ($baseControl === null || ! is_array($value) || $actualSides !== $expectedSides) {
-            throw ValidationException::withMessages([
-                "appearance.responsive.{$viewport}.mediaSpacing" => 'Provide all supported media spacing sides without extra properties.',
-            ]);
+        if ($control?->type !== AppearanceControlType::Spacing || ! is_array($value) || $actualSides !== $expectedSides) {
+            throw ValidationException::withMessages([$path => 'Provide all supported media spacing sides without extra properties.']);
         }
 
+        $allowed = array_column($control->options, 'key');
         foreach ($sides as $side) {
             if (! is_string($value[$side]) || ! in_array($value[$side], $allowed, true)) {
                 throw ValidationException::withMessages([
-                    "appearance.responsive.{$viewport}.mediaSpacing.{$side}" => "The selected {$side} media spacing is not supported for this viewport.",
+                    "{$path}.{$side}" => $responsive
+                        ? "The selected {$side} media spacing is not supported for this viewport."
+                        : "The selected {$side} media spacing is not supported by this presentation.",
                 ]);
             }
         }
+    }
+
+    private function validOption(?AppearanceControlCapability $control, mixed $value): bool
+    {
+        return $control?->type === AppearanceControlType::Option && is_string($value)
+            && in_array($value, array_column($control->options, 'key'), true);
+    }
+
+    /** @return array<string, AppearanceControlCapability> */
+    private function controlsById(string $templateKey, string $sectionType, ?string $presentation, string $viewport): array
+    {
+        $controls = $this->capabilities->controlsForViewport($templateKey, $sectionType, $presentation, $viewport) ?? [];
+
+        return collect($controls)->keyBy('id')->all();
     }
 }
