@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Websites\CreateWebsiteProject;
 use App\Enums\EventMembershipRole;
 use App\Models\Event;
 use App\Models\MediaAsset;
 use App\Models\User;
 use App\Website\WebsiteSectionAppearance;
+use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -63,7 +65,7 @@ class WebsiteSectionMediaTest extends TestCase
         $hero = $website->sections()->where('type', 'hero')->firstOrFail();
         $story = $website->sections()->where('type', 'story')->firstOrFail();
         $hero->update(['content' => [...$hero->content, 'media' => ['assetId' => $used->id]]]);
-        $story->update(['content' => [...$story->content, 'media' => ['assetId' => $used->id]]]);
+        $story->update(['content' => ['heading' => 'Story', 'body' => '', 'media' => ['assetId' => $used->id]]]);
 
         [$otherOwner, $otherEvent] = $this->eventFor(EventMembershipRole::Owner);
         $otherWebsite = $this->initializeWebsite($otherEvent);
@@ -76,18 +78,21 @@ class WebsiteSectionMediaTest extends TestCase
 
         $this->assertTrue($assets[$used->id]['usage']['isInUse']);
         $this->assertSame([
-            ['sectionId' => $hero->id, 'type' => 'hero', 'displayName' => 'Hero'],
-            ['sectionId' => $story->id, 'type' => 'story', 'displayName' => 'Story'],
-        ], $assets[$used->id]['usage']['website']['sections']);
+            ['mediaId' => $used->id, 'eventId' => $event->id, 'websiteProjectId' => $website->id, 'websiteProjectName' => $website->name,
+                'sectionId' => $hero->id, 'sectionType' => 'hero', 'sectionName' => 'Hero', 'reference' => ['type' => 'sectionMedia']],
+            ['mediaId' => $used->id, 'eventId' => $event->id, 'websiteProjectId' => $website->id, 'websiteProjectName' => $website->name,
+                'sectionId' => $story->id, 'sectionType' => 'story', 'sectionName' => 'Story',
+                'reference' => ['type' => 'storyNarrativeBlock', 'elementId' => 'story-legacy-'.$story->id]],
+        ], $assets[$used->id]['usage']['references']);
         $this->assertFalse($assets[$unused->id]['usage']['isInUse']);
-        $this->assertSame([], $assets[$unused->id]['usage']['website']['sections']);
+        $this->assertSame([], $assets[$unused->id]['usage']['references']);
         $this->assertArrayNotHasKey($otherAsset->id, $assets->all());
 
         $this->actingAs($otherOwner)->getJson("/api/events/{$otherEvent->id}/media")
             ->assertOk()
             ->assertJsonPath('data.0.id', $otherAsset->id)
             ->assertJsonPath('data.0.usage.isInUse', false)
-            ->assertJsonCount(0, 'data.0.usage.website.sections');
+            ->assertJsonCount(0, 'data.0.usage.references');
     }
 
     public function test_assignment_authorization_and_event_scope_are_enforced(): void
@@ -171,7 +176,10 @@ class WebsiteSectionMediaTest extends TestCase
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$venue->id}", ['content' => $content])->assertOk();
 
         $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")
-            ->assertUnprocessable()->assertJsonPath('errors.asset.0', 'This image is currently used by your Website and cannot be deleted.');
+            ->assertConflict()
+            ->assertJsonPath('code', 'media_asset_in_use')
+            ->assertJsonPath('message', 'This image is used by one or more Website Projects.')
+            ->assertJsonPath('usage.references.0.reference.type', 'sectionMedia');
         $this->assertDatabaseHas('media_assets', ['id' => $asset->id]);
 
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$venue->id}", ['content' => [...$content, 'media' => null]])->assertOk();
@@ -245,11 +253,11 @@ class WebsiteSectionMediaTest extends TestCase
             ->firstWhere('id', $asset->id)['usage'];
         $this->assertTrue($usage['isInUse']);
         $this->assertSame([
-            ['groupId' => 'friends', 'groupName' => 'Best Friends', 'personId' => 'jane', 'personName' => 'Jane Doe'],
-            ['groupId' => 'friends', 'groupName' => 'Best Friends', 'personId' => 'alex', 'personName' => 'Alex Cruz'],
-        ], collect($usage['website']['sections'])->pluck('context')->all());
+            ['type' => 'person', 'personId' => 'jane', 'label' => 'Jane Doe', 'groupId' => 'friends', 'groupLabel' => 'Best Friends'],
+            ['type' => 'person', 'personId' => 'alex', 'label' => 'Alex Cruz', 'groupId' => 'friends', 'groupLabel' => 'Best Friends'],
+        ], collect($usage['references'])->pluck('reference')->all());
 
-        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertUnprocessable();
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertConflict();
         $withoutMedia = $content;
         $withoutMedia['groups'][0]['people'] = array_map(fn (array $person): array => [...$person, 'media' => null], $withoutMedia['groups'][0]['people']);
         $this->actingAs($owner)->putJson($url, ['content' => $withoutMedia])->assertOk();
@@ -276,8 +284,9 @@ class WebsiteSectionMediaTest extends TestCase
 
         $usage = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/media")->assertOk()->json('data'))
             ->firstWhere('id', $first->id)['usage'];
-        $this->assertSame(['blockId' => 'meeting', 'blockHeading' => 'How we met'], $usage['website']['sections'][0]['context']);
-        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$first->id}")->assertUnprocessable();
+        $this->assertSame(['type' => 'storyNarrativeBlock', 'elementId' => 'meeting', 'label' => 'How we met'], $usage['references'][0]['reference']);
+        $this->assertArrayNotHasKey('blockId', $usage['references'][0]['reference']);
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$first->id}")->assertConflict();
 
         $withoutFirst = $content;
         unset($withoutFirst['elements'][0]['media'], $withoutFirst['mediaFraming']['meeting']);
@@ -287,6 +296,49 @@ class WebsiteSectionMediaTest extends TestCase
         $invalid = $content;
         $invalid['elements'][0]['media'] = ['type' => 'image', 'mediaId' => $foreign->id];
         $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable()->assertJsonValidationErrors('content.elements');
+    }
+
+    public function test_usage_is_project_aware_deduplicated_and_blocks_until_every_project_reference_is_removed(): void
+    {
+        [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
+        $firstProject = $this->initializeWebsite($event);
+        $secondProject = app(CreateWebsiteProject::class)->handle($event, 'Modern Project', WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $asset = $this->assetFor($event);
+        $firstHero = $firstProject->sections()->where('type', 'hero')->sole();
+        $secondHero = $secondProject->sections()->where('type', 'hero')->sole();
+        $firstHero->update(['content' => [...$firstHero->content, 'media' => ['assetId' => $asset->id]]]);
+        $secondHero->update(['content' => [...$secondHero->content, 'media' => ['assetId' => $asset->id]]]);
+
+        $usage = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/media")->assertOk()->json('data'))
+            ->firstWhere('id', $asset->id)['usage'];
+        $this->assertCount(2, $usage['references']);
+        $this->assertEqualsCanonicalizing([$firstProject->id, $secondProject->id], collect($usage['references'])->pluck('websiteProjectId')->all());
+        $this->assertEqualsCanonicalizing([$firstProject->name, 'Modern Project'], collect($usage['references'])->pluck('websiteProjectName')->all());
+
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")
+            ->assertConflict()->assertJsonCount(2, 'usage.references');
+        $firstHero->update(['content' => [...$firstHero->content, 'media' => null]]);
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")
+            ->assertConflict()->assertJsonCount(1, 'usage.references')
+            ->assertJsonPath('usage.references.0.websiteProjectId', $secondProject->id);
+        $secondHero->update(['content' => [...$secondHero->content, 'media' => null]]);
+        $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertNoContent();
+    }
+
+    public function test_exact_story_identity_is_deduplicated_but_distinct_elements_remain(): void
+    {
+        [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
+        $story = $this->initializeWebsite($event)->sections()->where('type', 'story')->sole();
+        $asset = $this->assetFor($event);
+        $story->update(['content' => ['heading' => 'Historical', 'blocks' => [
+            ['id' => 'same', 'body' => 'One', 'media' => ['assetId' => $asset->id]],
+            ['id' => 'same', 'body' => 'Duplicate', 'media' => ['assetId' => $asset->id]],
+            ['id' => 'different', 'body' => 'Distinct', 'media' => ['assetId' => $asset->id]],
+        ]]]);
+
+        $references = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/media")->assertOk()->json('data'))
+            ->firstWhere('id', $asset->id)['usage']['references'];
+        $this->assertSame(['same', 'different'], collect($references)->pluck('reference.elementId')->all());
     }
 
     private function eventFor(EventMembershipRole $role): array

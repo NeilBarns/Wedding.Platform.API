@@ -4,71 +4,34 @@ namespace App\Website;
 
 final class WebsiteSectionMediaReferences
 {
+    public function __construct(private readonly WebsiteSectionMediaReferenceExtractor $extractor) {}
+
     /**
      * @param  array<string, mixed>  $content
      * @return list<array{assetId: string, context?: array<string, string>}>
      */
     public function extract(string $sectionType, array $content): array
     {
-        $references = [];
-        $sectionAssetId = $content['media']['assetId'] ?? null;
-        if (is_string($sectionAssetId)) {
-            $references[] = ['assetId' => $sectionAssetId];
-        }
+        return array_map(function (array $item): array {
+            $reference = $item['reference'];
+            $context = match ($reference['type']) {
+                'storyNarrativeBlock' => array_filter([
+                    'blockId' => $reference['elementId'],
+                    'blockHeading' => $reference['label'] ?? '',
+                ], fn (string $value): bool => $value !== ''),
+                'person' => array_filter([
+                    'groupId' => $reference['groupId'] ?? '',
+                    'groupName' => $reference['groupLabel'] ?? '',
+                    'personId' => $reference['personId'],
+                    'personName' => $reference['label'] ?? '',
+                ], fn (string $value): bool => $value !== ''),
+                default => [],
+            };
 
-        if ($sectionType === 'story') {
-            foreach ($content['blocks'] ?? [] as $block) {
-                $assetId = $block['media']['assetId'] ?? null;
-                if (! is_string($assetId)) {
-                    continue;
-                }
-                $references[] = [
-                    'assetId' => $assetId,
-                    'context' => [
-                        'blockId' => (string) ($block['id'] ?? ''),
-                        'blockHeading' => (string) ($block['heading'] ?? ''),
-                    ],
-                ];
-            }
-            foreach ($content['elements'] ?? [] as $element) {
-                $mediaId = $element['type'] === 'narrativeBlock' && ($element['media']['type'] ?? null) === 'image'
-                    ? ($element['media']['mediaId'] ?? null)
-                    : null;
-                if (! is_string($mediaId)) {
-                    continue;
-                }
-                $references[] = [
-                    'assetId' => $mediaId,
-                    'context' => [
-                        'blockId' => (string) ($element['id'] ?? ''),
-                        'blockHeading' => (string) ($element['heading'] ?? ''),
-                    ],
-                ];
-            }
-        }
-
-        if ($sectionType !== 'people') {
-            return $references;
-        }
-
-        foreach ($content['groups'] ?? [] as $group) {
-            foreach ($group['people'] ?? [] as $person) {
-                $assetId = $person['media']['assetId'] ?? null;
-                if (! is_string($assetId)) {
-                    continue;
-                }
-                $references[] = [
-                    'assetId' => $assetId,
-                    'context' => [
-                        'groupId' => (string) ($group['id'] ?? ''),
-                        'groupName' => (string) ($group['name'] ?? ''),
-                        'personId' => (string) ($person['id'] ?? ''),
-                        'personName' => (string) ($person['name'] ?? ''),
-                    ],
-                ];
-            }
-        }
-
-        return $references;
+            return array_filter([
+                'assetId' => $item['mediaId'],
+                'context' => $context === [] ? null : $context,
+            ], fn (mixed $value): bool => $value !== null);
+        }, $this->extractor->extract('', $sectionType, $content));
     }
 }
