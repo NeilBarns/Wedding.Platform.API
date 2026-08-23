@@ -6,6 +6,8 @@ use App\Http\Resources\WebsiteTemplateCapabilitiesResource;
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlScope;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\GlobalDesignControlId;
+use App\Website\Capabilities\GlobalDesignControlType;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\Elements\WebsiteElementType;
 use App\Website\WebsiteSectionRegistry;
@@ -120,6 +122,52 @@ class WebsiteCapabilityRegistryTest extends TestCase
         $this->assertSame(['editorial', 'immersive'], array_map(fn ($item): string => $item->id, $modernHero->presentations));
         $this->assertSame(['medallions', 'portraitCards', 'namesOnly'], array_map(fn ($item): string => $item->id, $classicPeople->presentations));
         $this->assertSame(['editorialPortraits', 'squareGrid', 'minimal', 'namesOnly'], array_map(fn ($item): string => $item->id, $modernPeople->presentations));
+    }
+
+    public function test_global_design_capabilities_preserve_registry_options_defaults_and_resolver_lookups(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+        $expectedControls = [
+            GlobalDesignControlId::ColorTheme->value => ['colorThemes', GlobalDesignControlType::PalettePreset],
+            GlobalDesignControlId::FontSet->value => ['fontSets', GlobalDesignControlType::TypographyPairing],
+            GlobalDesignControlId::ArtStyle->value => ['artStyles', GlobalDesignControlType::ArtStyle],
+        ];
+
+        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
+            $capability = $resolver->globalDesign($template);
+            $this->assertNotNull($capability);
+            $this->assertSame(array_keys($expectedControls), array_map(
+                fn ($control): string => $control->id->value,
+                $capability->controls,
+            ));
+
+            foreach ($capability->controls as $control) {
+                [$group, $type] = $expectedControls[$control->id->value];
+                $this->assertSame($type, $control->type);
+                $this->assertSame($template->designOptions[$group], $control->options);
+                $this->assertSame($template->defaultDesignSettings[$control->id->value], $control->default);
+                $this->assertContains($control->default, array_column($control->options, 'key'));
+                $this->assertEquals($control, $resolver->globalDesignControl($template, $control->id));
+                $this->assertSame($control->default, $resolver->globalDesignDefault($template, $control->id));
+                $this->assertTrue($resolver->allowsGlobalDesignValue($template, $control->id, $control->default));
+                $this->assertFalse($resolver->allowsGlobalDesignValue($template, $control->id, 'unsupported-value'));
+            }
+
+            $serialized = (new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request());
+            $this->assertSame(array_keys($expectedControls), array_column($serialized['globalDesign']['controls'], 'id'));
+        }
+
+        $classic = $resolver->globalDesign(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $modern = $resolver->globalDesign(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $this->assertSame(['terracotta', 'editorial', 'minimal'], array_column($classic->controls, 'default'));
+        $this->assertSame(['ink', 'editorial', 'clean'], array_column($modern->controls, 'default'));
+        foreach ([0, 1, 2] as $controlIndex) {
+            $this->assertNotSame($classic->controls[$controlIndex]->options, $modern->controls[$controlIndex]->options);
+        }
+        $this->assertNull($resolver->globalDesign('unknown-template'));
+        $this->assertNull($resolver->globalDesignControl(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'unknown-control'));
+        $this->assertNull($resolver->globalDesignDefault(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'unknown-control'));
+        $this->assertFalse($resolver->allowsGlobalDesignValue(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'unknown-control', 'terracotta'));
     }
 
     public function test_every_responsive_control_serializes_fully_resolved_viewport_defaults_in_resolver_parity(): void

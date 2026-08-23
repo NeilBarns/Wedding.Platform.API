@@ -40,7 +40,11 @@ final class WebsiteCapabilityResolver
         $elements = collect($sections)->flatMap(fn (SectionCapability $section): array => $section->allowedElementTypes ?? [])
             ->unique()->values()->all();
 
-        $capabilities = new TemplateCapabilities(elements: $elements, sections: $sections);
+        $capabilities = new TemplateCapabilities(
+            globalDesign: $this->globalDesignFromDefinition($definition),
+            elements: $elements,
+            sections: $sections,
+        );
         if ($requestedKey !== null) {
             $this->resolvedTemplates[$requestedKey] = $capabilities;
         }
@@ -53,6 +57,41 @@ final class WebsiteCapabilityResolver
         $capabilities = $this->template($template);
 
         return collect($capabilities?->sections)->first(fn (SectionCapability $section): bool => $section->id === $sectionId);
+    }
+
+    public function globalDesign(string|WebsiteTemplateDefinition $template): ?GlobalDesignCapability
+    {
+        return $this->template($template)?->globalDesign;
+    }
+
+    public function globalDesignControl(
+        string|WebsiteTemplateDefinition $template,
+        string|GlobalDesignControlId $controlId,
+    ): ?GlobalDesignControlCapability {
+        $id = is_string($controlId) ? GlobalDesignControlId::tryFrom($controlId) : $controlId;
+        if ($id === null) {
+            return null;
+        }
+
+        return collect($this->globalDesign($template)?->controls)
+            ->first(fn (GlobalDesignControlCapability $control): bool => $control->id === $id);
+    }
+
+    public function allowsGlobalDesignValue(
+        string|WebsiteTemplateDefinition $template,
+        string|GlobalDesignControlId $controlId,
+        string $value,
+    ): bool {
+        $control = $this->globalDesignControl($template, $controlId);
+
+        return $control !== null && in_array($value, array_column($control->options, 'key'), true);
+    }
+
+    public function globalDesignDefault(
+        string|WebsiteTemplateDefinition $template,
+        string|GlobalDesignControlId $controlId,
+    ): ?string {
+        return $this->globalDesignControl($template, $controlId)?->default;
     }
 
     public function presentation(string|WebsiteTemplateDefinition $template, string $sectionId, ?string $presentationId = null): ?PresentationCapability
@@ -89,6 +128,25 @@ final class WebsiteCapabilityResolver
         }
 
         return in_array($elementType, $this->section($template, $sectionId)?->allowedElementTypes ?? [], true);
+    }
+
+    private function globalDesignFromDefinition(WebsiteTemplateDefinition $template): GlobalDesignCapability
+    {
+        $controls = [];
+        foreach ([
+            GlobalDesignControlId::ColorTheme->value => ['colorThemes', GlobalDesignControlType::PalettePreset],
+            GlobalDesignControlId::FontSet->value => ['fontSets', GlobalDesignControlType::TypographyPairing],
+            GlobalDesignControlId::ArtStyle->value => ['artStyles', GlobalDesignControlType::ArtStyle],
+        ] as $id => [$group, $type]) {
+            $controls[] = new GlobalDesignControlCapability(
+                id: GlobalDesignControlId::from($id),
+                type: $type,
+                default: $template->defaultDesignSettings[$id],
+                options: $template->designOptions[$group],
+            );
+        }
+
+        return new GlobalDesignCapability($controls);
     }
 
     private function sectionFromDefinition(WebsiteTemplateDefinition $template, string $sectionId): SectionCapability

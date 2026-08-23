@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\GlobalDesignControlCapability;
 use App\Website\Capabilities\PresentationCapability;
 use App\Website\Capabilities\SectionCapability;
 use Illuminate\Http\Request;
@@ -14,6 +15,14 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'globalDesign' => [
+                'controls' => array_map(fn (GlobalDesignControlCapability $control): array => [
+                    'id' => $control->id->value,
+                    'type' => $control->type->value,
+                    'default' => $control->default,
+                    'options' => $control->options,
+                ], $this->globalDesign->controls),
+            ],
             'elements' => $this->elements,
             'sections' => array_map(fn (SectionCapability $section): array => [
                 'id' => $section->id,

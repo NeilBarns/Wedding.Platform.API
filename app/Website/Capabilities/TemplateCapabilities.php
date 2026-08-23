@@ -9,6 +9,7 @@ final readonly class TemplateCapabilities
      * @param  list<SectionCapability>  $sections
      */
     public function __construct(
+        public GlobalDesignCapability $globalDesign,
         public array $elements,
         public array $sections,
     ) {}
