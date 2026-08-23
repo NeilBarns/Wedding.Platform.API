@@ -114,7 +114,7 @@ class WebsitePeopleSectionTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('content.groups.0.people');
     }
 
-    public function test_template_switch_and_visibility_changes_preserve_people_content(): void
+    public function test_visibility_changes_preserve_people_content(): void
     {
         [$event, $owner] = $this->eventWithWebsite();
         $people = $event->website->sections()->where('type', 'people')->sole();
@@ -122,11 +122,6 @@ class WebsitePeopleSectionTest extends TestCase
             'id' => 'group', 'name' => 'Best Friends', 'people' => [['id' => 'person', 'name' => 'Alex', 'role' => 'Best Person']],
         ]]];
         $people->update(['content' => $content]);
-
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk();
-        $this->assertSame($content, $people->refresh()->content);
 
         $enabledUrl = "/api/events/{$event->id}/website/sections/{$people->id}/enabled";
         $this->actingAs($owner)->putJson($enabledUrl, ['isEnabled' => false])->assertOk();

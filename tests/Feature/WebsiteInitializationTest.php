@@ -40,17 +40,16 @@ class WebsiteInitializationTest extends TestCase
         $this->actingAs($other)->getJson("/api/events/{$event->id}/website")->assertForbidden();
     }
 
-    public function test_templates_are_listed_before_initialization_with_no_selection(): void
+    public function test_creation_templates_are_listed_before_initialization(): void
     {
         [$event, $owner] = $this->newEvent();
 
-        $this->actingAs($owner)->getJson("/api/events/{$event->id}/website/templates")
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/website-templates")
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.key', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
-            ->assertJsonPath('data.0.isSelected', false)
             ->assertJsonPath('data.1.key', WebsiteTemplateRegistry::MODERN_EDITORIAL_V1)
-            ->assertJsonPath('data.1.isSelected', false);
+            ->assertJsonMissingPath('data.0.isSelected');
     }
 
     public function test_owner_explicitly_initializes_a_complete_website_with_target_defaults(): void

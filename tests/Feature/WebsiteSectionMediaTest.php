@@ -7,7 +7,6 @@ use App\Models\Event;
 use App\Models\MediaAsset;
 use App\Models\User;
 use App\Website\WebsiteSectionAppearance;
-use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -72,10 +71,6 @@ class WebsiteSectionMediaTest extends TestCase
         $otherHero = $otherWebsite->sections()->where('type', 'hero')->firstOrFail();
         $otherHero->update(['content' => [...$otherHero->content, 'media' => ['assetId' => $used->id]]]);
 
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk();
-
         $assets = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/media")
             ->assertOk()->assertJsonMissingPath('data.0.storagePath')->json('data'))->keyBy('id');
 
@@ -110,7 +105,7 @@ class WebsiteSectionMediaTest extends TestCase
         $this->actingAs($admin)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", $content((string) Str::ulid()))->assertUnprocessable();
     }
 
-    public function test_focal_point_validation_removal_and_template_switch_preserve_semantics(): void
+    public function test_focal_point_validation_and_removal_preserve_semantics(): void
     {
         [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
         $website = $this->initializeWebsite($event);
@@ -128,13 +123,12 @@ class WebsiteSectionMediaTest extends TestCase
             $this->actingAs($owner)->putJson($url, ['content' => $base(['assetId' => $asset->id, 'zoom' => $zoom])])->assertUnprocessable();
         }
         $this->actingAs($owner)->putJson($url, ['content' => $base(['assetId' => $asset->id])])->assertOk();
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", ['templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1])->assertOk();
         $this->assertSame($asset->id, $story->refresh()->content['blocks'][0]['media']['assetId']);
         $this->actingAs($owner)->putJson($url, ['content' => $base(null)])->assertOk();
         $this->assertNull($story->refresh()->content['blocks'][0]['media']);
     }
 
-    public function test_section_media_zoom_is_optional_bounded_and_preserved_across_presentations_and_templates(): void
+    public function test_section_media_zoom_is_optional_bounded_and_preserved_across_presentations(): void
     {
         [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
         $website = $this->initializeWebsite($event);
@@ -164,7 +158,6 @@ class WebsiteSectionMediaTest extends TestCase
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
             'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'classic'],
         ])->assertOk();
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", ['templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1])->assertOk();
         $this->assertSame(1.8, $hero->refresh()->content['media']['zoom']);
     }
 
@@ -245,9 +238,6 @@ class WebsiteSectionMediaTest extends TestCase
             'appearance' => [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'namesOnly'],
         ])->assertOk()->assertJsonPath("data.media.{$asset->id}.id", $asset->id);
         $this->assertSame($content, $people->refresh()->content);
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk();
         $this->assertSame($content, $people->refresh()->content);
 
         $usage = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/media")->assertOk()->json('data'))

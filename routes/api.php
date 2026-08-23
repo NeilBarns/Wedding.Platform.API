@@ -33,8 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/events/{event}/website', [WebsiteDraftController::class, 'show']);
     Route::post('/events/{event}/website', [WebsiteDraftController::class, 'store']);
-    Route::get('/events/{event}/website/templates', [WebsiteDraftController::class, 'templates']);
-    Route::put('/events/{event}/website/template', [WebsiteDraftController::class, 'updateTemplate']);
+    Route::get('/events/{event}/website-templates', [WebsiteDraftController::class, 'creationTemplates']);
     Route::put('/events/{event}/website/design', [WebsiteDraftController::class, 'updateDesign']);
     Route::put('/events/{event}/website/sections/order', [WebsiteDraftController::class, 'reorder']);
     Route::put('/events/{event}/website/sections/{section}/enabled', [WebsiteDraftController::class, 'updateSectionEnabled']);
@@ -44,8 +43,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}/websites', [WebsiteDraftController::class, 'projects']);
     Route::post('/events/{event}/websites', [WebsiteDraftController::class, 'storeProject']);
     Route::get('/events/{event}/websites/{website}', [WebsiteDraftController::class, 'showProject']);
-    Route::get('/events/{event}/websites/{website}/templates', [WebsiteDraftController::class, 'projectTemplates']);
-    Route::put('/events/{event}/websites/{website}/template', [WebsiteDraftController::class, 'updateProjectTemplate']);
     Route::put('/events/{event}/websites/{website}/design', [WebsiteDraftController::class, 'updateProjectDesign']);
     Route::put('/events/{event}/websites/{website}/sections/order', [WebsiteDraftController::class, 'reorderProjectSections']);
     Route::put('/events/{event}/websites/{website}/sections/{section}/enabled', [WebsiteDraftController::class, 'updateProjectSectionEnabled']);

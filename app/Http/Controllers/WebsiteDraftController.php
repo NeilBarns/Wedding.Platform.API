@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Websites\AssignWebsiteTemplate;
 use App\Actions\Websites\CreateWebsiteProject;
 use App\Actions\Websites\InitializeEventWebsite;
 use App\Actions\Websites\ReorderWebsiteSections;
@@ -20,14 +19,12 @@ use App\Http\Requests\UpdateWebsiteDesignSettingsRequest;
 use App\Http\Requests\UpdateWebsiteSectionAppearanceRequest;
 use App\Http\Requests\UpdateWebsiteSectionContentRequest;
 use App\Http\Requests\UpdateWebsiteSectionEnabledRequest;
-use App\Http\Requests\UpdateWebsiteTemplateRequest;
 use App\Http\Resources\WebsiteDraftResource;
 use App\Http\Resources\WebsiteProjectResource;
 use App\Models\Event;
 use App\Models\Website;
 use App\Models\WebsiteSection;
-use App\Website\WebsiteSectionRegistry;
-use App\Website\WebsiteTemplateRegistry;
+use App\Website\WebsiteCreationTemplateCatalog;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -95,41 +92,9 @@ class WebsiteDraftController extends Controller
         return $this->draft($website)->response()->setStatusCode(201);
     }
 
-    public function templates(WebsiteTemplateRegistry $templates, WebsiteSectionRegistry $sections, string $event): JsonResponse
+    public function creationTemplates(WebsiteCreationTemplateCatalog $catalog, string $event): JsonResponse
     {
         $eventModel = $this->authorizedEvent($event);
-
-        return $this->templateList($templates, $sections, $eventModel, $this->legacyWebsiteOrNull($eventModel));
-    }
-
-    public function projectTemplates(
-        WebsiteTemplateRegistry $templates,
-        WebsiteSectionRegistry $sections,
-        string $event,
-        string $website,
-    ): JsonResponse {
-        $eventModel = $this->authorizedEvent($event);
-
-        return $this->templateList($templates, $sections, $eventModel, $this->website($eventModel, $website));
-    }
-
-    private function templateList(
-        WebsiteTemplateRegistry $templates,
-        WebsiteSectionRegistry $sections,
-        Event $event,
-        ?Website $website,
-    ): JsonResponse {
-        $sectionTypes = $website
-            ? $website->sections()->where('is_enabled', true)->pluck('type')
-            : array_keys(array_filter(
-                $sections->defaultCompositionFor($event->type),
-                fn ($definition): bool => $definition->defaultEnabled,
-            ));
-
-        $compatible = array_filter(
-            $templates->forEventType($event->type),
-            fn ($template): bool => $templates->isCompatible($template->key, $event->type, $sectionTypes),
-        );
 
         return response()->json(['data' => array_values(array_map(
             fn ($template): array => [
@@ -137,46 +102,9 @@ class WebsiteDraftController extends Controller
                 'displayName' => $template->displayName,
                 'description' => $template->description,
                 'styleTags' => $template->styleTags,
-                'isSelected' => $website !== null && $template->key === $website->template_key,
             ],
-            $compatible,
+            $catalog->forEventType($eventModel->type),
         ))]);
-    }
-
-    public function updateTemplate(
-        UpdateWebsiteTemplateRequest $request,
-        AssignWebsiteTemplate $assignTemplate,
-        string $event,
-    ): WebsiteDraftResource {
-        $website = $this->legacyWebsite($this->authorizedEvent($event));
-
-        return $this->applyTemplate($request, $assignTemplate, $website);
-    }
-
-    public function updateProjectTemplate(
-        UpdateWebsiteTemplateRequest $request,
-        AssignWebsiteTemplate $assignTemplate,
-        string $event,
-        string $website,
-    ): WebsiteDraftResource {
-        $eventModel = $this->authorizedEvent($event);
-
-        return $this->applyTemplate($request, $assignTemplate, $this->website($eventModel, $website));
-    }
-
-    private function applyTemplate(
-        UpdateWebsiteTemplateRequest $request,
-        AssignWebsiteTemplate $assignTemplate,
-        Website $website,
-    ): WebsiteDraftResource {
-
-        try {
-            $assignTemplate->handle($website, $request->validated('templateKey'));
-        } catch (UnknownWebsiteTemplate|IncompatibleWebsiteTemplate $exception) {
-            throw ValidationException::withMessages(['templateKey' => $exception->getMessage()]);
-        }
-
-        return $this->draft($website);
     }
 
     public function updateDesign(

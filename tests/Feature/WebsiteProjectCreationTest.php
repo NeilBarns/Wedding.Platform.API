@@ -165,7 +165,7 @@ class WebsiteProjectCreationTest extends TestCase
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")
             ->assertConflict()->assertJsonPath('message', $message);
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/website/templates")
-            ->assertConflict()->assertJsonPath('message', $message);
+            ->assertNotFound();
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/enabled", [
             'isEnabled' => false,
         ])->assertConflict()->assertJsonPath('message', $message);

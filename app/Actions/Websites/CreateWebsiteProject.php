@@ -6,7 +6,7 @@ use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Models\Event;
 use App\Models\Website;
-use App\Website\WebsiteSectionRegistry;
+use App\Website\WebsiteCreationTemplateCatalog;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +14,7 @@ final class CreateWebsiteProject
 {
     public function __construct(
         private readonly WebsiteTemplateRegistry $templates,
-        private readonly WebsiteSectionRegistry $sections,
+        private readonly WebsiteCreationTemplateCatalog $creationTemplates,
         private readonly InitializeWebsiteSections $initializeSections,
     ) {}
 
@@ -31,11 +31,7 @@ final class CreateWebsiteProject
                 throw IncompatibleWebsiteTemplate::forEventType($templateKey, $lockedEvent->type->value);
             }
 
-            $definitions = $this->sections->defaultCompositionFor($lockedEvent->type);
-            $unsupported = array_values(array_filter(
-                array_keys($definitions),
-                fn (string $sectionType): bool => ! $template->supportsSection($sectionType),
-            ));
+            $unsupported = $this->creationTemplates->unsupportedSectionTypes($template, $lockedEvent->type);
             if ($unsupported !== []) {
                 throw IncompatibleWebsiteTemplate::forSections($templateKey, $unsupported);
             }

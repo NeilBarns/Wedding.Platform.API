@@ -7,7 +7,6 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
 use App\Website\WebsiteSectionAppearance;
-use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -305,31 +304,6 @@ class WebsiteSectionAppearanceTest extends TestCase
         }
     }
 
-    public function test_template_switch_normalizes_incompatible_responsive_overrides_without_touching_content(): void
-    {
-        [$event, $owner] = $this->eventWithOwner();
-        $hero = $event->website->sections()->where('type', 'hero')->sole();
-        $content = $hero->content;
-        $appearance = [
-            ...WebsiteSectionAppearance::DEFAULT,
-            'presentation' => 'classic',
-            'responsive' => [
-                'tablet' => ['headingAlignment' => 'right'],
-                'mobile' => ['mediaPlacement' => 'top'],
-            ],
-        ];
-
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", compact('appearance'))->assertOk();
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk();
-
-        $normalized = $hero->refresh()->appearance;
-        $this->assertSame('right', $normalized['responsive']['tablet']['headingAlignment']);
-        $this->assertArrayNotHasKey('mobile', $normalized['responsive']);
-        $this->assertSame($content, $hero->content);
-    }
-
     public function test_historical_framed_appearance_is_resolved_without_mutation_and_new_framed_updates_are_rejected(): void
     {
         [$event, $owner] = $this->eventWithOwner();
@@ -363,37 +337,6 @@ class WebsiteSectionAppearanceTest extends TestCase
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$story->id}/appearance", [
             'appearance' => $legacy,
         ])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
-    }
-
-    public function test_expanded_frame_styles_are_template_scoped_and_normalize_across_templates(): void
-    {
-        [$event, $owner] = $this->eventWithOwner();
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/website/sections/{$story->id}/appearance";
-        $classic = [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'portraitStory', 'frameStyle' => 'outset'];
-
-        $this->actingAs($owner)->putJson($url, ['appearance' => $classic])->assertOk();
-        $this->actingAs($owner)->putJson($url, ['appearance' => [...$classic, 'frameStyle' => 'ornamental']])->assertOk();
-        $this->actingAs($owner)->putJson($url, ['appearance' => [...$classic, 'frameStyle' => 'editorialFrame']])
-            ->assertUnprocessable()->assertJsonValidationErrors('appearance.frameStyle');
-
-        $this->actingAs($owner)->putJson($url, ['appearance' => $classic])->assertOk();
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk();
-        $this->assertSame('outset', $story->refresh()->appearance['frameStyle']);
-        $this->assertSame('editorial', $story->appearance['presentation']);
-
-        $modern = [...$story->appearance, 'frameStyle' => 'editorialFrame'];
-        $this->actingAs($owner)->putJson($url, ['appearance' => $modern])->assertOk();
-        $this->actingAs($owner)->putJson($url, ['appearance' => [...$modern, 'frameStyle' => 'ornamental']])
-            ->assertUnprocessable()->assertJsonValidationErrors('appearance.frameStyle');
-
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
-        ])->assertOk();
-        $this->assertSame('none', $story->refresh()->appearance['frameStyle']);
-        $this->assertSame('portraitStory', $story->appearance['presentation']);
     }
 
     public function test_invalid_missing_and_extra_appearance_values_are_rejected(): void

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\WebsiteFactory;
+use DomainException;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,15 @@ class Website extends Model
     protected function casts(): array
     {
         return ['design_settings' => 'array'];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (Website $website): void {
+            if ($website->isDirty('template_key')) {
+                throw new DomainException('A Website Project template cannot be changed after creation.');
+            }
+        });
     }
 
     public function event(): BelongsTo

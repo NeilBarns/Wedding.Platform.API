@@ -119,9 +119,6 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.sections.2.content.blocks.0.id', 'first')
             ->assertJsonPath('data.sections.2.content.blocks.1.id', 'second');
         $this->assertSame($content, $story->refresh()->content);
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk();
         $this->assertSame($content, $story->refresh()->content);
 
         $duplicate = [...$content, 'blocks' => [$blocks[0], [...$blocks[1], 'id' => 'first']]];
@@ -209,21 +206,6 @@ class WebsiteDraftApiTest extends TestCase
         $this->assertSame($original['is_enabled'], $hero->is_enabled);
         $this->assertSame($original['template_key'], $event->website->refresh()->template_key);
         $this->assertSame($original['story_content'], $story->refresh()->content);
-    }
-
-    public function test_template_update_uses_domain_validation_and_preserves_sections(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $before = $event->website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all();
-        $url = "/api/events/{$event->id}/website/template";
-
-        $this->actingAs($owner)->putJson($url, ['templateKey' => 'unknown-template'])
-            ->assertUnprocessable()->assertJsonValidationErrors('templateKey');
-        $this->actingAs($owner)->putJson($url, [
-            'templateKey' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
-        ])->assertOk()->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-
-        $this->assertSame($before, $event->website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all());
     }
 
     public function test_enable_disable_preserves_content_and_checks_template_capability(): void

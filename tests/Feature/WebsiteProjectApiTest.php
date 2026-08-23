@@ -44,7 +44,7 @@ class WebsiteProjectApiTest extends TestCase
         $this->assertArrayNotHasKey('sections', $response->json('data.0'));
     }
 
-    public function test_project_detail_and_templates_are_scoped_to_the_route_event(): void
+    public function test_project_detail_is_scoped_to_the_route_event_and_preserves_template_metadata(): void
     {
         [$event, $owner] = $this->event();
         [$otherEvent] = $this->event();
@@ -60,22 +60,15 @@ class WebsiteProjectApiTest extends TestCase
             ->assertJsonPath('data.designSettings', $project->design_settings)
             ->assertJsonCount(10, 'data.sections');
 
-        $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$project->id}/templates")
-            ->assertOk()->assertJsonPath('data.0.isSelected', true);
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$foreign->id}")->assertNotFound();
-        $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$foreign->id}/templates")->assertNotFound();
     }
 
     public function test_project_aware_mutations_reuse_existing_behavior(): void
     {
         [$event, $owner] = $this->event();
-        $project = $this->project($event, 'Main');
+        $project = $this->project($event, 'Main', templateKey: WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
         $base = "/api/events/{$event->id}/websites/{$project->id}";
         $hero = $project->sections()->where('type', 'hero')->sole();
-
-        $this->actingAs($owner)->putJson("{$base}/template", [
-            'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertOk()->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
 
         $design = ['colorTheme' => 'ink', 'fontSet' => 'fashion', 'artStyle' => 'frame'];
         $this->actingAs($owner)->putJson("{$base}/design", ['designSettings' => $design])
@@ -136,10 +129,6 @@ class WebsiteProjectApiTest extends TestCase
             ['designSettings' => $projectA->design_settings],
         )->assertNotFound();
         $this->actingAs($owner)->putJson(
-            "/api/events/{$event->id}/websites/{$foreignProject->id}/template",
-            ['templateKey' => WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1],
-        )->assertNotFound();
-        $this->actingAs($owner)->putJson(
             "/api/events/{$event->id}/websites/{$foreignProject->id}/sections/order",
             ['sectionIds' => $foreignProject->sections()->pluck('id')->all()],
         )->assertNotFound();
@@ -169,10 +158,17 @@ class WebsiteProjectApiTest extends TestCase
         return [app(CreateEvent::class)->handle($owner, ['name' => fake()->words(3, true)]), $owner];
     }
 
-    private function project(Event $event, string $name, mixed $createdAt = null): Website
-    {
+    private function project(
+        Event $event,
+        string $name,
+        mixed $createdAt = null,
+        string $templateKey = WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1,
+    ): Website {
+        $template = app(WebsiteTemplateRegistry::class)->get($templateKey);
         $project = Website::factory()->for($event)->create(array_filter([
             'name' => $name,
+            'template_key' => $templateKey,
+            'design_settings' => $template->defaultDesignSettings,
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ], fn (mixed $value): bool => $value !== null));
