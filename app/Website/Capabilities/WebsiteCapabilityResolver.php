@@ -76,10 +76,10 @@ final class WebsiteCapabilityResolver
             return null;
         }
 
-        return array_map(
-            fn (AppearanceControlCapability $control): AppearanceControlCapability => $viewport === 'desktop' ? $control : $control->forViewport($viewport),
+        return array_values(array_filter(array_map(
+            fn (AppearanceControlCapability $control): ?AppearanceControlCapability => $viewport === 'desktop' ? $control : $control->forViewport($viewport),
             [...$section->appearanceControls, ...($presentation?->appearanceControls ?? [])],
-        );
+        )));
     }
 
     public function allowsElement(string|WebsiteTemplateDefinition $template, string $sectionId, string $elementType): bool
@@ -229,12 +229,11 @@ final class WebsiteCapabilityResolver
     ): array {
         $viewports = [];
         foreach (WebsiteSectionAppearance::RESPONSIVE_VIEWPORTS as $viewport) {
-            $control = $template->responsiveControlFor($sectionId, $presentationId, $viewport, $setting);
-            $default = $template->responsiveDefaultFor($sectionId, $presentationId, $viewport, $setting);
-            if ($default !== null) {
+            $control = $template->resolvedResponsiveControlFor($sectionId, $presentationId, $viewport, $setting, $fallbackOptions);
+            if ($control !== null) {
                 $viewports[$viewport] = new ViewportControlCapability(
-                    default: $default,
-                    options: $control['options'] ?? $fallbackOptions,
+                    default: $control['default'],
+                    options: $control['options'],
                 );
             }
         }

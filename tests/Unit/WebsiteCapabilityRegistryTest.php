@@ -122,6 +122,72 @@ class WebsiteCapabilityRegistryTest extends TestCase
         $this->assertSame(['editorialPortraits', 'squareGrid', 'minimal', 'namesOnly'], array_map(fn ($item): string => $item->id, $modernPeople->presentations));
     }
 
+    public function test_every_responsive_control_serializes_fully_resolved_viewport_defaults_in_resolver_parity(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+        $seenResponsiveControls = [];
+
+        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
+            $capabilities = $resolver->template($template);
+            $serialized = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
+
+            foreach ($capabilities->sections as $sectionIndex => $section) {
+                $contexts = [[null, $section->appearanceControls, $serialized['sections'][$sectionIndex]['appearanceControls']]];
+                foreach ($section->presentations as $presentationIndex => $presentation) {
+                    $contexts[] = [
+                        $presentation->id,
+                        $presentation->appearanceControls,
+                        $serialized['sections'][$sectionIndex]['presentations'][$presentationIndex]['appearanceControls'],
+                    ];
+                }
+
+                foreach ($contexts as [$presentationId, $controls, $serializedControls]) {
+                    foreach ($controls as $controlIndex => $control) {
+                        if ($control->scope !== AppearanceControlScope::Responsive) {
+                            continue;
+                        }
+
+                        $seenResponsiveControls[$control->id] = true;
+                        foreach (['tablet', 'mobile'] as $viewport) {
+                            $this->assertArrayHasKey($viewport, $control->viewports);
+                            $resolved = collect($resolver->controlsForViewport(
+                                $template,
+                                $section->id,
+                                $presentationId,
+                                $viewport,
+                            ))->keyBy('id')->get($control->id);
+                            $this->assertNotNull($resolved);
+                            $this->assertSame($control->viewports[$viewport]->default, $resolved->default);
+                            $this->assertSame($control->viewports[$viewport]->options, $resolved->options);
+                            $this->assertSame($resolved->default, $serializedControls[$controlIndex]['viewports'][$viewport]['default']);
+                            $this->assertSame($resolved->options, $serializedControls[$controlIndex]['viewports'][$viewport]['options']);
+                            $this->assertResolvedDefaultIsAllowed($resolved);
+                        }
+                    }
+                }
+            }
+        }
+
+        $this->assertEqualsCanonicalizing(
+            ['headingAlignment', 'bodyAlignment', 'mediaPlacement', 'mediaSize', 'mediaSpacing', 'mediaContentGap'],
+            array_keys($seenResponsiveControls),
+        );
+    }
+
+    public function test_responsive_control_without_a_resolved_viewport_is_unsupported(): void
+    {
+        $control = new AppearanceControlCapability(
+            id: 'mediaSize',
+            type: AppearanceControlType::Option,
+            scope: AppearanceControlScope::Responsive,
+            default: 'balanced',
+            options: [['key' => 'balanced', 'displayName' => 'Balanced']],
+        );
+
+        $this->assertNull($control->forViewport('tablet'));
+        $this->assertNull($control->forViewport('mobile'));
+    }
+
     /** @param list<string> $knownControls */
     private function assertValidControl(AppearanceControlCapability $control, array $knownControls): void
     {
@@ -155,6 +221,14 @@ class WebsiteCapabilityRegistryTest extends TestCase
             foreach (is_array($viewport->default) ? $viewport->default : [$viewport->default] as $value) {
                 $this->assertContains($value, $viewportAllowed);
             }
+        }
+    }
+
+    private function assertResolvedDefaultIsAllowed(AppearanceControlCapability $control): void
+    {
+        $allowed = array_column($control->options, 'key');
+        foreach (is_array($control->default) ? $control->default : [$control->default] as $value) {
+            $this->assertContains($value, $allowed);
         }
     }
 }

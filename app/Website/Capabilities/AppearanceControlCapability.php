@@ -20,11 +20,18 @@ final readonly class AppearanceControlCapability
         public array $viewports = [],
     ) {}
 
-    public function forViewport(string $viewport): self
+    public function forViewport(string $viewport): ?self
     {
-        $narrowing = $this->viewports[$viewport] ?? null;
+        if ($this->scope === AppearanceControlScope::Shared) {
+            return $this;
+        }
 
-        return $narrowing === null ? $this : new self(
+        $narrowing = $this->viewports[$viewport] ?? null;
+        if ($narrowing === null) {
+            return null;
+        }
+
+        return new self(
             id: $this->id,
             type: $this->type,
             scope: $this->scope,

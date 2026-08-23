@@ -187,6 +187,30 @@ final readonly class WebsiteTemplateDefinition
     }
 
     /**
+     * @param  list<array{key: string, displayName: string}>  $fallbackOptions
+     * @return array{default: mixed, options: list<array{key: string, displayName: string}>}|null
+     */
+    public function resolvedResponsiveControlFor(
+        string $sectionType,
+        ?string $presentation,
+        string $viewport,
+        string $setting,
+        array $fallbackOptions,
+    ): ?array {
+        $default = $this->responsiveDefaultFor($sectionType, $presentation, $viewport, $setting);
+        if ($default === null) {
+            return null;
+        }
+
+        $control = $this->responsiveControlFor($sectionType, $presentation, $viewport, $setting);
+
+        return [
+            'default' => $default,
+            'options' => $control['options'] ?? $fallbackOptions,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $base
      * @param  array<string, mixed>  $override
      * @return array<string, mixed>
@@ -208,16 +232,22 @@ final readonly class WebsiteTemplateDefinition
             if (! array_key_exists($setting, $override)) {
                 continue;
             }
-            $viewportControl = $this->responsiveControlFor($sectionType, $base['presentation'] ?? null, $viewport, $setting);
-            $allowed = array_column($viewportControl['options'] ?? $baseOptions, 'key');
+            $viewportControl = $this->resolvedResponsiveControlFor($sectionType, $base['presentation'] ?? null, $viewport, $setting, $baseOptions);
+            $allowed = array_column($viewportControl['options'] ?? [], 'key');
             if (is_string($override[$setting]) && in_array($override[$setting], $allowed, true)) {
                 $normalized[$setting] = $override[$setting];
             }
         }
 
         if (array_key_exists('mediaSpacing', $override) && isset($controls['mediaSpacing'])) {
-            $viewportControl = $this->responsiveControlFor($sectionType, $base['presentation'] ?? null, $viewport, 'mediaSpacing');
-            $allowed = array_column($viewportControl['options'] ?? $controls['mediaSpacing']['options'], 'key');
+            $viewportControl = $this->resolvedResponsiveControlFor(
+                $sectionType,
+                $base['presentation'] ?? null,
+                $viewport,
+                'mediaSpacing',
+                $controls['mediaSpacing']['options'],
+            );
+            $allowed = array_column($viewportControl['options'] ?? [], 'key');
             $spacing = $override['mediaSpacing'];
             if (is_array($spacing) && collect(['top', 'right', 'bottom', 'left'])->every(
                 fn (string $side): bool => is_string($spacing[$side] ?? null) && in_array($spacing[$side], $allowed, true)

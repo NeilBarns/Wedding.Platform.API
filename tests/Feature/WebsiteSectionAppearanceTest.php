@@ -6,6 +6,7 @@ use App\Actions\Events\CreateEvent;
 use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
@@ -252,6 +253,34 @@ class WebsiteSectionAppearanceTest extends TestCase
         $response->assertJsonPath('data.schemaVersion', 2)
             ->assertJsonPath('data.sections.0.appearance', $expected);
         $this->assertSame($expected, $hero->refresh()->appearance);
+    }
+
+    public function test_resolver_serialized_tablet_defaults_are_the_write_pruning_defaults_for_both_templates(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+
+        foreach ([WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1] as $templateKey) {
+            $owner = User::factory()->create();
+            $event = app(CreateEvent::class)->handle($owner, ['name' => "{$templateKey} default parity"]);
+            $website = $this->initializeWebsite($event, $templateKey);
+            $hero = $website->sections()->where('type', 'hero')->sole();
+            $presentation = $resolver->section($templateKey, 'hero')->defaultPresentation;
+            $tabletControl = collect($resolver->controlsForViewport($templateKey, 'hero', $presentation, 'tablet'))->keyBy('id')['headingAlignment'];
+            $appearance = [
+                ...WebsiteSectionAppearance::DEFAULT,
+                'presentation' => $presentation,
+                'responsive' => ['tablet' => ['headingAlignment' => $tabletControl->default]],
+            ];
+
+            $this->actingAs($owner)->putJson(
+                "/api/events/{$event->id}/websites/{$website->id}/sections/{$hero->id}/appearance",
+                compact('appearance'),
+            )->assertOk()
+                ->assertJsonPath('data.schemaVersion', 2)
+                ->assertJsonMissingPath('data.sections.0.appearance.responsive');
+
+            $this->assertArrayNotHasKey('responsive', $hero->refresh()->appearance);
+        }
     }
 
     public function test_canonicalizing_default_overrides_removes_empty_responsive_object_on_legacy_route(): void
