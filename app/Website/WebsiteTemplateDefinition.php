@@ -147,13 +147,43 @@ final readonly class WebsiteTemplateDefinition
 
         $presentation = $normalized['presentation'] ?? null;
         foreach (WebsiteSectionAppearance::RESPONSIVE_SETTINGS as $setting) {
-            $viewportControl = $this->responsiveControlFor($sectionType, $presentation, $viewport, $setting);
-            if (array_key_exists('default', $viewportControl ?? [])) {
-                $normalized[$setting] = $viewportControl['default'];
+            unset($normalized[$setting]);
+            $default = $this->responsiveDefaultFor($sectionType, $presentation, $viewport, $setting);
+            if ($default !== null) {
+                $normalized[$setting] = $default;
             }
         }
 
         return [...$normalized, ...($responsive[$viewport] ?? [])];
+    }
+
+    public function responsiveDefaultFor(string $sectionType, ?string $presentation, string $viewport, string $setting): mixed
+    {
+        if (! in_array($setting, WebsiteSectionAppearance::RESPONSIVE_SETTINGS, true)) {
+            return null;
+        }
+
+        $viewportControl = $this->responsiveControlFor($sectionType, $presentation, $viewport, $setting);
+        if (array_key_exists('default', $viewportControl ?? [])) {
+            return $viewportControl['default'];
+        }
+
+        if ($setting === 'headingAlignment' || $setting === 'bodyAlignment') {
+            return $this->sectionAppearanceDefaults[$sectionType][$setting] ?? null;
+        }
+
+        if ($presentation === null) {
+            return null;
+        }
+
+        $controls = $this->mediaControlsFor($sectionType, $presentation);
+        if ($setting === 'mediaSpacing') {
+            return $controls['mediaSpacing']['default'] ?? null;
+        }
+
+        $group = $this->mediaControlSettings()[$setting] ?? null;
+
+        return $group === null ? null : ($controls[$group]['default'] ?? null);
     }
 
     /**

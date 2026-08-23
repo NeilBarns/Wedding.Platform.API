@@ -221,6 +221,59 @@ class WebsiteSectionAppearanceTest extends TestCase
         $this->assertSame($content, $hero->content);
     }
 
+    public function test_default_responsive_values_are_removed_while_non_default_viewport_intent_is_preserved(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $hero = $event->website->sections()->where('type', 'hero')->sole();
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+            'mediaPlacement' => 'left',
+            'mediaSize' => 'feature',
+            'responsive' => [
+                'tablet' => ['mediaPlacement' => 'top', 'mediaSize' => 'balanced', 'headingAlignment' => 'inherit'],
+                'mobile' => ['mediaPlacement' => 'bottom', 'mediaSize' => 'balanced'],
+            ],
+        ];
+
+        $response = $this->actingAs($owner)->putJson(
+            "/api/events/{$event->id}/websites/{$event->website->id}/sections/{$hero->id}/appearance",
+            compact('appearance'),
+        )->assertOk();
+
+        $expected = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+            'mediaPlacement' => 'left',
+            'mediaSize' => 'feature',
+            'responsive' => ['mobile' => ['mediaPlacement' => 'bottom']],
+        ];
+        $response->assertJsonPath('data.schemaVersion', 2)
+            ->assertJsonPath('data.sections.0.appearance', $expected);
+        $this->assertSame($expected, $hero->refresh()->appearance);
+    }
+
+    public function test_canonicalizing_default_overrides_removes_empty_responsive_object_on_legacy_route(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $hero = $event->website->sections()->where('type', 'hero')->sole();
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'presentation' => 'classic',
+            'responsive' => [
+                'tablet' => ['mediaPlacement' => 'top'],
+                'mobile' => ['mediaPlacement' => 'top'],
+            ],
+        ];
+
+        $this->actingAs($owner)->putJson(
+            "/api/events/{$event->id}/website/sections/{$hero->id}/appearance",
+            compact('appearance'),
+        )->assertOk()->assertJsonMissingPath('data.sections.0.appearance.responsive');
+
+        $this->assertArrayNotHasKey('responsive', $hero->refresh()->appearance);
+    }
+
     public function test_responsive_overrides_reject_unknown_keys_and_unsupported_values(): void
     {
         [$event, $owner] = $this->eventWithOwner();
@@ -249,8 +302,10 @@ class WebsiteSectionAppearanceTest extends TestCase
 
         foreach (['top', 'bottom'] as $placement) {
             $appearance = [...$base, 'responsive' => ['tablet' => ['mediaPlacement' => $placement]]];
-            $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
-                ->assertJsonPath('data.sections.0.appearance.responsive.tablet.mediaPlacement', $placement);
+            $response = $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
+            $placement === 'top'
+                ? $response->assertJsonMissingPath('data.sections.0.appearance.responsive')
+                : $response->assertJsonPath('data.sections.0.appearance.responsive.tablet.mediaPlacement', $placement);
         }
 
         foreach (['left', 'right'] as $placement) {
@@ -268,8 +323,10 @@ class WebsiteSectionAppearanceTest extends TestCase
 
         foreach (['top', 'bottom', 'left', 'right'] as $placement) {
             $appearance = [...$base, 'responsive' => ['tablet' => ['mediaPlacement' => $placement]]];
-            $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
-                ->assertJsonPath('data.sections.2.appearance.responsive.tablet.mediaPlacement', $placement);
+            $response = $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
+            $placement === 'top'
+                ? $response->assertJsonMissingPath('data.sections.2.appearance.responsive')
+                : $response->assertJsonPath('data.sections.2.appearance.responsive.tablet.mediaPlacement', $placement);
         }
 
         foreach (['left', 'right'] as $placement) {
@@ -294,8 +351,10 @@ class WebsiteSectionAppearanceTest extends TestCase
 
         foreach (['top', 'bottom', 'left', 'right'] as $placement) {
             $appearance = [...$base, 'responsive' => ['tablet' => ['mediaPlacement' => $placement]]];
-            $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
-                ->assertJsonPath('data.sections.4.appearance.responsive.tablet.mediaPlacement', $placement);
+            $response = $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
+            $placement === 'top'
+                ? $response->assertJsonMissingPath('data.sections.4.appearance.responsive')
+                : $response->assertJsonPath('data.sections.4.appearance.responsive.tablet.mediaPlacement', $placement);
         }
 
         foreach (['left', 'right'] as $placement) {

@@ -110,6 +110,24 @@ final class UpdateWebsiteSectionAppearance
             }
         }
 
+        if (isset($appearance['responsive'])) {
+            foreach ($appearance['responsive'] as $viewport => &$override) {
+                foreach ($override as $setting => $value) {
+                    if ($value === $template->responsiveDefaultFor($section->type, $activePresentation, $viewport, $setting)) {
+                        unset($override[$setting]);
+                    }
+                }
+            }
+            unset($override);
+            $appearance['responsive'] = array_filter(
+                $appearance['responsive'],
+                fn (array $override): bool => $override !== [],
+            );
+            if ($appearance['responsive'] === []) {
+                unset($appearance['responsive']);
+            }
+        }
+
         $section->appearance = $appearance;
         $section->save();
 

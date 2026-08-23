@@ -51,13 +51,18 @@ class WebsiteTemplateRegistryTest extends TestCase
         }
     }
 
-    public function test_effective_viewport_appearance_resolves_base_then_sparse_override(): void
+    public function test_effective_viewport_appearance_uses_independent_template_defaults_then_sparse_override(): void
     {
         $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
         $appearance = [
             ...WebsiteSectionAppearance::DEFAULT,
             'presentation' => 'classic',
             'mediaPlacement' => 'left',
+            'headingAlignment' => 'left',
+            'backgroundTreatment' => 'accent',
+            'emphasis' => 'featured',
+            'mediaSize' => 'feature',
+            'mediaSpacing' => array_fill_keys(['top', 'right', 'bottom', 'left'], 'large'),
             'responsive' => [
                 'tablet' => ['headingAlignment' => 'right'],
                 'mobile' => ['mediaPlacement' => 'bottom', 'mediaSize' => 'feature'],
@@ -72,11 +77,19 @@ class WebsiteTemplateRegistryTest extends TestCase
         $this->assertArrayNotHasKey('responsive', $desktop);
         $this->assertSame('top', $tablet['mediaPlacement']);
         $this->assertSame('right', $tablet['headingAlignment']);
+        $this->assertSame('accent', $tablet['backgroundTreatment']);
+        $this->assertSame('featured', $tablet['emphasis']);
+        $this->assertSame('balanced', $tablet['mediaSize']);
+        $this->assertSame(array_fill_keys(['top', 'right', 'bottom', 'left'], 'medium'), $tablet['mediaSpacing']);
         $this->assertSame('bottom', $mobile['mediaPlacement']);
         $this->assertSame('feature', $mobile['mediaSize']);
+        $this->assertSame('inherit', $mobile['headingAlignment']);
+        $this->assertSame('accent', $mobile['backgroundTreatment']);
+        $this->assertSame('featured', $mobile['emphasis']);
+        $this->assertSame(array_fill_keys(['top', 'right', 'bottom', 'left'], 'medium'), $mobile['mediaSpacing']);
     }
 
-    public function test_viewport_resolution_uses_base_then_viewport_default_then_explicit_override(): void
+    public function test_viewport_resolution_uses_viewport_default_then_explicit_override_without_desktop_fallback(): void
     {
         $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
         $capabilities = $template->sectionPresentationCapabilities;
@@ -129,7 +142,7 @@ class WebsiteTemplateRegistryTest extends TestCase
 
         $this->assertSame('right', $desktop['mediaPlacement']);
         $this->assertSame('bottom', $mobile['mediaPlacement']);
-        $this->assertSame('feature', $mobile['mediaSize']);
+        $this->assertSame('balanced', $mobile['mediaSize']);
         $this->assertSame('top', $mobileOverride['mediaPlacement']);
         $this->assertArrayNotHasKey('responsive', $normalized);
     }
