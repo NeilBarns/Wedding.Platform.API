@@ -112,20 +112,21 @@ class WebsiteSectionMediaTest extends TestCase
         $story = $website->sections()->where('type', 'story')->firstOrFail();
         $asset = $this->assetFor($event);
         $url = "/api/events/{$event->id}/website/sections/{$story->id}";
-        $base = fn (?array $media): array => ['heading' => '', 'intro' => null, 'blocks' => [[
-            'id' => 'story-one', 'heading' => null, 'body' => '', 'media' => $media,
-        ]]];
+        $base = fn (?array $framing, bool $withMedia = true): array => ['heading' => '', 'intro' => null, 'elements' => [[
+            'id' => 'story-one', 'type' => 'narrativeBlock', 'body' => '',
+            ...($withMedia ? ['media' => ['type' => 'image', 'mediaId' => $asset->id]] : []),
+        ]], 'mediaFraming' => $framing === null ? [] : ['story-one' => $framing]];
 
         foreach ([['x' => -0.1, 'y' => 0.5], ['x' => 0.5, 'y' => 1.1], ['x' => 0.5]] as $point) {
-            $this->actingAs($owner)->putJson($url, ['content' => $base(['assetId' => $asset->id, 'focalPoint' => $point])])->assertUnprocessable();
+            $this->actingAs($owner)->putJson($url, ['content' => $base(['focalPoint' => $point])])->assertUnprocessable();
         }
         foreach ([0.9, 3.1, 'close'] as $zoom) {
-            $this->actingAs($owner)->putJson($url, ['content' => $base(['assetId' => $asset->id, 'zoom' => $zoom])])->assertUnprocessable();
+            $this->actingAs($owner)->putJson($url, ['content' => $base(['zoom' => $zoom])])->assertUnprocessable();
         }
-        $this->actingAs($owner)->putJson($url, ['content' => $base(['assetId' => $asset->id])])->assertOk();
-        $this->assertSame($asset->id, $story->refresh()->content['blocks'][0]['media']['assetId']);
-        $this->actingAs($owner)->putJson($url, ['content' => $base(null)])->assertOk();
-        $this->assertNull($story->refresh()->content['blocks'][0]['media']);
+        $this->actingAs($owner)->putJson($url, ['content' => $base([])])->assertOk();
+        $this->assertSame($asset->id, $story->refresh()->content['elements'][0]['media']['mediaId']);
+        $this->actingAs($owner)->putJson($url, ['content' => $base(null, false)])->assertOk();
+        $this->assertArrayNotHasKey('media', $story->refresh()->content['elements'][0]);
     }
 
     public function test_section_media_zoom_is_optional_bounded_and_preserved_across_presentations(): void
@@ -263,10 +264,10 @@ class WebsiteSectionMediaTest extends TestCase
         $second = $this->assetFor($event);
         $foreign = $this->assetFor(Event::factory()->create());
         $url = "/api/events/{$event->id}/website/sections/{$story->id}";
-        $content = ['heading' => 'Our Story', 'intro' => null, 'blocks' => [
-            ['id' => 'meeting', 'heading' => 'How we met', 'body' => 'Chapter one', 'media' => ['assetId' => $first->id, 'focalPoint' => ['x' => 0.2, 'y' => 0.7], 'zoom' => 1.5]],
-            ['id' => 'proposal', 'heading' => null, 'body' => 'Chapter two', 'media' => ['assetId' => $second->id]],
-        ]];
+        $content = ['heading' => 'Our Story', 'intro' => null, 'elements' => [
+            ['id' => 'meeting', 'type' => 'narrativeBlock', 'heading' => 'How we met', 'body' => 'Chapter one', 'media' => ['type' => 'image', 'mediaId' => $first->id]],
+            ['id' => 'proposal', 'type' => 'narrativeBlock', 'body' => 'Chapter two', 'media' => ['type' => 'image', 'mediaId' => $second->id]],
+        ], 'mediaFraming' => ['meeting' => ['focalPoint' => ['x' => 0.2, 'y' => 0.7], 'zoom' => 1.5]]];
 
         $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
             ->assertJsonPath("data.media.{$first->id}.id", $first->id)
@@ -279,13 +280,13 @@ class WebsiteSectionMediaTest extends TestCase
         $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$first->id}")->assertUnprocessable();
 
         $withoutFirst = $content;
-        $withoutFirst['blocks'][0]['media'] = null;
+        unset($withoutFirst['elements'][0]['media'], $withoutFirst['mediaFraming']['meeting']);
         $this->actingAs($owner)->putJson($url, ['content' => $withoutFirst])->assertOk();
         $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$first->id}")->assertNoContent();
 
         $invalid = $content;
-        $invalid['blocks'][0]['media'] = ['assetId' => $foreign->id];
-        $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable()->assertJsonValidationErrors('content.blocks');
+        $invalid['elements'][0]['media'] = ['type' => 'image', 'mediaId' => $foreign->id];
+        $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable()->assertJsonValidationErrors('content.elements');
     }
 
     private function eventFor(EventMembershipRole $role): array

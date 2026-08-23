@@ -12,7 +12,7 @@ final class WebsiteSectionRegistry
         return [
             'hero' => $this->definition('hero', 'Hero', 10, ['headline' => '', 'subheadline' => '']),
             'date' => $this->definition('date', 'Date', 20, ['heading' => '', 'description' => '']),
-            'story' => $this->definition('story', 'Story', 30, ['heading' => '', 'intro' => null, 'blocks' => []]),
+            'story' => $this->definition('story', 'Story', 30, ['heading' => '', 'intro' => null, 'elements' => [], 'mediaFraming' => []]),
             'schedule' => $this->definition('schedule', 'Schedule', 40, ['heading' => '', 'items' => []]),
             'venue' => $this->definition('venue', 'Venue', 50, ['heading' => '', 'name' => '', 'address' => '', 'description' => '']),
             'dressCode' => $this->definition('dressCode', 'Dress Code', 60, ['heading' => '', 'description' => '']),

@@ -17,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class WebsiteSchemaVersionTest extends TestCase
@@ -43,6 +44,11 @@ class WebsiteSchemaVersionTest extends TestCase
 
         $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, Website::findOrFail($classic->json('data.id'))->schema_version);
         $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, Website::findOrFail($modern->json('data.id'))->schema_version);
+        foreach ([$classic->json('data.id'), $modern->json('data.id')] as $websiteId) {
+            $story = Website::findOrFail($websiteId)->sections()->where('type', 'story')->sole();
+            $this->assertSame(['heading' => '', 'intro' => null, 'elements' => [], 'mediaFraming' => []], $story->content);
+            $this->assertStringContainsString('"mediaFraming":{}', DB::table('website_sections')->where('id', $story->id)->value('content'));
+        }
         $classicWebsite = Website::findOrFail($classic->json('data.id'));
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/websites/{$classicWebsite->id}/design", [
             'designSettings' => $classicWebsite->design_settings,
@@ -82,7 +88,7 @@ class WebsiteSchemaVersionTest extends TestCase
             ->orderBy('id')->get(['id', 'website_id', 'type', 'sort_order', 'is_enabled', 'content', 'appearance', 'created_at', 'updated_at'])->all());
     }
 
-    public function test_v0_and_v1_normalize_to_runtime_v1_without_writes_and_preserve_story_adapter(): void
+    public function test_v0_and_v1_normalize_to_runtime_v2_without_writes_and_preserve_story_adapter(): void
     {
         [$event] = $this->event();
         $website = app(CreateWebsiteProject::class)->handle($event, 'Historical', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
@@ -100,8 +106,8 @@ class WebsiteSchemaVersionTest extends TestCase
 
         $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, $first['schemaVersion']);
         $this->assertSame($firstStory['content'], $secondStory['content']);
-        $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['blocks'][0]['id']);
-        $this->assertSame('Original narrative', $firstStory['content']['blocks'][0]['body']);
+        $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['elements'][0]['id']);
+        $this->assertSame('Original narrative', $firstStory['content']['elements'][0]['body']);
         $this->assertSame($legacy, $story->fresh()->content);
         $this->assertSame(WebsiteSchema::LEGACY_SCHEMA_VERSION, $website->fresh()->schema_version);
         $this->assertSame($beforeWebsiteTimestamp, $website->fresh()->updated_at->toJSON());
@@ -144,7 +150,7 @@ class WebsiteSchemaVersionTest extends TestCase
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$website->id}")
             ->assertOk()
-            ->assertJsonPath('data.sections.2.content.blocks.0.media.assetId', $asset->id)
+            ->assertJsonPath('data.sections.2.content.elements.0.media.mediaId', $asset->id)
             ->assertJsonPath("data.media.{$asset->id}.id", $asset->id);
         $this->assertSame($legacy, $story->fresh()->content);
     }
@@ -153,7 +159,7 @@ class WebsiteSchemaVersionTest extends TestCase
     {
         [$event, $owner] = $this->event();
         $website = app(CreateWebsiteProject::class)->handle($event, 'Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-        DB::table('websites')->where('id', $website->id)->update(['schema_version' => 2]);
+        DB::table('websites')->where('id', $website->id)->update(['schema_version' => 3]);
         $error = [
             'code' => 'website_schema_version_unsupported',
             'message' => 'This Website Project uses an unsupported schema version.',
@@ -173,7 +179,7 @@ class WebsiteSchemaVersionTest extends TestCase
         app(WebsiteDraftNormalizer::class)->normalize($website);
     }
 
-    public function test_partial_mutations_preserve_v0_storage_and_return_runtime_v1(): void
+    public function test_partial_mutations_preserve_v0_storage_and_return_runtime_v2(): void
     {
         [$event, $owner] = $this->event();
         $website = app(CreateWebsiteProject::class)->handle($event, 'Historical', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
@@ -198,6 +204,46 @@ class WebsiteSchemaVersionTest extends TestCase
 
         $website->update(['name' => 'Renamed']);
         $this->assertSame(WebsiteSchema::LEGACY_SCHEMA_VERSION, $website->fresh()->schema_version);
+    }
+
+    #[DataProvider('promotableSourceVersions')]
+    public function test_successful_canonical_story_save_promotes_old_source_versions(int $sourceVersion): void
+    {
+        [$event, $owner] = $this->event();
+        $website = app(CreateWebsiteProject::class)->handle($event, 'Historical', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        DB::table('websites')->where('id', $website->id)->update(['schema_version' => $sourceVersion]);
+        $story = $website->sections()->where('type', 'story')->sole();
+        $story->update(['content' => ['heading' => 'Old', 'intro' => null, 'blocks' => [['id' => 'old', 'heading' => null, 'body' => 'Old body']]]]);
+        $canonical = ['heading' => 'New', 'intro' => null, 'elements' => [['id' => 'new', 'type' => 'narrativeBlock', 'body' => 'New body']], 'mediaFraming' => []];
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}", ['content' => $canonical])->assertOk();
+        $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, $website->fresh()->schema_version);
+        $this->assertSame('new', $story->fresh()->content['elements'][0]['id']);
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}", ['content' => $canonical])->assertOk();
+        $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, $website->fresh()->schema_version);
+    }
+
+    public static function promotableSourceVersions(): array
+    {
+        return [[0], [1], [2]];
+    }
+
+    public function test_failed_story_save_leaves_source_content_and_version_unchanged(): void
+    {
+        [$event, $owner] = $this->event();
+        $website = app(CreateWebsiteProject::class)->handle($event, 'Historical', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        DB::table('websites')->where('id', $website->id)->update(['schema_version' => 1]);
+        $story = $website->sections()->where('type', 'story')->sole();
+        $stored = ['heading' => 'Old', 'intro' => null, 'blocks' => [['id' => 'old', 'heading' => null, 'body' => 'Old body']]];
+        $story->update(['content' => $stored]);
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}", [
+            'content' => ['heading' => 'Bad', 'intro' => null, 'elements' => [['id' => 'bad', 'type' => 'text', 'text' => 'No']], 'mediaFraming' => []],
+        ])->assertUnprocessable();
+
+        $this->assertSame(1, $website->fresh()->schema_version);
+        $this->assertSame($stored, $story->fresh()->content);
     }
 
     /** @return array{Event, User} */

@@ -2,11 +2,14 @@
 
 namespace App\Website;
 
+use App\Website\Elements\WebsiteElementValidator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 final class WebsiteSectionContentValidator
 {
+    public function __construct(private readonly WebsiteElementValidator $elements) {}
+
     /**
      * @param  array<string, mixed>  $content
      * @return array<string, mixed>
@@ -21,17 +24,10 @@ final class WebsiteSectionContentValidator
             ]);
         }
 
-        $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
         if ($sectionType === 'story') {
-            $validated['heading'] ??= '';
-            $validated['blocks'] = array_map(function (array $block): array {
-                $block['body'] ??= '';
-
-                return $block;
-            }, $validated['blocks']);
-
-            return $validated;
+            return $this->validateStory($content, $rules);
         }
+        $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
         array_walk_recursive($validated, function (mixed &$value, string|int $key) use ($sectionType): void {
             if ($value === null && $key !== 'media' && ! ($sectionType === 'people' && $key === 'role')) {
                 $value = '';
@@ -48,20 +44,17 @@ final class WebsiteSectionContentValidator
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
             'date', 'dressCode' => $this->stringContentRules(['heading' => 255, 'description' => 5000]),
             'story' => [
-                'content' => ['required', 'array:heading,intro,blocks'],
+                'content' => ['required', 'array:heading,intro,elements,mediaFraming'],
                 'content.heading' => ['present', 'nullable', 'string', 'max:255'],
-                'content.intro' => ['sometimes', 'nullable', 'string', 'max:5000'],
-                'content.blocks' => ['present', 'array', 'max:20'],
-                'content.blocks.*' => ['required', 'array:id,heading,body,media'],
-                'content.blocks.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
-                'content.blocks.*.heading' => ['sometimes', 'nullable', 'string', 'max:255'],
-                'content.blocks.*.body' => ['present', 'nullable', 'string', 'max:10000'],
-                'content.blocks.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint,zoom'],
-                'content.blocks.*.media.assetId' => ['required_with:content.blocks.*.media', 'string', 'ulid'],
-                'content.blocks.*.media.focalPoint' => ['sometimes', 'array:x,y'],
-                'content.blocks.*.media.focalPoint.x' => ['required_with:content.blocks.*.media.focalPoint', 'numeric', 'between:0,1'],
-                'content.blocks.*.media.focalPoint.y' => ['required_with:content.blocks.*.media.focalPoint', 'numeric', 'between:0,1'],
-                'content.blocks.*.media.zoom' => ['sometimes', 'numeric', 'between:1,3'],
+                'content.intro' => ['present', 'nullable', 'string', 'max:5000'],
+                'content.elements' => ['present', 'array', 'list', 'max:20'],
+                'content.elements.*' => ['required', 'array'],
+                'content.mediaFraming' => ['present', 'array'],
+                'content.mediaFraming.*' => ['present', 'array:focalPoint,zoom'],
+                'content.mediaFraming.*.focalPoint' => ['sometimes', 'array:x,y', 'required_array_keys:x,y'],
+                'content.mediaFraming.*.focalPoint.x' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
+                'content.mediaFraming.*.focalPoint.y' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
+                'content.mediaFraming.*.zoom' => ['sometimes', 'numeric', 'between:1,3'],
             ],
             'venue' => $this->singleMediaRules($this->stringContentRules([
                 'heading' => 255,
@@ -117,6 +110,50 @@ final class WebsiteSectionContentValidator
             ],
             default => null,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $content
+     * @param  array<string, list<string>>  $rules
+     * @return array<string, mixed>
+     */
+    private function validateStory(array $content, array $rules): array
+    {
+        if (array_key_exists('heading', $content) && $content['heading'] === null) {
+            $content['heading'] = '';
+        }
+        foreach ($content['elements'] ?? [] as $index => $element) {
+            if (is_array($element) && array_key_exists('body', $element) && $element['body'] === null) {
+                $content['elements'][$index]['body'] = '';
+            }
+        }
+        $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
+        try {
+            $validated['elements'] = $this->elements->validateTree($validated['elements']);
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages(['content.elements' => $exception->getMessage()]);
+        }
+
+        $imageElementIds = [];
+        foreach ($validated['elements'] as $index => $element) {
+            if (($element['type'] ?? null) !== 'narrativeBlock') {
+                throw ValidationException::withMessages([
+                    "content.elements.{$index}.type" => 'Story supports Narrative Block elements only.',
+                ]);
+            }
+            if (($element['media']['type'] ?? null) === 'image') {
+                $imageElementIds[(string) $element['id']] = true;
+            }
+        }
+        foreach ($validated['mediaFraming'] as $elementId => $_framing) {
+            if (! isset($imageElementIds[(string) $elementId])) {
+                throw ValidationException::withMessages([
+                    "content.mediaFraming.{$elementId}" => 'Framing must reference a Story element with image media.',
+                ]);
+            }
+        }
+
+        return $validated;
     }
 
     /**

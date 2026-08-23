@@ -63,7 +63,8 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.displayName', 'Classic Filipiniana')
             ->assertJsonPath('data.sections.0.id', $story->id)
             ->assertJsonPath('data.sections.0.displayName', 'Story')
-            ->assertJsonPath('data.sections.0.content.blocks', [])
+            ->assertJsonPath('data.sections.0.content.elements', [])
+            ->assertJsonPath('data.sections.0.content.mediaFraming', [])
             ->assertJsonPath('data.sections.0.mediaCapability.mode', 'multiple')
             ->assertJsonCount(10, 'data.sections');
         $this->assertSame('Hero', $heroPayload['displayName']);
@@ -77,9 +78,9 @@ class WebsiteDraftApiTest extends TestCase
         $payloads = [
             'hero' => ['headline' => '', 'subheadline' => 'Together'],
             'date' => ['heading' => '', 'description' => 'Save the date'],
-            'story' => ['heading' => 'Our Story', 'intro' => null, 'blocks' => [[
-                'id' => 'story-one', 'heading' => null, 'body' => 'Plain text', 'media' => null,
-            ]]],
+            'story' => ['heading' => 'Our Story', 'intro' => null, 'elements' => [[
+                'id' => 'story-one', 'type' => 'narrativeBlock', 'body' => 'Plain text',
+            ]], 'mediaFraming' => []],
             'schedule' => ['heading' => '', 'items' => [[
                 'time' => '3:00 PM', 'title' => 'Ceremony', 'description' => '',
             ]]],
@@ -104,29 +105,29 @@ class WebsiteDraftApiTest extends TestCase
         }
     }
 
-    public function test_story_blocks_round_trip_in_order_and_reject_invalid_structures(): void
+    public function test_story_elements_round_trip_in_order_and_reject_invalid_structures(): void
     {
         [$event, $owner] = $this->createEvent();
         $story = $event->website->sections()->where('type', 'story')->sole();
         $url = "/api/events/{$event->id}/website/sections/{$story->id}";
         $blocks = [
-            ['id' => 'first', 'heading' => null, 'body' => 'First chapter', 'media' => null],
-            ['id' => 'second', 'heading' => 'The proposal', 'body' => 'Second chapter', 'media' => null],
+            ['id' => 'first', 'type' => 'narrativeBlock', 'body' => 'First chapter'],
+            ['id' => 'second', 'type' => 'narrativeBlock', 'heading' => 'The proposal', 'body' => 'Second chapter'],
         ];
-        $content = ['heading' => 'Our Story', 'intro' => 'How it began', 'blocks' => $blocks];
+        $content = ['heading' => 'Our Story', 'intro' => 'How it began', 'elements' => $blocks, 'mediaFraming' => []];
 
         $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
-            ->assertJsonPath('data.sections.2.content.blocks.0.id', 'first')
-            ->assertJsonPath('data.sections.2.content.blocks.1.id', 'second');
+            ->assertJsonPath('data.sections.2.content.elements.0.id', 'first')
+            ->assertJsonPath('data.sections.2.content.elements.1.id', 'second');
         $this->assertSame($content, $story->refresh()->content);
         $this->assertSame($content, $story->refresh()->content);
 
-        $duplicate = [...$content, 'blocks' => [$blocks[0], [...$blocks[1], 'id' => 'first']]];
+        $duplicate = [...$content, 'elements' => [$blocks[0], [...$blocks[1], 'id' => 'first']]];
         $this->actingAs($owner)->putJson($url, ['content' => $duplicate])->assertUnprocessable();
-        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'blocks' => array_fill(0, 21, $blocks[0])]])
-            ->assertUnprocessable()->assertJsonValidationErrors('content.blocks');
+        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => array_fill(0, 21, $blocks[0])]])
+            ->assertUnprocessable()->assertJsonValidationErrors('content.elements');
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'unexpected' => true]])->assertUnprocessable();
-        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'blocks' => [['id' => 'broken', 'body' => [], 'media' => null]]]])->assertUnprocessable();
+        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => [['id' => 'broken', 'type' => 'narrativeBlock', 'body' => []]]]])->assertUnprocessable();
     }
 
     public function test_historical_story_content_is_read_as_one_stable_block_without_mutating_storage(): void
@@ -141,8 +142,8 @@ class WebsiteDraftApiTest extends TestCase
         $firstStory = collect($first->json('data.sections'))->firstWhere('id', $story->id);
         $secondStory = collect($second->json('data.sections'))->firstWhere('id', $story->id);
 
-        $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['blocks'][0]['id']);
-        $this->assertSame('The original narrative', $firstStory['content']['blocks'][0]['body']);
+        $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['elements'][0]['id']);
+        $this->assertSame('The original narrative', $firstStory['content']['elements'][0]['body']);
         $this->assertSame($firstStory['content'], $secondStory['content']);
         $this->assertSame($legacy, $story->refresh()->content);
     }

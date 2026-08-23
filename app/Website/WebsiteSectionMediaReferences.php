@@ -30,6 +30,21 @@ final class WebsiteSectionMediaReferences
                     ],
                 ];
             }
+            foreach ($content['elements'] ?? [] as $element) {
+                $mediaId = $element['type'] === 'narrativeBlock' && ($element['media']['type'] ?? null) === 'image'
+                    ? ($element['media']['mediaId'] ?? null)
+                    : null;
+                if (! is_string($mediaId)) {
+                    continue;
+                }
+                $references[] = [
+                    'assetId' => $mediaId,
+                    'context' => [
+                        'blockId' => (string) ($element['id'] ?? ''),
+                        'blockHeading' => (string) ($element['heading'] ?? ''),
+                    ],
+                ];
+            }
         }
 
         if ($sectionType !== 'people') {

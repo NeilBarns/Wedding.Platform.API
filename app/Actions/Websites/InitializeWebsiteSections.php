@@ -31,13 +31,18 @@ final class InitializeWebsiteSections
                     continue;
                 }
 
+                $content = $definition->defaultContent;
+                if ($definition->key === 'story' && $content['mediaFraming'] === []) {
+                    $content['mediaFraming'] = new \stdClass;
+                }
+
                 $rows[] = [
                     'id' => (string) Str::ulid(),
                     'website_id' => $website->getKey(),
                     'type' => $definition->key,
                     'sort_order' => $definition->defaultOrder,
                     'is_enabled' => $enableMissingSections && $definition->defaultEnabled,
-                    'content' => json_encode($definition->defaultContent, JSON_THROW_ON_ERROR),
+                    'content' => json_encode($content, JSON_THROW_ON_ERROR),
                     'appearance' => json_encode(
                         $template?->appearanceDefaultsFor($definition->key) ?? WebsiteSectionAppearance::DEFAULT,
                         JSON_THROW_ON_ERROR,

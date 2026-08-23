@@ -33,12 +33,23 @@ class WebsiteSectionResource extends JsonResource
             'displayName' => $definition?->displayName ?? $this->type,
             'sortOrder' => $this->sort_order,
             'isEnabled' => $this->is_enabled,
-            'content' => $this->normalizedContent,
+            'content' => $this->serializedContent(),
             'appearance' => $appearance,
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),
             'itemMediaCapability' => $template?->itemMediaCapabilityFor($this->type),
             'presentationCapability' => $template?->presentationCapabilityFor($this->type),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function serializedContent(): array
+    {
+        $content = $this->normalizedContent;
+        if ($this->type === 'story' && ($content['mediaFraming'] ?? null) === []) {
+            $content['mediaFraming'] = new \stdClass;
+        }
+
+        return $content;
     }
 }
