@@ -94,6 +94,32 @@ final class WebsiteCapabilityResolver
         return $this->globalDesignControl($template, $controlId)?->default;
     }
 
+    /** @return array{colorTheme: string, fontSet: string, artStyle: string}|null */
+    public function globalDesignDefaults(string|WebsiteTemplateDefinition $template): ?array
+    {
+        $capability = $this->globalDesign($template);
+        if ($capability === null) {
+            return null;
+        }
+
+        return collect($capability->controls)->mapWithKeys(
+            fn (GlobalDesignControlCapability $control): array => [$control->id->value => $control->default],
+        )->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return array{colorTheme: string, fontSet: string, artStyle: string}|null
+     */
+    public function normalizeGlobalDesignSettings(
+        string|WebsiteTemplateDefinition $template,
+        array $settings,
+    ): ?array {
+        $definition = is_string($template) ? $this->templates->get($template) : $template;
+
+        return $definition?->normalizeDesignSettings($settings);
+    }
+
     public function presentation(string|WebsiteTemplateDefinition $template, string $sectionId, ?string $presentationId = null): ?PresentationCapability
     {
         $section = $this->section($template, $sectionId);

@@ -155,6 +155,13 @@ class WebsiteCapabilityRegistryTest extends TestCase
 
             $serialized = (new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request());
             $this->assertSame(array_keys($expectedControls), array_column($serialized['globalDesign']['controls'], 'id'));
+            $this->assertSame(
+                $resolver->globalDesignDefaults($template),
+                $resolver->normalizeGlobalDesignSettings($template, [
+                    'colorTheme' => 'unsupported-value',
+                    'fontSet' => null,
+                ]),
+            );
         }
 
         $classic = $resolver->globalDesign(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
@@ -165,6 +172,8 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $this->assertNotSame($classic->controls[$controlIndex]->options, $modern->controls[$controlIndex]->options);
         }
         $this->assertNull($resolver->globalDesign('unknown-template'));
+        $this->assertNull($resolver->globalDesignDefaults('unknown-template'));
+        $this->assertNull($resolver->normalizeGlobalDesignSettings('unknown-template', []));
         $this->assertNull($resolver->globalDesignControl(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'unknown-control'));
         $this->assertNull($resolver->globalDesignDefault(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'unknown-control'));
         $this->assertFalse($resolver->allowsGlobalDesignValue(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'unknown-control', 'terracotta'));

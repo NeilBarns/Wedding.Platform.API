@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\MediaAsset;
 use App\Models\User;
 use App\Models\Website;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -128,7 +129,10 @@ class WebsiteProjectCreationTest extends TestCase
         $response = $this->actingAs($owner)->postJson($url, [
             'name' => 'B',
             'templateKey' => $template->key,
-        ])->assertCreated()->assertJsonPath('data.designSettings', $template->defaultDesignSettings);
+        ])->assertCreated()->assertJsonPath(
+            'data.designSettings',
+            app(WebsiteCapabilityResolver::class)->globalDesignDefaults($template),
+        );
         $projectB = Website::query()->findOrFail($response->json('data.id'));
 
         $this->assertSame(10, $projectB->sections()->count());

@@ -7,6 +7,7 @@ use App\Actions\Websites\UpdateWebsiteDesignSettings;
 use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,9 +29,12 @@ class WebsiteDesignSettingsTest extends TestCase
 
     public function test_explicit_website_initialization_receives_template_default_design_settings(): void
     {
-        $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
+        $resolver = app(WebsiteCapabilityResolver::class);
 
-        $this->assertSame($this->defaults(), $this->initializeWebsite($event)->design_settings);
+        foreach ([WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1] as $templateKey) {
+            $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
+            $this->assertSame($resolver->globalDesignDefaults($templateKey), $this->initializeWebsite($event, $templateKey)->design_settings);
+        }
     }
 
     public function test_database_requires_explicit_design_settings_without_a_default(): void
@@ -82,6 +86,7 @@ class WebsiteDesignSettingsTest extends TestCase
             ['colorTheme' => 'neonRainbow', 'fontSet' => 'editorial', 'artStyle' => 'minimal'],
             ['colorTheme' => 'olive', 'fontSet' => 'comicSans', 'artStyle' => 'minimal'],
             ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'externalUrl'],
+            ['colorTheme' => 'olive', 'fontSet' => 'modern'],
             ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'clean', 'css' => 'body{}'],
         ] as $settings) {
             try {
@@ -90,6 +95,59 @@ class WebsiteDesignSettingsTest extends TestCase
             } catch (ValidationException) {
                 $this->assertSame($this->defaults(), $website->refresh()->design_settings);
             }
+        }
+    }
+
+    public function test_each_typed_global_design_control_accepts_and_rejects_values_for_both_templates(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+
+        foreach ([WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1] as $templateKey) {
+            $owner = User::factory()->create();
+            $event = app(CreateEvent::class)->handle($owner, ['name' => 'A Wedding']);
+            $website = $this->initializeWebsite($event, $templateKey);
+            $settings = $resolver->globalDesignDefaults($templateKey);
+            $url = "/api/events/{$event->id}/website/design";
+
+            foreach ($resolver->globalDesign($templateKey)->controls as $control) {
+                $settings[$control->id->value] = $control->options[1]['key'];
+                $this->actingAs($owner)->putJson($url, ['designSettings' => $settings])
+                    ->assertOk()
+                    ->assertJsonPath("data.designSettings.{$control->id->value}", $settings[$control->id->value]);
+
+                $invalid = [...$settings, $control->id->value => 'unsupported-value'];
+                $this->actingAs($owner)->putJson($url, ['designSettings' => $invalid])
+                    ->assertUnprocessable()
+                    ->assertJsonValidationErrors("designSettings.{$control->id->value}");
+                $this->assertSame($settings, $website->refresh()->design_settings);
+            }
+        }
+    }
+
+    public function test_historical_invalid_design_settings_normalize_to_capability_defaults_without_mutation(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $website = $event->website;
+        $defaults = app(WebsiteCapabilityResolver::class)->globalDesignDefaults($website->template_key);
+
+        foreach ([
+            ['fontSet' => 'editorial', 'artStyle' => 'minimal'],
+            ['colorTheme' => 'unknown', 'fontSet' => 'editorial', 'artStyle' => 'minimal'],
+            ['colorTheme' => [], 'fontSet' => 42, 'artStyle' => null],
+        ] as $stored) {
+            DB::table('websites')->where('id', $website->id)->update([
+                'design_settings' => json_encode($stored, JSON_THROW_ON_ERROR),
+            ]);
+            $before = $website->refresh()->design_settings;
+
+            $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")
+                ->assertOk()
+                ->assertJsonPath('data.schemaVersion', 2)
+                ->assertJsonPath('data.designSettings', $defaults)
+                ->assertJsonPath('data.template.designOptions', app(WebsiteTemplateRegistry::class)->get($website->template_key)->designOptions)
+                ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.default', $defaults['colorTheme']);
+
+            $this->assertSame($before, $website->refresh()->design_settings);
         }
     }
 

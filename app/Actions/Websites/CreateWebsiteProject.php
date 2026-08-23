@@ -6,6 +6,7 @@ use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Models\Event;
 use App\Models\Website;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteCreationTemplateCatalog;
 use App\Website\WebsiteSchema;
 use App\Website\WebsiteTemplateRegistry;
@@ -15,6 +16,7 @@ final class CreateWebsiteProject
 {
     public function __construct(
         private readonly WebsiteTemplateRegistry $templates,
+        private readonly WebsiteCapabilityResolver $capabilities,
         private readonly WebsiteCreationTemplateCatalog $creationTemplates,
         private readonly InitializeWebsiteSections $initializeSections,
     ) {}
@@ -40,7 +42,7 @@ final class CreateWebsiteProject
             $website = $lockedEvent->websiteProjects()->create([
                 'name' => trim($name),
                 'template_key' => $template->key,
-                'design_settings' => $template->defaultDesignSettings,
+                'design_settings' => $this->capabilities->globalDesignDefaults($template),
                 'schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
             ]);
             $this->initializeSections->handle($website);

@@ -12,6 +12,7 @@ use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Models\Event;
 use App\Models\User;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateDefinition;
 use App\Website\WebsiteTemplateRegistry;
@@ -61,7 +62,7 @@ class WebsiteInitializationTest extends TestCase
             'templateKey' => $template->key,
         ])->assertCreated()
             ->assertJsonPath('data.templateKey', $template->key)
-            ->assertJsonPath('data.designSettings', $template->defaultDesignSettings)
+            ->assertJsonPath('data.designSettings', app(WebsiteCapabilityResolver::class)->globalDesignDefaults($template))
             ->assertJsonCount(10, 'data.sections');
 
         $website = $event->website()->sole();
@@ -153,7 +154,12 @@ class WebsiteInitializationTest extends TestCase
     {
         $registry = new WebsiteTemplateRegistry([$definition->key => $definition]);
         $sections = new WebsiteSectionRegistry;
-        $action = new InitializeEventWebsite($registry, $sections, new InitializeWebsiteSections($sections, $registry));
+        $action = new InitializeEventWebsite(
+            $registry,
+            new WebsiteCapabilityResolver($registry, $sections),
+            $sections,
+            new InitializeWebsiteSections($sections, $registry),
+        );
 
         try {
             $action->handle($event, $definition->key);

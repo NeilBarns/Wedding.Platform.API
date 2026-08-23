@@ -3,23 +3,22 @@
 namespace App\Actions\Websites;
 
 use App\Models\Website;
-use App\Website\WebsiteTemplateRegistry;
+use App\Website\Capabilities\GlobalDesignControlId;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use Illuminate\Validation\ValidationException;
 
 final class UpdateWebsiteDesignSettings
 {
-    public function __construct(private readonly WebsiteTemplateRegistry $templates) {}
+    public function __construct(private readonly WebsiteCapabilityResolver $capabilities) {}
 
     /** @param array<string, mixed> $settings */
     public function handle(Website $website, array $settings): Website
     {
-        $template = $this->templates->get($website->template_key);
-
-        if ($template === null) {
+        if ($this->capabilities->globalDesign($website->template_key) === null) {
             throw ValidationException::withMessages(['designSettings' => 'The assigned Template is not supported.']);
         }
 
-        $expectedKeys = ['colorTheme', 'fontSet', 'artStyle'];
+        $expectedKeys = array_map(fn (GlobalDesignControlId $id): string => $id->value, GlobalDesignControlId::cases());
         $actualKeys = array_keys($settings);
         sort($expectedKeys);
         sort($actualKeys);
@@ -27,15 +26,9 @@ final class UpdateWebsiteDesignSettings
             throw ValidationException::withMessages(['designSettings' => 'Provide exactly colorTheme, fontSet, and artStyle.']);
         }
 
-        $optionGroups = [
-            'colorTheme' => 'colorThemes',
-            'fontSet' => 'fontSets',
-            'artStyle' => 'artStyles',
-        ];
-
-        foreach ($optionGroups as $setting => $group) {
-            $allowed = array_column($template->designOptions[$group], 'key');
-            if (! is_string($settings[$setting]) || ! in_array($settings[$setting], $allowed, true)) {
+        foreach (GlobalDesignControlId::cases() as $controlId) {
+            $setting = $controlId->value;
+            if (! is_string($settings[$setting]) || ! $this->capabilities->allowsGlobalDesignValue($website->template_key, $controlId, $settings[$setting])) {
                 throw ValidationException::withMessages([
                     "designSettings.{$setting}" => "The selected {$setting} is invalid for this Template.",
                 ]);

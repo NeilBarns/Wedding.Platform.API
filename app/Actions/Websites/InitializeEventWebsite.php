@@ -7,6 +7,7 @@ use App\Exceptions\UnknownWebsiteTemplate;
 use App\Exceptions\WebsiteAlreadyInitialized;
 use App\Models\Event;
 use App\Models\Website;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteSchema;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
@@ -17,6 +18,7 @@ final class InitializeEventWebsite
 {
     public function __construct(
         private readonly WebsiteTemplateRegistry $templates,
+        private readonly WebsiteCapabilityResolver $capabilities,
         private readonly WebsiteSectionRegistry $sections,
         private readonly InitializeWebsiteSections $initializeSections,
     ) {}
@@ -50,7 +52,7 @@ final class InitializeEventWebsite
                 $website = $lockedEvent->website()->create([
                     'name' => Website::DEFAULT_NAME,
                     'template_key' => $template->key,
-                    'design_settings' => $template->defaultDesignSettings,
+                    'design_settings' => $this->capabilities->globalDesignDefaults($template),
                     'schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
                 ]);
                 $this->initializeSections->handle($website);

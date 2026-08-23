@@ -5,10 +5,14 @@ namespace App\Website;
 use App\Exceptions\UnsupportedWebsiteSchemaVersion;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 
 final class WebsiteDraftNormalizer
 {
-    public function __construct(private readonly WebsiteSectionContentNormalizer $sectionContent) {}
+    public function __construct(
+        private readonly WebsiteSectionContentNormalizer $sectionContent,
+        private readonly WebsiteCapabilityResolver $capabilities,
+    ) {}
 
     /**
      * @return array{
@@ -29,6 +33,10 @@ final class WebsiteDraftNormalizer
         }
 
         $website->loadMissing('sections.website');
+        $storedDesignSettings = $website->design_settings;
+        $designSettings = is_array($storedDesignSettings)
+            ? $this->capabilities->normalizeGlobalDesignSettings($website->template_key, $storedDesignSettings)
+            : $this->capabilities->globalDesignDefaults($website->template_key);
 
         return [
             'schemaVersion' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
@@ -36,7 +44,7 @@ final class WebsiteDraftNormalizer
             'eventId' => $website->event_id,
             'name' => $website->name,
             'templateKey' => $website->template_key,
-            'designSettings' => $website->design_settings,
+            'designSettings' => $designSettings ?? $storedDesignSettings,
             'sections' => $website->sections->map(fn (WebsiteSection $section): array => [
                 'section' => $section,
                 'content' => $this->sectionContent->normalize($section->id, $section->type, $section->content),
