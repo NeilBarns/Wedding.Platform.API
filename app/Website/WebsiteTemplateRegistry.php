@@ -7,6 +7,7 @@ use App\Website\Capabilities\DesignColorCapability;
 use App\Website\Capabilities\DesignColorRole;
 use App\Website\Capabilities\FontFamilyCapability;
 use App\Website\Capabilities\PalettePresetCapability;
+use App\Website\Capabilities\ProjectColorRole;
 use App\Website\Capabilities\TemplateDesignLibrary;
 use App\Website\Capabilities\TypographyPresetCapability;
 use App\Website\Capabilities\TypographyRole;
@@ -399,7 +400,12 @@ final class WebsiteTemplateRegistry
                     'accentContrast' => 'accent-contrast',
                     default => $role,
                 };
-                $colors[] = new DesignColorCapability($colorId, $palette['displayName'].' '.$roleLabels[$role], $value);
+                $allowedProjectRoles = match ($role) {
+                    DesignColorRole::Text->value => [ProjectColorRole::Heading, ProjectColorRole::Body],
+                    DesignColorRole::Accent->value => [ProjectColorRole::Heading, ProjectColorRole::Accent],
+                    default => [],
+                };
+                $colors[] = new DesignColorCapability($colorId, $palette['displayName'].' '.$roleLabels[$role], $value, $allowedProjectRoles);
                 $roles[$role] = $colorId;
             }
             $palettePresets[] = new PalettePresetCapability($presetId, $palette['displayName'], $roles);
@@ -431,6 +437,9 @@ final class WebsiteTemplateRegistry
         foreach ($library->colors as $color) {
             if (trim($color->id) === '' || trim($color->displayName) === '' || preg_match('/^#[0-9a-fA-F]{6}$/', $color->value) !== 1) {
                 throw new LogicException("Template [{$template->key}] has an invalid Design Library color.");
+            }
+            if (count($color->allowedProjectRoles) !== count(array_unique($color->allowedProjectRoles, SORT_REGULAR))) {
+                throw new LogicException("Template [{$template->key}] has duplicate Project color roles [{$color->id}].");
             }
         }
 

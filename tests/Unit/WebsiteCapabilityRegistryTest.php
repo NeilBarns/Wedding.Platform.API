@@ -8,6 +8,7 @@ use App\Website\Capabilities\AppearanceControlScope;
 use App\Website\Capabilities\AppearanceControlType;
 use App\Website\Capabilities\GlobalDesignControlId;
 use App\Website\Capabilities\GlobalDesignControlType;
+use App\Website\Capabilities\ProjectColorRole;
 use App\Website\Capabilities\TypographyRole;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\Elements\WebsiteElementType;
@@ -247,6 +248,73 @@ class WebsiteCapabilityRegistryTest extends TestCase
         $modern = $resolver->template(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1)->designLibrary;
         $this->assertTrue(collect($classic->palettePresets)->every(fn ($preset): bool => isset($preset->roles['ornament'])));
         $this->assertTrue(collect($modern->palettePresets)->every(fn ($preset): bool => ! isset($preset->roles['ornament'])));
+    }
+
+    public function test_legacy_presets_resolve_legal_project_defaults_for_every_template_option(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+
+        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
+            $capabilities = $resolver->template($template);
+            $library = $capabilities->designLibrary;
+            $fontFamilies = collect($library->fontFamilies)->keyBy('id');
+            $colors = collect($library->colors)->keyBy('id');
+
+            foreach ($template->designOptions['colorThemes'] as $colorTheme) {
+                $resolved = $resolver->resolveProjectDesignDefaults($template, [
+                    ...$template->defaultDesignSettings,
+                    'colorTheme' => $colorTheme['key'],
+                ]);
+                $this->assertNotNull($resolved);
+                foreach (['headingColorId', 'bodyColorId', 'accentColorId'] as $property) {
+                    $this->assertTrue($colors->has($resolved->{$property}));
+                }
+                $this->assertContains($resolved->headingColorId, $capabilities->projectDefaults->colors->headingColorIds);
+                $this->assertContains($resolved->bodyColorId, $capabilities->projectDefaults->colors->bodyColorIds);
+                $this->assertContains($resolved->accentColorId, $capabilities->projectDefaults->colors->accentColorIds);
+            }
+
+            foreach ($template->designOptions['fontSets'] as $fontSet) {
+                $resolved = $resolver->resolveProjectDesignDefaults($template, [
+                    ...$template->defaultDesignSettings,
+                    'fontSet' => $fontSet['key'],
+                ]);
+                $this->assertNotNull($resolved);
+                $this->assertContains(TypographyRole::Heading, $fontFamilies[$resolved->headingFontId]->allowedRoles);
+                $this->assertContains(TypographyRole::Body, $fontFamilies[$resolved->bodyFontId]->allowedRoles);
+                $this->assertContains($resolved->headingFontId, $capabilities->projectDefaults->typography->headingFontIds);
+                $this->assertContains($resolved->bodyFontId, $capabilities->projectDefaults->typography->bodyFontIds);
+            }
+
+            foreach ($library->colors as $color) {
+                foreach ($color->allowedProjectRoles as $role) {
+                    $allowed = match ($role) {
+                        ProjectColorRole::Heading => $capabilities->projectDefaults->colors->headingColorIds,
+                        ProjectColorRole::Body => $capabilities->projectDefaults->colors->bodyColorIds,
+                        ProjectColorRole::Accent => $capabilities->projectDefaults->colors->accentColorIds,
+                    };
+                    $this->assertContains($color->id, $allowed);
+                }
+            }
+
+            $fallback = $resolver->resolveProjectDesignDefaults($template, ['colorTheme' => 'invalid', 'fontSet' => 'invalid']);
+            $defaults = $resolver->resolveProjectDesignDefaults($template, $template->defaultDesignSettings);
+            $this->assertEquals($defaults, $fallback);
+        }
+
+        $classic = $resolver->resolveProjectDesignDefaults(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, [
+            'colorTheme' => 'terracotta', 'fontSet' => 'editorial', 'artStyle' => 'minimal',
+        ]);
+        $this->assertSame(['editorial-serif', 'modern-sans', 'terracotta-text', 'terracotta-text', 'terracotta-accent'], [
+            $classic->headingFontId, $classic->bodyFontId, $classic->headingColorId, $classic->bodyColorId, $classic->accentColorId,
+        ]);
+
+        $modern = $resolver->resolveProjectDesignDefaults(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, [
+            'colorTheme' => 'ink', 'fontSet' => 'editorial', 'artStyle' => 'clean',
+        ]);
+        $this->assertSame(['editorial-serif', 'modern-sans', 'ink-text', 'ink-text', 'ink-accent'], [
+            $modern->headingFontId, $modern->bodyFontId, $modern->headingColorId, $modern->bodyColorId, $modern->accentColorId,
+        ]);
     }
 
     public function test_every_responsive_control_serializes_fully_resolved_viewport_defaults_in_resolver_parity(): void

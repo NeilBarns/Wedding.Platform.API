@@ -26,6 +26,7 @@ class WebsiteDraftResource extends JsonResource
             'name' => $draft['name'],
             'templateKey' => $draft['templateKey'],
             'designSettings' => $draft['designSettings'],
+            'projectDesignDefaults' => $draft['projectDesignDefaults'],
             'template' => $template === null ? null : [
                 'key' => $template->key,
                 'displayName' => $template->displayName,

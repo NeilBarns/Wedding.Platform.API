@@ -29,6 +29,7 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'displayName' => $color->displayName,
                     'value' => $color->value,
                     'origin' => 'template',
+                    'allowedProjectRoles' => array_map(fn ($role): string => $role->value, $color->allowedProjectRoles),
                 ], $this->designLibrary->colors),
                 'fontFamilies' => array_map(fn ($family): array => [
                     'id' => $family->id,
@@ -46,6 +47,17 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'headingFontId' => $preset->headingFontId,
                     'bodyFontId' => $preset->bodyFontId,
                 ], $this->designLibrary->typographyPresets),
+            ],
+            'projectDefaults' => [
+                'typography' => [
+                    'headingFont' => ['allowedFontIds' => $this->projectDefaults->typography->headingFontIds],
+                    'bodyFont' => ['allowedFontIds' => $this->projectDefaults->typography->bodyFontIds],
+                ],
+                'colors' => [
+                    'headingColor' => ['allowedColorIds' => $this->projectDefaults->colors->headingColorIds],
+                    'bodyColor' => ['allowedColorIds' => $this->projectDefaults->colors->bodyColorIds],
+                    'accentColor' => ['allowedColorIds' => $this->projectDefaults->colors->accentColorIds],
+                ],
             ],
             'elements' => $this->elements,
             'sections' => array_map(fn (SectionCapability $section): array => [

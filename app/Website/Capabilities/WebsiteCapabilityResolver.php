@@ -43,6 +43,7 @@ final class WebsiteCapabilityResolver
         $capabilities = new TemplateCapabilities(
             globalDesign: $this->globalDesignFromDefinition($definition),
             designLibrary: $definition->designLibrary,
+            projectDefaults: $this->projectDefaultsFromDefinition($definition),
             elements: $elements,
             sections: $sections,
         );
@@ -63,6 +64,37 @@ final class WebsiteCapabilityResolver
     public function globalDesign(string|WebsiteTemplateDefinition $template): ?GlobalDesignCapability
     {
         return $this->template($template)?->globalDesign;
+    }
+
+    public function projectDefaults(string|WebsiteTemplateDefinition $template): ?ProjectDefaultsCapability
+    {
+        return $this->template($template)?->projectDefaults;
+    }
+
+    /** @param array<string, mixed> $legacySettings */
+    public function resolveProjectDesignDefaults(
+        string|WebsiteTemplateDefinition $template,
+        array $legacySettings,
+    ): ?ResolvedProjectDesignDefaults {
+        $definition = is_string($template) ? $this->templates->get($template) : $template;
+        if ($definition === null) {
+            return null;
+        }
+
+        $normalized = $definition->normalizeDesignSettings($legacySettings);
+        $palette = collect($definition->designLibrary->palettePresets)->firstWhere('id', $normalized['colorTheme']);
+        $typography = collect($definition->designLibrary->typographyPresets)->firstWhere('id', $normalized['fontSet']);
+        if ($palette === null || $typography === null) {
+            return null;
+        }
+
+        return new ResolvedProjectDesignDefaults(
+            headingFontId: $typography->headingFontId,
+            bodyFontId: $typography->bodyFontId,
+            headingColorId: $palette->roles[DesignColorRole::Text->value],
+            bodyColorId: $palette->roles[DesignColorRole::Text->value],
+            accentColorId: $palette->roles[DesignColorRole::Accent->value],
+        );
     }
 
     public function globalDesignControl(
@@ -174,6 +206,38 @@ final class WebsiteCapabilityResolver
         }
 
         return new GlobalDesignCapability($controls);
+    }
+
+    private function projectDefaultsFromDefinition(WebsiteTemplateDefinition $template): ProjectDefaultsCapability
+    {
+        $library = $template->designLibrary;
+
+        return new ProjectDefaultsCapability(
+            typography: new ProjectTypographyDefaultsCapability(
+                headingFontIds: array_values(array_map(
+                    fn (FontFamilyCapability $family): string => $family->id,
+                    array_filter($library->fontFamilies, fn (FontFamilyCapability $family): bool => in_array(TypographyRole::Heading, $family->allowedRoles, true)),
+                )),
+                bodyFontIds: array_values(array_map(
+                    fn (FontFamilyCapability $family): string => $family->id,
+                    array_filter($library->fontFamilies, fn (FontFamilyCapability $family): bool => in_array(TypographyRole::Body, $family->allowedRoles, true)),
+                )),
+            ),
+            colors: new ProjectColorDefaultsCapability(
+                headingColorIds: $this->colorIdsForProjectRole($library, ProjectColorRole::Heading),
+                bodyColorIds: $this->colorIdsForProjectRole($library, ProjectColorRole::Body),
+                accentColorIds: $this->colorIdsForProjectRole($library, ProjectColorRole::Accent),
+            ),
+        );
+    }
+
+    /** @return list<string> */
+    private function colorIdsForProjectRole(TemplateDesignLibrary $library, ProjectColorRole $role): array
+    {
+        return array_values(array_map(
+            fn (DesignColorCapability $color): string => $color->id,
+            array_filter($library->colors, fn (DesignColorCapability $color): bool => in_array($role, $color->allowedProjectRoles, true)),
+        ));
     }
 
     private function sectionFromDefinition(WebsiteTemplateDefinition $template, string $sectionId): SectionCapability

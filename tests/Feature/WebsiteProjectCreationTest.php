@@ -135,6 +135,7 @@ class WebsiteProjectCreationTest extends TestCase
         );
         $projectB = Website::query()->findOrFail($response->json('data.id'));
 
+        $this->assertSame(['colorTheme', 'fontSet', 'artStyle'], array_keys($projectB->design_settings));
         $this->assertSame(10, $projectB->sections()->count());
         $this->assertEmpty(array_intersect(
             $projectA->sections()->pluck('id')->all(),

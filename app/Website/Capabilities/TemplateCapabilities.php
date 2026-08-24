@@ -11,6 +11,7 @@ final readonly class TemplateCapabilities
     public function __construct(
         public GlobalDesignCapability $globalDesign,
         public TemplateDesignLibrary $designLibrary,
+        public ProjectDefaultsCapability $projectDefaults,
         public array $elements,
         public array $sections,
     ) {}

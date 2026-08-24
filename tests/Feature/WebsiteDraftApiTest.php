@@ -82,6 +82,13 @@ class WebsiteDraftApiTest extends TestCase
         $legacy = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
             ->assertJsonPath('data.schemaVersion', 2)
             ->assertJsonPath('data.designSettings', $website->design_settings)
+            ->assertJsonPath('data.projectDesignDefaults', [
+                'headingFontId' => 'editorial-serif',
+                'bodyFontId' => 'modern-sans',
+                'headingColorId' => 'terracotta-text',
+                'bodyColorId' => 'terracotta-text',
+                'accentColorId' => 'terracotta-accent',
+            ])
             ->assertJsonPath('data.template.designOptions', app(WebsiteTemplateRegistry::class)->get($website->template_key)->designOptions)
             ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.id', 'colorTheme')
             ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.type', 'palettePreset')
@@ -94,6 +101,11 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.capabilities.designLibrary.palettePresets.0.roles.ornament', 'terracotta-ornament')
             ->assertJsonPath('data.template.capabilities.designLibrary.typographyPresets.0.headingFontId', 'editorial-serif')
             ->assertJsonPath('data.template.capabilities.designLibrary.typographyPresets.0.bodyFontId', 'modern-sans')
+            ->assertJsonPath('data.template.capabilities.projectDefaults.typography.headingFont.allowedFontIds.0', 'editorial-serif')
+            ->assertJsonPath('data.template.capabilities.projectDefaults.typography.bodyFont.allowedFontIds.0', 'modern-sans')
+            ->assertJsonPath('data.template.capabilities.projectDefaults.colors.headingColor.allowedColorIds.0', 'terracotta-text')
+            ->assertJsonPath('data.template.capabilities.projectDefaults.colors.bodyColor.allowedColorIds.0', 'terracotta-text')
+            ->assertJsonPath('data.template.capabilities.projectDefaults.colors.accentColor.allowedColorIds.0', 'terracotta-accent')
             ->assertJsonPath('data.template.capabilities.elements', ['narrativeBlock'])
             ->assertJsonPath('data.template.capabilities.sections.2.id', 'story')
             ->assertJsonPath('data.template.capabilities.sections.2.elements.allowedTypes', ['narrativeBlock'])

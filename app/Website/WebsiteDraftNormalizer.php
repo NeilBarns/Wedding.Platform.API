@@ -22,6 +22,7 @@ final class WebsiteDraftNormalizer
      *   name: string,
      *   templateKey: string,
      *   designSettings: array<string, mixed>,
+     *   projectDesignDefaults: array{headingFontId: string, bodyFontId: string, headingColorId: string, bodyColorId: string, accentColorId: string}|null,
      *   sections: list<array{section: WebsiteSection, content: array<string, mixed>}>
      * }
      */
@@ -45,6 +46,16 @@ final class WebsiteDraftNormalizer
             'name' => $website->name,
             'templateKey' => $website->template_key,
             'designSettings' => $designSettings ?? $storedDesignSettings,
+            'projectDesignDefaults' => ($resolved = $this->capabilities->resolveProjectDesignDefaults(
+                $website->template_key,
+                $designSettings ?? (is_array($storedDesignSettings) ? $storedDesignSettings : []),
+            )) === null ? null : [
+                'headingFontId' => $resolved->headingFontId,
+                'bodyFontId' => $resolved->bodyFontId,
+                'headingColorId' => $resolved->headingColorId,
+                'bodyColorId' => $resolved->bodyColorId,
+                'accentColorId' => $resolved->accentColorId,
+            ],
             'sections' => $website->sections->map(fn (WebsiteSection $section): array => [
                 'section' => $section,
                 'content' => $this->sectionContent->normalize($section->id, $section->type, $section->content),
