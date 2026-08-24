@@ -72,6 +72,15 @@ final class WebsiteCapabilityResolver
         return $this->template($template)?->projectDefaults;
     }
 
+    public function blockContextDefaults(string|WebsiteTemplateDefinition $template): ?ContextDefaultsCapability
+    {
+        $definition = is_string($template) ? $this->templates->get($template) : $template;
+
+        return $definition === null ? null : $this->contextDefaultsFromDefinition($definition, [
+            'headingFont', 'bodyFont', 'headingColor', 'bodyColor', 'accentColor',
+        ]);
+    }
+
     /** @param array<string, mixed> $legacySettings */
     public function resolveProjectDesignDefaults(
         string|WebsiteTemplateDefinition $template,
@@ -349,6 +358,60 @@ final class WebsiteCapabilityResolver
     }
 
     /** @return list<string> */
+    private function colorIdsForContainerRole(WebsiteTemplateDefinition $template, ContainerColorRole $role): array
+    {
+        return array_values(array_map(
+            fn (DesignColorCapability $color): string => $color->id,
+            array_filter(
+                $template->designLibrary->colors,
+                fn (DesignColorCapability $color): bool => in_array($role, $color->allowedContainerRoles, true),
+            ),
+        ));
+    }
+
+    private function contextDefaultsForSection(
+        WebsiteTemplateDefinition $template,
+        string $sectionId,
+        bool $includeColors = true,
+    ): ContextDefaultsCapability {
+        $roles = match ($sectionId) {
+            'gallery' => ['headingFont', 'headingColor'],
+            'dressCode', 'faq' => ['headingFont', 'bodyFont', 'headingColor', 'bodyColor'],
+            default => ['headingFont', 'bodyFont', 'headingColor', 'bodyColor', 'accentColor'],
+        };
+        if (! $includeColors) {
+            $roles = array_values(array_filter($roles, fn (string $role): bool => str_ends_with($role, 'Font')));
+        }
+
+        return $this->contextDefaultsFromDefinition($template, $roles);
+    }
+
+    /** @param list<string> $roles */
+    private function contextDefaultsFromDefinition(WebsiteTemplateDefinition $template, array $roles): ContextDefaultsCapability
+    {
+        $typography = [];
+        if (in_array('headingFont', $roles, true)) {
+            $typography[] = new ContextTypographyCapability(TypographyRole::Heading, $this->fontIdsForRole($template, TypographyRole::Heading));
+        }
+        if (in_array('bodyFont', $roles, true)) {
+            $typography[] = new ContextTypographyCapability(TypographyRole::Body, $this->fontIdsForRole($template, TypographyRole::Body));
+        }
+
+        $colors = [];
+        foreach ([
+            'headingColor' => ContainerColorRole::HeadingColor,
+            'bodyColor' => ContainerColorRole::BodyColor,
+            'accentColor' => ContainerColorRole::AccentColor,
+        ] as $name => $role) {
+            if (in_array($name, $roles, true)) {
+                $colors[] = new ContextColorCapability($role, $this->colorIdsForContainerRole($template, $role));
+            }
+        }
+
+        return new ContextDefaultsCapability($typography, $colors);
+    }
+
+    /** @return list<string> */
     private function colorIdsForProjectRole(TemplateDesignLibrary $library, ProjectColorRole $role): array
     {
         return array_values(array_map(
@@ -393,12 +456,19 @@ final class WebsiteCapabilityResolver
                 ], $presentationDefinition['options']),
             );
             foreach ($presentationDefinition['options'] as $option) {
+                $presentationControls = $this->presentationControls($template, $sectionId, $option['key']);
+                $ownsForeground = collect($presentationControls)->contains(
+                    fn (AppearanceControlCapability $control): bool => $control->id === 'foregroundColor',
+                );
                 $presentations[] = new PresentationCapability(
                     id: $option['key'],
                     displayName: $option['displayName'],
                     description: $option['description'],
                     preview: $option['preview'],
-                    appearanceControls: $this->presentationControls($template, $sectionId, $option['key']),
+                    appearanceControls: $presentationControls,
+                    contextDefaults: $ownsForeground
+                        ? $this->contextDefaultsForSection($template, $sectionId, includeColors: false)
+                        : null,
                 );
             }
         }
@@ -410,6 +480,7 @@ final class WebsiteCapabilityResolver
             appearanceControls: $controls,
             defaultPresentation: $presentationDefinition['default'] ?? null,
             presentations: $presentations,
+            contextDefaults: $this->contextDefaultsForSection($template, $sectionId),
             allowedElementTypes: $allowedElements,
             maximumElementCount: $allowedElements === null ? null : 20,
         );

@@ -147,6 +147,58 @@ class WebsiteCapabilityRegistryTest extends TestCase
         }
     }
 
+    public function test_section_context_defaults_follow_semantic_matrix_and_template_legality(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+        $expected = [
+            'hero' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'date' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'story' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'schedule' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'venue' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'dressCode' => [['heading', 'body'], ['headingColor', 'bodyColor']],
+            'people' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'gallery' => [['heading'], ['headingColor']],
+            'faq' => [['heading', 'body'], ['headingColor', 'bodyColor']],
+            'rsvp' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+        ];
+
+        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
+            $capabilities = $resolver->template($template);
+            $families = collect($capabilities->designLibrary->fontFamilies)->keyBy('id');
+            $colors = collect($capabilities->designLibrary->colors)->keyBy('id');
+
+            foreach ($capabilities->sections as $section) {
+                [$typographyRoles, $colorRoles] = $expected[$section->id];
+                $this->assertSame($typographyRoles, array_map(fn ($control): string => $control->role->value, $section->contextDefaults->typography));
+                $this->assertSame($colorRoles, array_map(fn ($control): string => $control->role->value, $section->contextDefaults->colors));
+                foreach ($section->contextDefaults->typography as $control) {
+                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
+                    foreach ($control->allowedFontIds as $id) {
+                        $this->assertContains($control->role, $families[$id]->allowedRoles);
+                    }
+                }
+                foreach ($section->contextDefaults->colors as $control) {
+                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
+                    foreach ($control->allowedColorIds as $id) {
+                        $this->assertContains($control->role, $colors[$id]->allowedContainerRoles);
+                    }
+                }
+
+                foreach ($section->presentations as $presentation) {
+                    $ownsForeground = collect($presentation->appearanceControls)->contains(fn ($control): bool => $control->id === 'foregroundColor');
+                    $this->assertSame($ownsForeground, $presentation->contextDefaults !== null);
+                    if ($ownsForeground) {
+                        $this->assertSame([], $presentation->contextDefaults->colors);
+                        $this->assertSame($typographyRoles, array_map(fn ($control): string => $control->role->value, $presentation->contextDefaults->typography));
+                    }
+                }
+            }
+
+            $this->assertNull(collect($capabilities->sections)->firstWhere('id', 'story')->compositionGroups);
+        }
+    }
+
     public function test_resolver_fails_safely_and_resolves_presentation_and_viewport_narrowing(): void
     {
         $resolver = app(WebsiteCapabilityResolver::class);

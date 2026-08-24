@@ -11,5 +11,6 @@ final readonly class PresentationCapability
         public string $description,
         public string $preview,
         public array $appearanceControls,
+        public ?ContextDefaultsCapability $contextDefaults = null,
     ) {}
 }

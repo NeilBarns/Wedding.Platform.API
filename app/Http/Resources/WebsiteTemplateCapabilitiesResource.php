@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\ContextDefaultsCapability;
 use App\Website\Capabilities\ElementCapability;
 use App\Website\Capabilities\GlobalDesignControlCapability;
 use App\Website\Capabilities\PresentationCapability;
@@ -32,6 +33,7 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'origin' => 'template',
                     'allowedProjectRoles' => array_map(fn ($role): string => $role->value, $color->allowedProjectRoles),
                     'allowedElementRoles' => array_map(fn ($role): string => $role->value, $color->allowedElementRoles),
+                    'allowedContainerRoles' => array_map(fn ($role): string => $role->value, $color->allowedContainerRoles),
                 ], $this->designLibrary->colors),
                 'fontFamilies' => array_map(fn ($family): array => [
                     'id' => $family->id,
@@ -80,6 +82,7 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
             'sections' => array_map(fn (SectionCapability $section): array => [
                 'id' => $section->id,
                 'appearanceControls' => array_map($this->serializeControl(...), $section->appearanceControls),
+                'contextDefaults' => $this->serializeContextDefaults($section->contextDefaults),
                 'defaultPresentation' => $section->defaultPresentation,
                 'presentations' => array_map(fn (PresentationCapability $presentation): array => [
                     'id' => $presentation->id,
@@ -87,6 +90,9 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'description' => $presentation->description,
                     'preview' => $presentation->preview,
                     'appearanceControls' => array_map($this->serializeControl(...), $presentation->appearanceControls),
+                    'contextDefaults' => $presentation->contextDefaults === null
+                        ? null
+                        : $this->serializeContextDefaults($presentation->contextDefaults),
                 ], $section->presentations),
                 'elements' => $section->allowedElementTypes === null ? null : [
                     'allowedTypes' => $section->allowedElementTypes,
@@ -94,6 +100,22 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'compositionGroups' => $section->compositionGroups,
                 ],
             ], $this->sections),
+        ];
+    }
+
+    private function serializeContextDefaults(ContextDefaultsCapability $capability): array
+    {
+        return [
+            'typography' => array_map(fn ($control): array => [
+                'role' => $control->role->value,
+                'allowedFontIds' => $control->allowedFontIds,
+                'scope' => $control->scope->value,
+            ], $capability->typography),
+            'colors' => array_map(fn ($control): array => [
+                'role' => $control->role->value,
+                'allowedColorIds' => $control->allowedColorIds,
+                'scope' => $control->scope->value,
+            ], $capability->colors),
         ];
     }
 

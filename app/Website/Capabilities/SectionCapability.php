@@ -14,6 +14,7 @@ final readonly class SectionCapability
         public array $appearanceControls,
         public ?string $defaultPresentation,
         public array $presentations,
+        public ContextDefaultsCapability $contextDefaults,
         public ?array $allowedElementTypes = null,
         public ?int $maximumElementCount = null,
         public null $compositionGroups = null,
