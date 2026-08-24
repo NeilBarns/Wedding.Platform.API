@@ -18,6 +18,7 @@ final class UpdateWebsiteSectionAppearance
     /** @param array<string, mixed> $appearance */
     public function handle(WebsiteSection $section, array $appearance): WebsiteSection
     {
+        $storedDesignDefaults = $section->appearance['designDefaults'] ?? null;
         $section->loadMissing('website');
         $templateKey = $section->website->template_key;
         $sectionCapability = $this->capabilities->section($templateKey, $section->type);
@@ -93,6 +94,11 @@ final class UpdateWebsiteSectionAppearance
             }
         }
 
+        if ($storedDesignDefaults !== null) {
+            $appearance['designDefaults'] = is_array($storedDesignDefaults) && $storedDesignDefaults === []
+                ? new \stdClass
+                : $storedDesignDefaults;
+        }
         $section->appearance = $appearance;
         $section->save();
 

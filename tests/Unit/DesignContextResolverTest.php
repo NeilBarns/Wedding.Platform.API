@@ -73,13 +73,13 @@ class DesignContextResolverTest extends TestCase
             $resolver->resolveSection($project, $hero, new ContextDefaultsIntent, $immersive),
         );
 
-        $this->expectException(InvalidArgumentException::class);
-        $resolver->resolveSection(
+        $narrowed = $resolver->resolveSection(
             $project,
             $hero,
             new ContextDefaultsIntent(headingColorId: 'ink-accent'),
             $immersive,
         );
+        $this->assertSame($project->headingColorId, $narrowed->headingColorId);
     }
 
     public function test_block_context_and_element_bridge_apply_only_local_legal_overrides(): void

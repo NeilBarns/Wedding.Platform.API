@@ -12,11 +12,12 @@ final class DesignContextResolver
         ContextDefaultsIntent $intent,
         ?PresentationCapability $presentation = null,
     ): ResolvedDesignContext {
-        return $this->resolveContext(
-            $parent,
-            $presentation?->contextDefaults ?? $section->contextDefaults,
-            $intent,
-        );
+        $this->resolveContext($parent, $section->contextDefaults, $intent);
+        $effectiveCapability = $presentation?->contextDefaults ?? $section->contextDefaults;
+        $allowedKeys = array_keys($this->allowedContextValues($effectiveCapability));
+        $effectiveIntent = array_intersect_key($intent->toArray(), array_flip($allowedKeys));
+
+        return $this->resolveContext($parent, $effectiveCapability, ContextDefaultsIntent::fromArray($effectiveIntent));
     }
 
     public function resolveBlock(
@@ -69,6 +70,12 @@ final class DesignContextResolver
         ContextDefaultsCapability $capability,
         ContextDefaultsIntent $intent,
     ): ResolvedDesignContext {
+        return $this->apply($parent, $this->allowedContextValues($capability), $intent->toArray());
+    }
+
+    /** @return array<string, list<string>> */
+    public function allowedContextValues(ContextDefaultsCapability $capability): array
+    {
         $allowed = [];
         foreach ($capability->typography as $control) {
             $allowed[$control->role === TypographyRole::Heading ? 'headingFontId' : 'bodyFontId'] = $control->allowedFontIds;
@@ -82,7 +89,7 @@ final class DesignContextResolver
             $allowed[$key] = $control->allowedColorIds;
         }
 
-        return $this->apply($parent, $allowed, $intent->toArray());
+        return $allowed;
     }
 
     /**

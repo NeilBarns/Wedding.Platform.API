@@ -6,6 +6,8 @@ use App\Http\Resources\WebsiteTemplateCapabilitiesResource;
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlScope;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\ContainerColorRole;
+use App\Website\Capabilities\ElementColorRole;
 use App\Website\Capabilities\GlobalDesignControlId;
 use App\Website\Capabilities\GlobalDesignControlType;
 use App\Website\Capabilities\ProjectColorRole;
@@ -489,6 +491,53 @@ class WebsiteCapabilityRegistryTest extends TestCase
 
         $this->assertNull($control->forViewport('tablet'));
         $this->assertNull($control->forViewport('mobile'));
+    }
+
+    public function test_curated_readable_text_colors_are_role_safe_and_template_isolated(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+        $expected = [
+            WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 => [
+                'classic-forest-text' => '#29453a',
+                'classic-wine-text' => '#5a2635',
+                'classic-indigo-text' => '#2f3556',
+            ],
+            WebsiteTemplateRegistry::MODERN_EDITORIAL_V1 => [
+                'modern-slate-text' => '#25364a',
+                'modern-plum-text' => '#4d294b',
+                'modern-russet-text' => '#5c302a',
+            ],
+        ];
+
+        foreach ($expected as $templateKey => $additions) {
+            $capabilities = $resolver->template($templateKey);
+            $colors = collect($capabilities->designLibrary->colors)->keyBy('id');
+            $otherIds = array_keys($expected[$templateKey === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
+                ? WebsiteTemplateRegistry::MODERN_EDITORIAL_V1
+                : WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1]);
+
+            foreach ($additions as $id => $value) {
+                $color = $colors[$id];
+                $this->assertSame($value, $color->value);
+                $this->assertEqualsCanonicalizing([ProjectColorRole::Heading, ProjectColorRole::Body], $color->allowedProjectRoles);
+                $this->assertEqualsCanonicalizing([ElementColorRole::HeadingColor, ElementColorRole::TextColor], $color->allowedElementRoles);
+                $this->assertEqualsCanonicalizing([ContainerColorRole::HeadingColor, ContainerColorRole::BodyColor], $color->allowedContainerRoles);
+                $this->assertNotContains(ProjectColorRole::Accent, $color->allowedProjectRoles);
+                $this->assertContains($id, $capabilities->projectDefaults->colors->bodyColorIds);
+
+                $story = collect($capabilities->sections)->firstWhere('id', 'story');
+                $body = collect($story->contextDefaults->colors)->firstWhere('role', ContainerColorRole::BodyColor);
+                $accent = collect($story->contextDefaults->colors)->firstWhere('role', ContainerColorRole::AccentColor);
+                $this->assertContains($id, $body->allowedColorIds);
+                $this->assertNotContains($id, $accent->allowedColorIds);
+            }
+
+            foreach ($otherIds as $otherId) {
+                $this->assertFalse($colors->has($otherId));
+            }
+
+            $this->assertTrue($colors->has($templateKey === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 ? 'olive-text' : 'ink-text'));
+        }
     }
 
     /** @param list<string> $knownControls */

@@ -356,6 +356,11 @@ final class WebsiteTemplateRegistry
                 new TypographyPresetCapability('romantic', 'Romantic', 'romantic-serif', 'classic-serif'),
                 new TypographyPresetCapability('modern', 'Modern', 'modern-sans', 'modern-sans'),
             ],
+            additionalColors: [
+                $this->readableTextColor('classic-forest-text', 'Forest Text', '#29453a'),
+                $this->readableTextColor('classic-wine-text', 'Wine Text', '#5a2635'),
+                $this->readableTextColor('classic-indigo-text', 'Indigo Text', '#2f3556'),
+            ],
         );
     }
 
@@ -380,6 +385,11 @@ final class WebsiteTemplateRegistry
                 new TypographyPresetCapability('fashion', 'Fashion', 'fashion-serif', 'fashion-sans'),
                 new TypographyPresetCapability('minimal', 'Minimal', 'modern-sans', 'modern-sans'),
             ],
+            additionalColors: [
+                $this->readableTextColor('modern-slate-text', 'Slate Text', '#25364a'),
+                $this->readableTextColor('modern-plum-text', 'Plum Text', '#4d294b'),
+                $this->readableTextColor('modern-russet-text', 'Russet Text', '#5c302a'),
+            ],
         );
     }
 
@@ -387,8 +397,9 @@ final class WebsiteTemplateRegistry
      * @param  array<string, array{displayName: string, roles: array<string, string>}>  $palettes
      * @param  list<FontFamilyCapability>  $fontFamilies
      * @param  list<TypographyPresetCapability>  $typographyPresets
+     * @param  list<DesignColorCapability>  $additionalColors
      */
-    private function designLibrary(array $palettes, array $fontFamilies, array $typographyPresets): TemplateDesignLibrary
+    private function designLibrary(array $palettes, array $fontFamilies, array $typographyPresets, array $additionalColors = []): TemplateDesignLibrary
     {
         $colors = [];
         $palettePresets = [];
@@ -423,7 +434,19 @@ final class WebsiteTemplateRegistry
             $palettePresets[] = new PalettePresetCapability($presetId, $palette['displayName'], $roles);
         }
 
-        return new TemplateDesignLibrary($colors, $fontFamilies, $palettePresets, $typographyPresets);
+        return new TemplateDesignLibrary([...$colors, ...$additionalColors], $fontFamilies, $palettePresets, $typographyPresets);
+    }
+
+    private function readableTextColor(string $id, string $displayName, string $value): DesignColorCapability
+    {
+        return new DesignColorCapability(
+            $id,
+            $displayName,
+            $value,
+            [ProjectColorRole::Heading, ProjectColorRole::Body],
+            [ElementColorRole::HeadingColor, ElementColorRole::TextColor],
+            [ContainerColorRole::HeadingColor, ContainerColorRole::BodyColor],
+        );
     }
 
     /** @param  list<PalettePresetCapability|TypographyPresetCapability>  $presets */

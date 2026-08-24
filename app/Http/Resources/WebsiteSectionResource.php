@@ -2,6 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Website\Capabilities\ContextDefaultsIntent;
+use App\Website\Capabilities\DesignContextResolver;
+use App\Website\Capabilities\ResolvedDesignContext;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\Request;
@@ -23,8 +27,30 @@ class WebsiteSectionResource extends JsonResource
             : null;
 
         $appearance = $this->appearance;
+        $designDefaults = is_array($appearance['designDefaults'] ?? null) ? $appearance['designDefaults'] : [];
+        unset($appearance['designDefaults']);
         if ($template?->presentationFallbackFor($this->type, $appearance['presentation'] ?? '') !== null) {
             $appearance = $template->normalizeSectionAppearance($this->type, $appearance);
+        }
+
+        $resolvedContext = null;
+        if ($template !== null && $this->relationLoaded('website')) {
+            $capabilities = app(WebsiteCapabilityResolver::class);
+            $projectDefaults = $capabilities->resolveProjectDesignDefaults($template, $this->website->design_settings);
+            $sectionCapability = $capabilities->section($template, $this->type);
+            if ($projectDefaults !== null && $sectionCapability !== null) {
+                $presentationId = is_string($appearance['presentation'] ?? null)
+                    ? $appearance['presentation']
+                    : $sectionCapability->defaultPresentation;
+                $presentation = $presentationId === null ? null : $capabilities->presentation($template, $this->type, $presentationId);
+                $resolved = app(DesignContextResolver::class)->resolveSection(
+                    ResolvedDesignContext::fromProjectDefaults($projectDefaults),
+                    $sectionCapability,
+                    ContextDefaultsIntent::fromArray($designDefaults),
+                    $presentation,
+                );
+                $resolvedContext = get_object_vars($resolved);
+            }
         }
 
         return [
@@ -35,6 +61,8 @@ class WebsiteSectionResource extends JsonResource
             'isEnabled' => $this->is_enabled,
             'content' => $this->serializedContent(),
             'appearance' => $appearance,
+            'designDefaults' => (object) $designDefaults,
+            'resolvedDesignContext' => $resolvedContext,
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),
             'itemMediaCapability' => $template?->itemMediaCapabilityFor($this->type),

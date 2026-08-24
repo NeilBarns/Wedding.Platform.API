@@ -9,6 +9,7 @@ use App\Actions\Websites\SetWebsiteSectionEnabled;
 use App\Actions\Websites\UpdateWebsiteDesignSettings;
 use App\Actions\Websites\UpdateWebsiteSectionAppearance;
 use App\Actions\Websites\UpdateWebsiteSectionContent;
+use App\Actions\Websites\UpdateWebsiteSectionDesignDefaults;
 use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Exceptions\WebsiteAlreadyInitialized;
@@ -18,6 +19,7 @@ use App\Http\Requests\ReorderWebsiteSectionsRequest;
 use App\Http\Requests\UpdateWebsiteDesignSettingsRequest;
 use App\Http\Requests\UpdateWebsiteSectionAppearanceRequest;
 use App\Http\Requests\UpdateWebsiteSectionContentRequest;
+use App\Http\Requests\UpdateWebsiteSectionDesignDefaultsRequest;
 use App\Http\Requests\UpdateWebsiteSectionEnabledRequest;
 use App\Http\Resources\WebsiteDraftResource;
 use App\Http\Resources\WebsiteProjectResource;
@@ -204,6 +206,41 @@ class WebsiteDraftController extends Controller
     ): WebsiteDraftResource {
         $sectionModel = $this->section($website, $section);
         $updateAppearance->handle($sectionModel, $request->validated('appearance'));
+
+        return $this->draft($website);
+    }
+
+    public function updateSectionDesignDefaults(
+        UpdateWebsiteSectionDesignDefaultsRequest $request,
+        UpdateWebsiteSectionDesignDefaults $updateDesignDefaults,
+        string $event,
+        string $section,
+    ): WebsiteDraftResource {
+        $website = $this->legacyWebsite($this->authorizedEvent($event));
+
+        return $this->applySectionDesignDefaults($request, $updateDesignDefaults, $website, $section);
+    }
+
+    public function updateProjectSectionDesignDefaults(
+        UpdateWebsiteSectionDesignDefaultsRequest $request,
+        UpdateWebsiteSectionDesignDefaults $updateDesignDefaults,
+        string $event,
+        string $website,
+        string $section,
+    ): WebsiteDraftResource {
+        $eventModel = $this->authorizedEvent($event);
+
+        return $this->applySectionDesignDefaults($request, $updateDesignDefaults, $this->website($eventModel, $website), $section);
+    }
+
+    private function applySectionDesignDefaults(
+        UpdateWebsiteSectionDesignDefaultsRequest $request,
+        UpdateWebsiteSectionDesignDefaults $updateDesignDefaults,
+        Website $website,
+        string $section,
+    ): WebsiteDraftResource {
+        $sectionModel = $this->section($website, $section);
+        $updateDesignDefaults->handle($sectionModel, $request->validated('designDefaults'));
 
         return $this->draft($website);
     }
