@@ -5,6 +5,7 @@ namespace App\Website;
 use App\Enums\EventType;
 use App\Website\Capabilities\DesignColorCapability;
 use App\Website\Capabilities\DesignColorRole;
+use App\Website\Capabilities\ElementColorRole;
 use App\Website\Capabilities\FontFamilyCapability;
 use App\Website\Capabilities\PalettePresetCapability;
 use App\Website\Capabilities\ProjectColorRole;
@@ -405,7 +406,12 @@ final class WebsiteTemplateRegistry
                     DesignColorRole::Accent->value => [ProjectColorRole::Heading, ProjectColorRole::Accent],
                     default => [],
                 };
-                $colors[] = new DesignColorCapability($colorId, $palette['displayName'].' '.$roleLabels[$role], $value, $allowedProjectRoles);
+                $allowedElementRoles = match ($role) {
+                    DesignColorRole::Text->value => [ElementColorRole::HeadingColor, ElementColorRole::TextColor],
+                    DesignColorRole::Accent->value => [ElementColorRole::HeadingColor, ElementColorRole::AccentColor],
+                    default => [],
+                };
+                $colors[] = new DesignColorCapability($colorId, $palette['displayName'].' '.$roleLabels[$role], $value, $allowedProjectRoles, $allowedElementRoles);
                 $roles[$role] = $colorId;
             }
             $palettePresets[] = new PalettePresetCapability($presetId, $palette['displayName'], $roles);

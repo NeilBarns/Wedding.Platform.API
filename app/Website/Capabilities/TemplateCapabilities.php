@@ -6,6 +6,7 @@ final readonly class TemplateCapabilities
 {
     /**
      * @param  list<string>  $elements
+     * @param  list<ElementCapability>  $elementCapabilities
      * @param  list<SectionCapability>  $sections
      */
     public function __construct(
@@ -13,6 +14,7 @@ final readonly class TemplateCapabilities
         public TemplateDesignLibrary $designLibrary,
         public ProjectDefaultsCapability $projectDefaults,
         public array $elements,
+        public array $elementCapabilities,
         public array $sections,
     ) {}
 }

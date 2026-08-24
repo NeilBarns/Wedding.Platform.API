@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\ElementCapability;
 use App\Website\Capabilities\GlobalDesignControlCapability;
 use App\Website\Capabilities\PresentationCapability;
 use App\Website\Capabilities\SectionCapability;
@@ -30,6 +31,7 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'value' => $color->value,
                     'origin' => 'template',
                     'allowedProjectRoles' => array_map(fn ($role): string => $role->value, $color->allowedProjectRoles),
+                    'allowedElementRoles' => array_map(fn ($role): string => $role->value, $color->allowedElementRoles),
                 ], $this->designLibrary->colors),
                 'fontFamilies' => array_map(fn ($family): array => [
                     'id' => $family->id,
@@ -60,6 +62,21 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                 ],
             ],
             'elements' => $this->elements,
+            'elementCapabilities' => array_map(fn (ElementCapability $element): array => [
+                'type' => $element->type->value,
+                'appearance' => $element->appearance === null ? null : [
+                    'typography' => array_map(fn ($control): array => [
+                        'role' => $control->role->value,
+                        'allowedFontIds' => $control->allowedFontIds,
+                        'scope' => $control->scope->value,
+                    ], $element->appearance->typography),
+                    'colors' => array_map(fn ($control): array => [
+                        'role' => $control->role->value,
+                        'allowedColorIds' => $control->allowedColorIds,
+                        'scope' => $control->scope->value,
+                    ], $element->appearance->colors),
+                ],
+            ], $this->elementCapabilities),
             'sections' => array_map(fn (SectionCapability $section): array => [
                 'id' => $section->id,
                 'appearanceControls' => array_map($this->serializeControl(...), $section->appearanceControls),

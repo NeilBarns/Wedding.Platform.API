@@ -45,6 +45,7 @@ final class WebsiteCapabilityResolver
             designLibrary: $definition->designLibrary,
             projectDefaults: $this->projectDefaultsFromDefinition($definition),
             elements: $elements,
+            elementCapabilities: $this->elementCapabilitiesFromDefinition($definition),
             sections: $sections,
         );
         if ($requestedKey !== null) {
@@ -286,6 +287,65 @@ final class WebsiteCapabilityResolver
                 accentColorIds: $this->colorIdsForProjectRole($library, ProjectColorRole::Accent),
             ),
         );
+    }
+
+    /** @return list<ElementCapability> */
+    private function elementCapabilitiesFromDefinition(WebsiteTemplateDefinition $template): array
+    {
+        $headingTypography = new ElementTypographyCapability(
+            TypographyRole::Heading,
+            $this->fontIdsForRole($template, TypographyRole::Heading),
+        );
+        $bodyTypography = new ElementTypographyCapability(
+            TypographyRole::Body,
+            $this->fontIdsForRole($template, TypographyRole::Body),
+        );
+        $headingColor = new ElementColorCapability(
+            ElementColorRole::HeadingColor,
+            $this->colorIdsForElementRole($template, ElementColorRole::HeadingColor),
+        );
+        $textColor = new ElementColorCapability(
+            ElementColorRole::TextColor,
+            $this->colorIdsForElementRole($template, ElementColorRole::TextColor),
+        );
+
+        return array_map(function (WebsiteElementType $type) use ($headingTypography, $bodyTypography, $headingColor, $textColor): ElementCapability {
+            $appearance = match ($type) {
+                WebsiteElementType::Heading => new ElementAppearanceCapability([$headingTypography], [$headingColor]),
+                WebsiteElementType::Text, WebsiteElementType::Quote => new ElementAppearanceCapability([$bodyTypography], [$textColor]),
+                WebsiteElementType::NarrativeBlock => new ElementAppearanceCapability(
+                    [$headingTypography, $bodyTypography],
+                    [$headingColor, $textColor],
+                ),
+                default => null,
+            };
+
+            return new ElementCapability($type, $appearance);
+        }, WebsiteElementType::cases());
+    }
+
+    /** @return list<string> */
+    private function fontIdsForRole(WebsiteTemplateDefinition $template, TypographyRole $role): array
+    {
+        return array_values(array_map(
+            fn (FontFamilyCapability $family): string => $family->id,
+            array_filter(
+                $template->designLibrary->fontFamilies,
+                fn (FontFamilyCapability $family): bool => in_array($role, $family->allowedRoles, true),
+            ),
+        ));
+    }
+
+    /** @return list<string> */
+    private function colorIdsForElementRole(WebsiteTemplateDefinition $template, ElementColorRole $role): array
+    {
+        return array_values(array_map(
+            fn (DesignColorCapability $color): string => $color->id,
+            array_filter(
+                $template->designLibrary->colors,
+                fn (DesignColorCapability $color): bool => in_array($role, $color->allowedElementRoles, true),
+            ),
+        ));
     }
 
     /** @return list<string> */

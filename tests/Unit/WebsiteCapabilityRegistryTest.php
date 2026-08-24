@@ -12,6 +12,7 @@ use App\Website\Capabilities\ProjectColorRole;
 use App\Website\Capabilities\TypographyRole;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\Elements\WebsiteElementType;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Tests\TestCase;
@@ -88,6 +89,61 @@ class WebsiteCapabilityRegistryTest extends TestCase
                 $this->assertTrue($resolver->allowsElement($templateKey, 'story', 'narrativeBlock'));
                 $this->assertFalse($resolver->allowsElement($templateKey, 'story', 'compositionGroup'));
             }
+        }
+    }
+
+    public function test_element_appearance_capabilities_are_typed_template_legal_and_shared(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+
+        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
+            $capabilities = $resolver->template($template);
+            $elements = collect($capabilities->elementCapabilities)->keyBy(fn ($element): string => $element->type->value);
+            $families = collect($capabilities->designLibrary->fontFamilies)->keyBy('id');
+            $colors = collect($capabilities->designLibrary->colors)->keyBy('id');
+
+            $this->assertEqualsCanonicalizing(
+                array_map(fn (WebsiteElementType $type): string => $type->value, WebsiteElementType::cases()),
+                $elements->keys()->all(),
+            );
+
+            foreach ([
+                'heading' => [['heading'], ['headingColor']],
+                'text' => [['body'], ['textColor']],
+                'quote' => [['body'], ['textColor']],
+                'narrativeBlock' => [['heading', 'body'], ['headingColor', 'textColor']],
+            ] as $type => [$typographyRoles, $colorRoles]) {
+                $appearance = $elements[$type]->appearance;
+                $this->assertNotNull($appearance);
+                $this->assertSame($typographyRoles, array_map(fn ($control): string => $control->role->value, $appearance->typography));
+                $this->assertSame($colorRoles, array_map(fn ($control): string => $control->role->value, $appearance->colors));
+
+                foreach ($appearance->typography as $control) {
+                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
+                    foreach ($control->allowedFontIds as $id) {
+                        $this->assertTrue($families->has($id));
+                        $this->assertContains($control->role, $families[$id]->allowedRoles);
+                        $this->assertStringNotContainsString('font-family', $id);
+                    }
+                }
+                foreach ($appearance->colors as $control) {
+                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
+                    foreach ($control->allowedColorIds as $id) {
+                        $this->assertTrue($colors->has($id));
+                        $this->assertContains($control->role, $colors[$id]->allowedElementRoles);
+                        $this->assertFalse(str_starts_with($id, '#'));
+                    }
+                }
+            }
+
+            foreach (['image', 'divider', 'cta', 'mediaCollection', 'compositionGroup', 'eventDate', 'eventTime', 'countdown'] as $type) {
+                $this->assertNull($elements[$type]->appearance);
+            }
+
+            $serialized = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
+            $this->assertSame($capabilities->elements, $serialized['elements']);
+            $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, 3);
+            $this->assertStringNotContainsString('#', json_encode($serialized['elementCapabilities'], JSON_THROW_ON_ERROR));
         }
     }
 
