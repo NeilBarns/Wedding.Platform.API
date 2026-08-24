@@ -10,6 +10,7 @@ final readonly class TemplateCapabilities
      */
     public function __construct(
         public GlobalDesignCapability $globalDesign,
+        public TemplateDesignLibrary $designLibrary,
         public array $elements,
         public array $sections,
     ) {}

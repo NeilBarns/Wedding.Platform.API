@@ -3,6 +3,13 @@
 namespace App\Website;
 
 use App\Enums\EventType;
+use App\Website\Capabilities\DesignColorCapability;
+use App\Website\Capabilities\DesignColorRole;
+use App\Website\Capabilities\FontFamilyCapability;
+use App\Website\Capabilities\PalettePresetCapability;
+use App\Website\Capabilities\TemplateDesignLibrary;
+use App\Website\Capabilities\TypographyPresetCapability;
+use App\Website\Capabilities\TypographyRole;
 use LogicException;
 
 final class WebsiteTemplateRegistry
@@ -11,7 +18,7 @@ final class WebsiteTemplateRegistry
 
     public const MODERN_EDITORIAL_V1 = 'modern-editorial-v1';
 
-    /** @param array<string, WebsiteTemplateDefinition>|null $definitions */
+    /** @param  array<string, WebsiteTemplateDefinition>|null  $definitions */
     public function __construct(private readonly ?array $definitions = null) {}
 
     /** @return array<string, WebsiteTemplateDefinition> */
@@ -24,6 +31,7 @@ final class WebsiteTemplateRegistry
         $sectionTypes = [
             'hero', 'date', 'story', 'schedule', 'venue', 'dressCode', 'people', 'gallery', 'faq', 'rsvp',
         ];
+        $classicDesignLibrary = $this->classicDesignLibrary();
         $classic = new WebsiteTemplateDefinition(
             key: self::CLASSIC_FILIPINIANA_V1,
             displayName: 'Classic Filipiniana',
@@ -33,18 +41,8 @@ final class WebsiteTemplateRegistry
             supportedEventTypes: [EventType::Wedding],
             supportedSectionTypes: $sectionTypes,
             designOptions: [
-                'colorThemes' => $this->options([
-                    'terracotta' => 'Terracotta',
-                    'olive' => 'Olive',
-                    'sage' => 'Sage',
-                    'burgundy' => 'Burgundy',
-                    'neutral' => 'Warm Neutral',
-                ]),
-                'fontSets' => $this->options([
-                    'editorial' => 'Editorial',
-                    'romantic' => 'Romantic',
-                    'modern' => 'Modern',
-                ]),
+                'colorThemes' => $this->presetOptions($classicDesignLibrary->palettePresets),
+                'fontSets' => $this->presetOptions($classicDesignLibrary->typographyPresets),
                 'artStyles' => $this->options([
                     'minimal' => 'Minimal',
                     'botanical' => 'Botanical',
@@ -57,6 +55,7 @@ final class WebsiteTemplateRegistry
                 'fontSet' => 'editorial',
                 'artStyle' => 'minimal',
             ],
+            designLibrary: $classicDesignLibrary,
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: [
@@ -92,6 +91,7 @@ final class WebsiteTemplateRegistry
             ],
         );
 
+        $modernDesignLibrary = $this->modernDesignLibrary();
         $modern = new WebsiteTemplateDefinition(
             key: self::MODERN_EDITORIAL_V1,
             displayName: 'Modern Editorial',
@@ -101,18 +101,8 @@ final class WebsiteTemplateRegistry
             supportedEventTypes: [EventType::Wedding],
             supportedSectionTypes: $sectionTypes,
             designOptions: [
-                'colorThemes' => $this->options([
-                    'ink' => 'Ink',
-                    'stone' => 'Stone',
-                    'blush' => 'Blush',
-                    'plum' => 'Plum',
-                    'navy' => 'Navy',
-                ]),
-                'fontSets' => $this->options([
-                    'editorial' => 'Editorial',
-                    'fashion' => 'Fashion',
-                    'minimal' => 'Minimal',
-                ]),
+                'colorThemes' => $this->presetOptions($modernDesignLibrary->palettePresets),
+                'fontSets' => $this->presetOptions($modernDesignLibrary->typographyPresets),
                 'artStyles' => $this->options([
                     'clean' => 'Clean',
                     'rule' => 'Rule',
@@ -125,6 +115,7 @@ final class WebsiteTemplateRegistry
                 'fontSet' => 'editorial',
                 'artStyle' => 'clean',
             ],
+            designLibrary: $modernDesignLibrary,
             sectionAppearanceOptions: array_fill_keys($sectionTypes, WebsiteSectionAppearance::OPTIONS),
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: [
@@ -194,7 +185,7 @@ final class WebsiteTemplateRegistry
         return $this->get($templateKey)?->supportsSection($sectionType) ?? false;
     }
 
-    /** @param iterable<string> $enabledSectionTypes */
+    /** @param  iterable<string>  $enabledSectionTypes */
     public function isCompatible(string $templateKey, EventType $eventType, iterable $enabledSectionTypes): bool
     {
         $definition = $this->get($templateKey);
@@ -244,6 +235,7 @@ final class WebsiteTemplateRegistry
                     throw new LogicException("Template [{$definition->key}] has an invalid default [{$setting}].");
                 }
             }
+            $this->assertDesignLibrary($definition);
 
             foreach ($definition->supportedSectionTypes as $sectionType) {
                 $options = $definition->appearanceOptionsFor($sectionType) ?? [];
@@ -340,6 +332,140 @@ final class WebsiteTemplateRegistry
         }
     }
 
+    private function classicDesignLibrary(): TemplateDesignLibrary
+    {
+        return $this->designLibrary(
+            palettes: [
+                'terracotta' => ['displayName' => 'Terracotta', 'roles' => ['canvas' => '#f8f0e4', 'surface' => '#f1e5d5', 'text' => '#3b312d', 'textMuted' => '#6c5f57', 'accent' => '#9d5b45', 'accentContrast' => '#ffffff', 'border' => '#806d5e', 'ornament' => '#78805f']],
+                'olive' => ['displayName' => 'Olive', 'roles' => ['canvas' => '#f4f1e5', 'surface' => '#e8e4d2', 'text' => '#34372c', 'textMuted' => '#626454', 'accent' => '#70764e', 'accentContrast' => '#ffffff', 'border' => '#74745f', 'ornament' => '#a06a4f']],
+                'sage' => ['displayName' => 'Sage', 'roles' => ['canvas' => '#f1f3e9', 'surface' => '#e2e8d9', 'text' => '#303a33', 'textMuted' => '#5f6c63', 'accent' => '#748a70', 'accentContrast' => '#ffffff', 'border' => '#718075', 'ornament' => '#a86650']],
+                'burgundy' => ['displayName' => 'Burgundy', 'roles' => ['canvas' => '#f7eeea', 'surface' => '#ecddda', 'text' => '#3d292d', 'textMuted' => '#715d61', 'accent' => '#7d3443', 'accentContrast' => '#ffffff', 'border' => '#82696d', 'ornament' => '#7b7955']],
+                'neutral' => ['displayName' => 'Warm Neutral', 'roles' => ['canvas' => '#f5f1eb', 'surface' => '#e9e3dc', 'text' => '#35312e', 'textMuted' => '#69625d', 'accent' => '#74645a', 'accentContrast' => '#ffffff', 'border' => '#7c746e', 'ornament' => '#777363']],
+            ],
+            fontFamilies: [
+                new FontFamilyCapability('editorial-serif', 'Editorial Serif', [TypographyRole::Heading]),
+                new FontFamilyCapability('modern-sans', 'Modern Sans', [TypographyRole::Heading, TypographyRole::Body]),
+                new FontFamilyCapability('romantic-serif', 'Romantic Serif', [TypographyRole::Heading]),
+                new FontFamilyCapability('classic-serif', 'Classic Serif', [TypographyRole::Body]),
+            ],
+            typographyPresets: [
+                new TypographyPresetCapability('editorial', 'Editorial', 'editorial-serif', 'modern-sans'),
+                new TypographyPresetCapability('romantic', 'Romantic', 'romantic-serif', 'classic-serif'),
+                new TypographyPresetCapability('modern', 'Modern', 'modern-sans', 'modern-sans'),
+            ],
+        );
+    }
+
+    private function modernDesignLibrary(): TemplateDesignLibrary
+    {
+        return $this->designLibrary(
+            palettes: [
+                'ink' => ['displayName' => 'Ink', 'roles' => ['canvas' => '#f5f3ee', 'surface' => '#e9e6df', 'text' => '#171717', 'textMuted' => '#65615b', 'accent' => '#171717', 'accentContrast' => '#ffffff', 'border' => '#908a80']],
+                'stone' => ['displayName' => 'Stone', 'roles' => ['canvas' => '#f3f1ed', 'surface' => '#e4e0da', 'text' => '#302e2a', 'textMuted' => '#716c64', 'accent' => '#686158', 'accentContrast' => '#ffffff', 'border' => '#999188']],
+                'blush' => ['displayName' => 'Blush', 'roles' => ['canvas' => '#faf3f1', 'surface' => '#f0dfdc', 'text' => '#3b292b', 'textMuted' => '#765f61', 'accent' => '#9c5f64', 'accentContrast' => '#ffffff', 'border' => '#b99191']],
+                'plum' => ['displayName' => 'Plum', 'roles' => ['canvas' => '#f7f2f6', 'surface' => '#e9dde7', 'text' => '#302330', 'textMuted' => '#6e5a6c', 'accent' => '#5f405f', 'accentContrast' => '#ffffff', 'border' => '#927b8f']],
+                'navy' => ['displayName' => 'Navy', 'roles' => ['canvas' => '#f1f4f7', 'surface' => '#dde4eb', 'text' => '#182432', 'textMuted' => '#596775', 'accent' => '#263c5a', 'accentContrast' => '#ffffff', 'border' => '#77889b']],
+            ],
+            fontFamilies: [
+                new FontFamilyCapability('editorial-serif', 'Editorial Serif', [TypographyRole::Heading]),
+                new FontFamilyCapability('modern-sans', 'Modern Sans', [TypographyRole::Heading, TypographyRole::Body]),
+                new FontFamilyCapability('fashion-serif', 'Fashion Serif', [TypographyRole::Heading]),
+                new FontFamilyCapability('fashion-sans', 'Fashion Sans', [TypographyRole::Body]),
+            ],
+            typographyPresets: [
+                new TypographyPresetCapability('editorial', 'Editorial', 'editorial-serif', 'modern-sans'),
+                new TypographyPresetCapability('fashion', 'Fashion', 'fashion-serif', 'fashion-sans'),
+                new TypographyPresetCapability('minimal', 'Minimal', 'modern-sans', 'modern-sans'),
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, array{displayName: string, roles: array<string, string>}>  $palettes
+     * @param  list<FontFamilyCapability>  $fontFamilies
+     * @param  list<TypographyPresetCapability>  $typographyPresets
+     */
+    private function designLibrary(array $palettes, array $fontFamilies, array $typographyPresets): TemplateDesignLibrary
+    {
+        $colors = [];
+        $palettePresets = [];
+        $roleLabels = ['canvas' => 'Canvas', 'surface' => 'Surface', 'text' => 'Text', 'textMuted' => 'Muted Text', 'accent' => 'Accent', 'accentContrast' => 'Accent Contrast', 'border' => 'Border', 'ornament' => 'Ornament'];
+
+        foreach ($palettes as $presetId => $palette) {
+            $roles = [];
+            foreach ($palette['roles'] as $role => $value) {
+                $colorId = $presetId.'-'.match ($role) {
+                    'textMuted' => 'text-muted',
+                    'accentContrast' => 'accent-contrast',
+                    default => $role,
+                };
+                $colors[] = new DesignColorCapability($colorId, $palette['displayName'].' '.$roleLabels[$role], $value);
+                $roles[$role] = $colorId;
+            }
+            $palettePresets[] = new PalettePresetCapability($presetId, $palette['displayName'], $roles);
+        }
+
+        return new TemplateDesignLibrary($colors, $fontFamilies, $palettePresets, $typographyPresets);
+    }
+
+    /** @param  list<PalettePresetCapability|TypographyPresetCapability>  $presets */
+    private function presetOptions(array $presets): array
+    {
+        return array_map(fn (PalettePresetCapability|TypographyPresetCapability $preset): array => [
+            'key' => $preset->id,
+            'displayName' => $preset->displayName,
+        ], $presets);
+    }
+
+    private function assertDesignLibrary(WebsiteTemplateDefinition $template): void
+    {
+        $library = $template->designLibrary;
+        $colorIds = array_column($library->colors, 'id');
+        $fontIds = array_column($library->fontFamilies, 'id');
+        foreach ([$colorIds, $fontIds] as $ids) {
+            if ($ids === [] || count($ids) !== count(array_unique($ids))) {
+                throw new LogicException("Template [{$template->key}] has duplicate or empty Design Library IDs.");
+            }
+        }
+
+        foreach ($library->colors as $color) {
+            if (trim($color->id) === '' || trim($color->displayName) === '' || preg_match('/^#[0-9a-fA-F]{6}$/', $color->value) !== 1) {
+                throw new LogicException("Template [{$template->key}] has an invalid Design Library color.");
+            }
+        }
+
+        $requiredRoles = array_map(fn (DesignColorRole $role): string => $role->value, array_filter(
+            DesignColorRole::cases(),
+            fn (DesignColorRole $role): bool => $role !== DesignColorRole::Ornament,
+        ));
+        $allowedRoles = array_map(fn (DesignColorRole $role): string => $role->value, DesignColorRole::cases());
+        foreach ($library->palettePresets as $preset) {
+            if (array_diff($requiredRoles, array_keys($preset->roles)) !== [] || array_diff(array_keys($preset->roles), $allowedRoles) !== []) {
+                throw new LogicException("Template [{$template->key}] has invalid Palette roles [{$preset->id}].");
+            }
+            foreach ($preset->roles as $colorId) {
+                if (! in_array($colorId, $colorIds, true)) {
+                    throw new LogicException("Template [{$template->key}] Palette [{$preset->id}] references an unknown color.");
+                }
+            }
+        }
+
+        $families = collect($library->fontFamilies)->keyBy('id');
+        foreach ($library->typographyPresets as $preset) {
+            $heading = $families->get($preset->headingFontId);
+            $body = $families->get($preset->bodyFontId);
+            if (! ($heading instanceof FontFamilyCapability) || ! in_array(TypographyRole::Heading, $heading->allowedRoles, true)
+                || ! ($body instanceof FontFamilyCapability) || ! in_array(TypographyRole::Body, $body->allowedRoles, true)) {
+                throw new LogicException("Template [{$template->key}] has invalid Typography mapping [{$preset->id}].");
+            }
+        }
+
+        if ($this->presetOptions($library->palettePresets) !== $template->designOptions['colorThemes']
+            || $this->presetOptions($library->typographyPresets) !== $template->designOptions['fontSets']) {
+            throw new LogicException("Template [{$template->key}] Design Library presets are out of sync with Design options.");
+        }
+    }
+
     /**
      * @param  array<string, string>  $values
      * @return list<array{key: string, displayName: string}>
@@ -417,7 +543,7 @@ final class WebsiteTemplateRegistry
         };
     }
 
-    /** @param list<array{key: string, displayName: string}> $options */
+    /** @param  list<array{key: string, displayName: string}>  $options */
     private function assertOptionGroup(string $templateKey, string $group, array $options): void
     {
         $keys = array_column($options, 'key');

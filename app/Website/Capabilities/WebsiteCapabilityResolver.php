@@ -42,6 +42,7 @@ final class WebsiteCapabilityResolver
 
         $capabilities = new TemplateCapabilities(
             globalDesign: $this->globalDesignFromDefinition($definition),
+            designLibrary: $definition->designLibrary,
             elements: $elements,
             sections: $sections,
         );

@@ -23,6 +23,30 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'options' => $control->options,
                 ], $this->globalDesign->controls),
             ],
+            'designLibrary' => [
+                'colors' => array_map(fn ($color): array => [
+                    'id' => $color->id,
+                    'displayName' => $color->displayName,
+                    'value' => $color->value,
+                    'origin' => 'template',
+                ], $this->designLibrary->colors),
+                'fontFamilies' => array_map(fn ($family): array => [
+                    'id' => $family->id,
+                    'displayName' => $family->displayName,
+                    'allowedRoles' => array_map(fn ($role): string => $role->value, $family->allowedRoles),
+                ], $this->designLibrary->fontFamilies),
+                'palettePresets' => array_map(fn ($preset): array => [
+                    'id' => $preset->id,
+                    'displayName' => $preset->displayName,
+                    'roles' => $preset->roles,
+                ], $this->designLibrary->palettePresets),
+                'typographyPresets' => array_map(fn ($preset): array => [
+                    'id' => $preset->id,
+                    'displayName' => $preset->displayName,
+                    'headingFontId' => $preset->headingFontId,
+                    'bodyFontId' => $preset->bodyFontId,
+                ], $this->designLibrary->typographyPresets),
+            ],
             'elements' => $this->elements,
             'sections' => array_map(fn (SectionCapability $section): array => [
                 'id' => $section->id,

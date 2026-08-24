@@ -3,6 +3,7 @@
 namespace App\Website;
 
 use App\Enums\EventType;
+use App\Website\Capabilities\TemplateDesignLibrary;
 
 final readonly class WebsiteTemplateDefinition
 {
@@ -24,6 +25,7 @@ final readonly class WebsiteTemplateDefinition
         public array $supportedSectionTypes,
         public array $designOptions,
         public array $defaultDesignSettings,
+        public TemplateDesignLibrary $designLibrary,
         public array $sectionAppearanceOptions,
         public array $sectionAppearanceDefaults,
         public array $sectionMediaCapabilities = [],

@@ -190,6 +190,7 @@ class WebsiteInitializationTest extends TestCase
             supportedSectionTypes: $supportedSectionTypes ?? $template->supportedSectionTypes,
             designOptions: $template->designOptions,
             defaultDesignSettings: $template->defaultDesignSettings,
+            designLibrary: $template->designLibrary,
             sectionAppearanceOptions: $template->sectionAppearanceOptions,
             sectionAppearanceDefaults: $template->sectionAppearanceDefaults,
         );

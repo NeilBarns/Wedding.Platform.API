@@ -115,6 +115,7 @@ class WebsiteTemplateRegistryTest extends TestCase
             supportedSectionTypes: $template->supportedSectionTypes,
             designOptions: $template->designOptions,
             defaultDesignSettings: $template->defaultDesignSettings,
+            designLibrary: $template->designLibrary,
             sectionAppearanceOptions: $template->sectionAppearanceOptions,
             sectionAppearanceDefaults: $template->sectionAppearanceDefaults,
             sectionMediaCapabilities: $template->sectionMediaCapabilities,
@@ -284,6 +285,7 @@ class WebsiteTemplateRegistryTest extends TestCase
             supportedSectionTypes: $template->supportedSectionTypes,
             designOptions: $template->designOptions,
             defaultDesignSettings: $template->defaultDesignSettings,
+            designLibrary: $template->designLibrary,
             sectionAppearanceOptions: $options,
             sectionAppearanceDefaults: $defaults,
         );
@@ -323,6 +325,7 @@ class WebsiteTemplateRegistryTest extends TestCase
             supportedSectionTypes: $valid->supportedSectionTypes,
             designOptions: $valid->designOptions,
             defaultDesignSettings: [...$valid->defaultDesignSettings, 'colorTheme' => 'missing'],
+            designLibrary: $valid->designLibrary,
             sectionAppearanceOptions: $valid->sectionAppearanceOptions,
             sectionAppearanceDefaults: $valid->sectionAppearanceDefaults,
         );
