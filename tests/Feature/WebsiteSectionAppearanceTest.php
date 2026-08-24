@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
@@ -250,7 +251,7 @@ class WebsiteSectionAppearanceTest extends TestCase
             'mediaSize' => 'feature',
             'responsive' => ['mobile' => ['mediaPlacement' => 'bottom']],
         ];
-        $response->assertJsonPath('data.schemaVersion', 2)
+        $response->assertJsonPath('data.schemaVersion', WebsiteSchema::CURRENT_SCHEMA_VERSION)
             ->assertJsonPath('data.sections.0.appearance', $expected);
         $this->assertSame($expected, $hero->refresh()->appearance);
     }
@@ -276,7 +277,7 @@ class WebsiteSectionAppearanceTest extends TestCase
                 "/api/events/{$event->id}/websites/{$website->id}/sections/{$hero->id}/appearance",
                 compact('appearance'),
             )->assertOk()
-                ->assertJsonPath('data.schemaVersion', 2)
+                ->assertJsonPath('data.schemaVersion', WebsiteSchema::CURRENT_SCHEMA_VERSION)
                 ->assertJsonMissingPath('data.sections.0.appearance.responsive');
 
             $this->assertArrayNotHasKey('responsive', $hero->refresh()->appearance);

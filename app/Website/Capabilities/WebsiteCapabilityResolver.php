@@ -82,6 +82,7 @@ final class WebsiteCapabilityResolver
         }
 
         $normalized = $definition->normalizeDesignSettings($legacySettings);
+        $overrides = $this->normalizeProjectDefaultOverrides($definition, $legacySettings['projectDefaults'] ?? null);
         $palette = collect($definition->designLibrary->palettePresets)->firstWhere('id', $normalized['colorTheme']);
         $typography = collect($definition->designLibrary->typographyPresets)->firstWhere('id', $normalized['fontSet']);
         if ($palette === null || $typography === null) {
@@ -89,11 +90,67 @@ final class WebsiteCapabilityResolver
         }
 
         return new ResolvedProjectDesignDefaults(
-            headingFontId: $typography->headingFontId,
-            bodyFontId: $typography->bodyFontId,
-            headingColorId: $palette->roles[DesignColorRole::Text->value],
-            bodyColorId: $palette->roles[DesignColorRole::Text->value],
-            accentColorId: $palette->roles[DesignColorRole::Accent->value],
+            headingFontId: $overrides['headingFontId'] ?? $typography->headingFontId,
+            bodyFontId: $overrides['bodyFontId'] ?? $typography->bodyFontId,
+            headingColorId: $overrides['headingColorId'] ?? $palette->roles[DesignColorRole::Text->value],
+            bodyColorId: $overrides['bodyColorId'] ?? $palette->roles[DesignColorRole::Text->value],
+            accentColorId: $overrides['accentColorId'] ?? $palette->roles[DesignColorRole::Accent->value],
+        );
+    }
+
+    /** @return array{colorTheme: string, fontSet: string, artStyle: string, projectDefaults: array<string, string>}|null */
+    public function normalizeDesignSettings(string|WebsiteTemplateDefinition $template, mixed $settings): ?array
+    {
+        $definition = is_string($template) ? $this->templates->get($template) : $template;
+        if ($definition === null) {
+            return null;
+        }
+
+        $stored = is_array($settings) ? $settings : [];
+
+        return [
+            ...$definition->normalizeDesignSettings($stored),
+            'projectDefaults' => $this->normalizeProjectDefaultOverrides($definition, $stored['projectDefaults'] ?? null),
+        ];
+    }
+
+    /** @return array{colorTheme: string, fontSet: string, artStyle: string, projectDefaults: array<string, string>}|null */
+    public function canonicalDesignDefaults(string|WebsiteTemplateDefinition $template): ?array
+    {
+        return $this->normalizeDesignSettings($template, []);
+    }
+
+    /** @return array{colorTheme: string, fontSet: string, artStyle: string, projectDefaults: object}|null */
+    public function designSettingsForStorage(string|WebsiteTemplateDefinition $template, mixed $settings): ?array
+    {
+        $normalized = $this->normalizeDesignSettings($template, $settings);
+        if ($normalized === null) {
+            return null;
+        }
+
+        return [...$normalized, 'projectDefaults' => (object) $normalized['projectDefaults']];
+    }
+
+    /** @return array<string, string> */
+    public function normalizeProjectDefaultOverrides(string|WebsiteTemplateDefinition $template, mixed $overrides): array
+    {
+        $capability = $this->projectDefaults($template);
+        if ($capability === null || ! is_array($overrides)) {
+            return [];
+        }
+
+        $allowed = [
+            'headingFontId' => $capability->typography->headingFontIds,
+            'bodyFontId' => $capability->typography->bodyFontIds,
+            'headingColorId' => $capability->colors->headingColorIds,
+            'bodyColorId' => $capability->colors->bodyColorIds,
+            'accentColorId' => $capability->colors->accentColorIds,
+        ];
+
+        return array_filter(
+            array_intersect_key($overrides, $allowed),
+            fn (mixed $value, string $key): bool => is_string($value) && in_array($value, $allowed[$key], true),
+            ARRAY_FILTER_USE_BOTH,
         );
     }
 

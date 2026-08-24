@@ -42,7 +42,7 @@ final class CreateWebsiteProject
             $website = $lockedEvent->websiteProjects()->create([
                 'name' => trim($name),
                 'template_key' => $template->key,
-                'design_settings' => $this->capabilities->globalDesignDefaults($template),
+                'design_settings' => $this->capabilities->designSettingsForStorage($template, []),
                 'schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
             ]);
             $this->initializeSections->handle($website);

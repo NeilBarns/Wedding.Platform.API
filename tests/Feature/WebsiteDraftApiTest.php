@@ -8,6 +8,7 @@ use App\Models\Event;
 use App\Models\EventMembership;
 use App\Models\User;
 use App\Models\WebsiteSection;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -80,7 +81,7 @@ class WebsiteDraftApiTest extends TestCase
         $beforeSections = $website->sections()->pluck('updated_at', 'id')->map->toJSON()->all();
 
         $legacy = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
-            ->assertJsonPath('data.schemaVersion', 2)
+            ->assertJsonPath('data.schemaVersion', WebsiteSchema::CURRENT_SCHEMA_VERSION)
             ->assertJsonPath('data.designSettings', $website->design_settings)
             ->assertJsonPath('data.projectDesignDefaults', [
                 'headingFontId' => 'editorial-serif',

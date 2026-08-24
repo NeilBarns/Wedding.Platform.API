@@ -35,9 +35,11 @@ final class WebsiteDraftNormalizer
 
         $website->loadMissing('sections.website');
         $storedDesignSettings = $website->design_settings;
-        $designSettings = is_array($storedDesignSettings)
-            ? $this->capabilities->normalizeGlobalDesignSettings($website->template_key, $storedDesignSettings)
-            : $this->capabilities->globalDesignDefaults($website->template_key);
+        $designSettings = $this->capabilities->normalizeDesignSettings($website->template_key, $storedDesignSettings);
+        $resolved = $this->capabilities->resolveProjectDesignDefaults(
+            $website->template_key,
+            is_array($storedDesignSettings) ? $storedDesignSettings : [],
+        );
 
         return [
             'schemaVersion' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
@@ -45,11 +47,11 @@ final class WebsiteDraftNormalizer
             'eventId' => $website->event_id,
             'name' => $website->name,
             'templateKey' => $website->template_key,
-            'designSettings' => $designSettings ?? $storedDesignSettings,
-            'projectDesignDefaults' => ($resolved = $this->capabilities->resolveProjectDesignDefaults(
-                $website->template_key,
-                $designSettings ?? (is_array($storedDesignSettings) ? $storedDesignSettings : []),
-            )) === null ? null : [
+            'designSettings' => $designSettings === null ? $storedDesignSettings : [
+                ...$designSettings,
+                'projectDefaults' => (object) $designSettings['projectDefaults'],
+            ],
+            'projectDesignDefaults' => $resolved === null ? null : [
                 'headingFontId' => $resolved->headingFontId,
                 'bodyFontId' => $resolved->bodyFontId,
                 'headingColorId' => $resolved->headingColorId,

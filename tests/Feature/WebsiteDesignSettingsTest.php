@@ -8,6 +8,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\WebsiteSchema;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,7 +34,7 @@ class WebsiteDesignSettingsTest extends TestCase
 
         foreach ([WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1] as $templateKey) {
             $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
-            $this->assertSame($resolver->globalDesignDefaults($templateKey), $this->initializeWebsite($event, $templateKey)->design_settings);
+            $this->assertEquals($resolver->canonicalDesignDefaults($templateKey), $this->initializeWebsite($event, $templateKey)->design_settings);
         }
     }
 
@@ -68,12 +69,16 @@ class WebsiteDesignSettingsTest extends TestCase
     {
         [$event, $owner] = $this->eventWithOwner();
         $before = $event->website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all();
-        $settings = ['colorTheme' => 'sage', 'fontSet' => 'romantic', 'artStyle' => 'botanical'];
+        $settings = ['colorTheme' => 'sage', 'fontSet' => 'romantic', 'artStyle' => 'botanical', 'projectDefaults' => []];
 
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/design", ['designSettings' => $settings])
             ->assertOk()->assertJsonPath('data.designSettings', $settings);
 
         $this->assertSame($settings, $event->website->refresh()->design_settings);
+        $this->assertStringContainsString(
+            '"projectDefaults":{}',
+            DB::table('websites')->where('id', $event->website->id)->value('design_settings'),
+        );
         $this->assertSame($before, $event->website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all());
     }
 
@@ -83,11 +88,11 @@ class WebsiteDesignSettingsTest extends TestCase
         $action = app(UpdateWebsiteDesignSettings::class);
 
         foreach ([
-            ['colorTheme' => 'neonRainbow', 'fontSet' => 'editorial', 'artStyle' => 'minimal'],
-            ['colorTheme' => 'olive', 'fontSet' => 'comicSans', 'artStyle' => 'minimal'],
-            ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'externalUrl'],
+            ['colorTheme' => 'neonRainbow', 'fontSet' => 'editorial', 'artStyle' => 'minimal', 'projectDefaults' => []],
+            ['colorTheme' => 'olive', 'fontSet' => 'comicSans', 'artStyle' => 'minimal', 'projectDefaults' => []],
+            ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'externalUrl', 'projectDefaults' => []],
             ['colorTheme' => 'olive', 'fontSet' => 'modern'],
-            ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'clean', 'css' => 'body{}'],
+            ['colorTheme' => 'olive', 'fontSet' => 'modern', 'artStyle' => 'clean', 'projectDefaults' => [], 'css' => 'body{}'],
         ] as $settings) {
             try {
                 $action->handle($website, $settings);
@@ -106,7 +111,7 @@ class WebsiteDesignSettingsTest extends TestCase
             $owner = User::factory()->create();
             $event = app(CreateEvent::class)->handle($owner, ['name' => 'A Wedding']);
             $website = $this->initializeWebsite($event, $templateKey);
-            $settings = $resolver->globalDesignDefaults($templateKey);
+            $settings = $resolver->canonicalDesignDefaults($templateKey);
             $url = "/api/events/{$event->id}/website/design";
 
             foreach ($resolver->globalDesign($templateKey)->controls as $control) {
@@ -128,7 +133,7 @@ class WebsiteDesignSettingsTest extends TestCase
     {
         [$event, $owner] = $this->eventWithOwner();
         $website = $event->website;
-        $defaults = app(WebsiteCapabilityResolver::class)->globalDesignDefaults($website->template_key);
+        $defaults = app(WebsiteCapabilityResolver::class)->canonicalDesignDefaults($website->template_key);
 
         foreach ([
             ['fontSet' => 'editorial', 'artStyle' => 'minimal'],
@@ -142,12 +147,113 @@ class WebsiteDesignSettingsTest extends TestCase
 
             $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")
                 ->assertOk()
-                ->assertJsonPath('data.schemaVersion', 2)
+                ->assertJsonPath('data.schemaVersion', WebsiteSchema::CURRENT_SCHEMA_VERSION)
                 ->assertJsonPath('data.designSettings', $defaults)
                 ->assertJsonPath('data.template.designOptions', app(WebsiteTemplateRegistry::class)->get($website->template_key)->designOptions)
                 ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.default', $defaults['colorTheme']);
 
             $this->assertSame($before, $website->refresh()->design_settings);
+        }
+    }
+
+    public function test_sparse_project_defaults_layer_independently_over_legacy_presets_and_reset_by_key_removal(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $url = "/api/events/{$event->id}/website/design";
+        $settings = [
+            'colorTheme' => 'terracotta',
+            'fontSet' => 'editorial',
+            'artStyle' => 'minimal',
+            'projectDefaults' => [
+                'headingFontId' => 'romantic-serif',
+                'bodyFontId' => 'classic-serif',
+                'headingColorId' => 'terracotta-accent',
+                'bodyColorId' => 'terracotta-text',
+                'accentColorId' => 'terracotta-accent',
+            ],
+        ];
+
+        $this->actingAs($owner)->putJson($url, ['designSettings' => $settings])->assertOk()
+            ->assertJsonPath('data.projectDesignDefaults.headingFontId', 'romantic-serif')
+            ->assertJsonPath('data.projectDesignDefaults.bodyFontId', 'classic-serif')
+            ->assertJsonPath('data.projectDesignDefaults.headingColorId', 'terracotta-accent')
+            ->assertJsonPath('data.projectDesignDefaults.bodyColorId', 'terracotta-text')
+            ->assertJsonPath('data.projectDesignDefaults.accentColorId', 'terracotta-accent');
+
+        $settings['colorTheme'] = 'olive';
+        $settings['fontSet'] = 'modern';
+        $this->actingAs($owner)->putJson($url, ['designSettings' => $settings])->assertOk()
+            ->assertJsonPath('data.designSettings.projectDefaults', $settings['projectDefaults'])
+            ->assertJsonPath('data.projectDesignDefaults.headingFontId', 'romantic-serif')
+            ->assertJsonPath('data.projectDesignDefaults.accentColorId', 'terracotta-accent');
+
+        unset($settings['projectDefaults']['headingFontId'], $settings['projectDefaults']['accentColorId']);
+        $this->actingAs($owner)->putJson($url, ['designSettings' => $settings])->assertOk()
+            ->assertJsonPath('data.projectDesignDefaults.headingFontId', 'modern-sans')
+            ->assertJsonPath('data.projectDesignDefaults.accentColorId', 'olive-accent');
+
+        $settings['projectDefaults'] = [];
+        $this->actingAs($owner)->putJson($url, ['designSettings' => $settings])->assertOk()
+            ->assertJsonPath('data.projectDesignDefaults', [
+                'headingFontId' => 'modern-sans',
+                'bodyFontId' => 'modern-sans',
+                'headingColorId' => 'olive-text',
+                'bodyColorId' => 'olive-text',
+                'accentColorId' => 'olive-accent',
+            ]);
+        $this->assertSame([], $event->website->refresh()->design_settings['projectDefaults']);
+    }
+
+    public function test_project_default_save_rejects_unknown_wrong_type_and_role_illegal_values(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $base = $this->defaults();
+        $url = "/api/events/{$event->id}/website/design";
+        $invalid = [
+            ['unknown' => 'terracotta-text'],
+            ['headingFontId' => 'missing-font'],
+            ['bodyFontId' => 'editorial-serif'],
+            ['headingColorId' => 'terracotta-canvas'],
+            ['bodyColorId' => 'terracotta-accent'],
+            ['accentColorId' => 'terracotta-text'],
+            ['accentColorId' => '#9d5b45'],
+            ['headingFontId' => null],
+            ['headingFontId' => 42],
+        ];
+
+        foreach ($invalid as $projectDefaults) {
+            $this->actingAs($owner)->putJson($url, ['designSettings' => [...$base, 'projectDefaults' => $projectDefaults]])
+                ->assertUnprocessable();
+        }
+        foreach (['not-an-object', ['terracotta-text']] as $projectDefaults) {
+            $this->actingAs($owner)->putJson($url, ['designSettings' => [...$base, 'projectDefaults' => $projectDefaults]])
+                ->assertUnprocessable();
+        }
+        $this->assertEquals($base, $event->website->refresh()->design_settings);
+    }
+
+    public function test_historical_malformed_project_defaults_normalize_safely_without_database_writes(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $website = $event->website;
+        $cases = [
+            null,
+            'invalid',
+            ['unknown' => 'terracotta-text'],
+            ['headingFontId' => 'missing', 'bodyFontId' => 'classic-serif'],
+        ];
+
+        foreach ($cases as $storedOverrides) {
+            $stored = [...$this->defaults(), 'projectDefaults' => $storedOverrides];
+            DB::table('websites')->where('id', $website->id)->update(['design_settings' => json_encode($stored, JSON_THROW_ON_ERROR)]);
+            $before = DB::table('websites')->where('id', $website->id)->value('design_settings');
+            $expected = is_array($storedOverrides) && ($storedOverrides['bodyFontId'] ?? null) === 'classic-serif'
+                ? ['bodyFontId' => 'classic-serif']
+                : [];
+
+            $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
+                ->assertJsonPath('data.designSettings.projectDefaults', $expected);
+            $this->assertSame($before, DB::table('websites')->where('id', $website->id)->value('design_settings'));
         }
     }
 
@@ -177,7 +283,10 @@ class WebsiteDesignSettingsTest extends TestCase
         $migration = require database_path('migrations/2026_08_15_000000_add_design_settings_to_websites.php');
 
         $migration->up();
-        $this->assertSame($this->defaults(), $website->refresh()->design_settings);
+        $this->assertSame(
+            app(WebsiteTemplateRegistry::class)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)->defaultDesignSettings,
+            $website->refresh()->design_settings,
+        );
         $this->assertSame($before, $website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all());
         $migration->down();
         $this->assertSame($before, $website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all());
@@ -196,11 +305,9 @@ class WebsiteDesignSettingsTest extends TestCase
         return [$event->refresh(), $owner];
     }
 
-    /** @return array{colorTheme: string, fontSet: string, artStyle: string} */
+    /** @return array{colorTheme: string, fontSet: string, artStyle: string, projectDefaults: array<string, string>} */
     private function defaults(): array
     {
-        return app(WebsiteTemplateRegistry::class)
-            ->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
-            ->defaultDesignSettings;
+        return app(WebsiteCapabilityResolver::class)->canonicalDesignDefaults(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
     }
 }

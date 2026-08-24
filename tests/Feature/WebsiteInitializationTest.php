@@ -62,7 +62,7 @@ class WebsiteInitializationTest extends TestCase
             'templateKey' => $template->key,
         ])->assertCreated()
             ->assertJsonPath('data.templateKey', $template->key)
-            ->assertJsonPath('data.designSettings', app(WebsiteCapabilityResolver::class)->globalDesignDefaults($template))
+            ->assertJsonPath('data.designSettings', app(WebsiteCapabilityResolver::class)->canonicalDesignDefaults($template))
             ->assertJsonCount(10, 'data.sections');
 
         $website = $event->website()->sole();

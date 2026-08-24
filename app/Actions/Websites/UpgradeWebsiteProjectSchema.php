@@ -6,6 +6,7 @@ use App\Exceptions\UnsupportedWebsiteSchemaVersion;
 use App\Models\MediaAsset;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\StoryContentNormalizer;
 use App\Website\WebsiteSchema;
 use App\Website\WebsiteSectionContentValidator;
@@ -20,6 +21,7 @@ final class UpgradeWebsiteProjectSchema
         private readonly StoryContentNormalizer $normalizer,
         private readonly WebsiteSectionContentValidator $validator,
         private readonly WebsiteTemplateRegistry $templates,
+        private readonly WebsiteCapabilityResolver $capabilities,
         private readonly WebsiteSectionMediaReferences $mediaReferences,
     ) {}
 
@@ -51,6 +53,8 @@ final class UpgradeWebsiteProjectSchema
             $lockedSection->save();
 
             if ($website->schema_version !== WebsiteSchema::CURRENT_SCHEMA_VERSION) {
+                $website->design_settings = $this->capabilities->designSettingsForStorage($website->template_key, $website->design_settings)
+                    ?? $website->design_settings;
                 $website->schema_version = WebsiteSchema::CURRENT_SCHEMA_VERSION;
                 $website->save();
             }

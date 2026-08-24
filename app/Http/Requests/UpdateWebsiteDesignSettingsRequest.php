@@ -18,6 +18,8 @@ class UpdateWebsiteDesignSettingsRequest extends FormRequest
             'designSettings.colorTheme' => ['required', 'string'],
             'designSettings.fontSet' => ['required', 'string'],
             'designSettings.artStyle' => ['required', 'string'],
+            'designSettings.projectDefaults' => ['present', 'array'],
+            'designSettings.projectDefaults.*' => ['string'],
         ];
     }
 }

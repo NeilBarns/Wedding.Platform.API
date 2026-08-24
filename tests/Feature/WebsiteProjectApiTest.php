@@ -7,6 +7,7 @@ use App\Actions\Websites\InitializeWebsiteSections;
 use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,7 +71,7 @@ class WebsiteProjectApiTest extends TestCase
         $base = "/api/events/{$event->id}/websites/{$project->id}";
         $hero = $project->sections()->where('type', 'hero')->sole();
 
-        $design = ['colorTheme' => 'ink', 'fontSet' => 'fashion', 'artStyle' => 'frame'];
+        $design = ['colorTheme' => 'ink', 'fontSet' => 'fashion', 'artStyle' => 'frame', 'projectDefaults' => []];
         $this->actingAs($owner)->putJson("{$base}/design", ['designSettings' => $design])
             ->assertOk()->assertJsonPath('data.designSettings', $design);
 
@@ -168,7 +169,7 @@ class WebsiteProjectApiTest extends TestCase
         $project = Website::factory()->for($event)->create(array_filter([
             'name' => $name,
             'template_key' => $templateKey,
-            'design_settings' => $template->defaultDesignSettings,
+            'design_settings' => app(WebsiteCapabilityResolver::class)->canonicalDesignDefaults($template),
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ], fn (mixed $value): bool => $value !== null));

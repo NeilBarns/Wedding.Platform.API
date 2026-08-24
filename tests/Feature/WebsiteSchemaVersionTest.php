@@ -88,6 +88,60 @@ class WebsiteSchemaVersionTest extends TestCase
             ->orderBy('id')->get(['id', 'website_id', 'type', 'sort_order', 'is_enabled', 'content', 'appearance', 'created_at', 'updated_at'])->all());
     }
 
+    public function test_v3_design_migration_adds_empty_sparse_defaults_and_preserves_legacy_values(): void
+    {
+        [$event] = $this->event();
+        $classic = app(CreateWebsiteProject::class)->handle($event, 'Classic', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $modern = app(CreateWebsiteProject::class)->handle($event, 'Modern', WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
+        $stored = [
+            $classic->id => ['colorTheme' => 'terracotta', 'fontSet' => 'editorial', 'artStyle' => 'minimal', 'futureMetadata' => 'keep'],
+            $modern->id => ['colorTheme' => 'plum', 'fontSet' => 'fashion', 'artStyle' => 'offset', 'futureMetadata' => 'keep'],
+        ];
+        foreach ($stored as $id => $settings) {
+            DB::table('websites')->where('id', $id)->update([
+                'design_settings' => json_encode($settings, JSON_THROW_ON_ERROR),
+                'schema_version' => 2,
+            ]);
+        }
+        $migration = require database_path('migrations/2026_08_24_000000_upgrade_website_design_settings_to_v3.php');
+
+        $migration->up();
+        foreach ($stored as $id => $settings) {
+            $row = DB::table('websites')->where('id', $id)->first(['design_settings', 'schema_version']);
+            $this->assertSame(3, $row->schema_version);
+            $this->assertSame([...$settings, 'projectDefaults' => []], json_decode($row->design_settings, true, flags: JSON_THROW_ON_ERROR));
+            $this->assertStringContainsString('"projectDefaults":{}', $row->design_settings);
+        }
+
+        $migration->down();
+        foreach ($stored as $id => $settings) {
+            $row = DB::table('websites')->where('id', $id)->first(['design_settings', 'schema_version']);
+            $this->assertSame(2, $row->schema_version);
+            $this->assertSame($settings, json_decode($row->design_settings, true, flags: JSON_THROW_ON_ERROR));
+        }
+    }
+
+    public function test_v3_design_migration_rollback_refuses_to_discard_sparse_overrides_before_mutation(): void
+    {
+        [$event] = $this->event();
+        $first = app(CreateWebsiteProject::class)->handle($event, 'First', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $second = app(CreateWebsiteProject::class)->handle($event, 'Second', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $settings = $second->design_settings;
+        $settings['projectDefaults'] = ['headingFontId' => 'romantic-serif'];
+        DB::table('websites')->where('id', $second->id)->update(['design_settings' => json_encode($settings, JSON_THROW_ON_ERROR)]);
+        $before = DB::table('websites')->whereIn('id', [$first->id, $second->id])->orderBy('id')->get(['id', 'design_settings', 'schema_version'])->all();
+        $migration = require database_path('migrations/2026_08_24_000000_upgrade_website_design_settings_to_v3.php');
+
+        try {
+            $migration->down();
+            $this->fail('Rollback must refuse persisted Project Design Default overrides.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('persisted Project Design Default overrides', $exception->getMessage());
+        }
+
+        $this->assertEquals($before, DB::table('websites')->whereIn('id', [$first->id, $second->id])->orderBy('id')->get(['id', 'design_settings', 'schema_version'])->all());
+    }
+
     public function test_v0_and_v1_normalize_to_runtime_v2_without_writes_and_preserve_story_adapter(): void
     {
         [$event] = $this->event();
@@ -159,7 +213,7 @@ class WebsiteSchemaVersionTest extends TestCase
     {
         [$event, $owner] = $this->event();
         $website = app(CreateWebsiteProject::class)->handle($event, 'Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-        DB::table('websites')->where('id', $website->id)->update(['schema_version' => 3]);
+        DB::table('websites')->where('id', $website->id)->update(['schema_version' => WebsiteSchema::CURRENT_SCHEMA_VERSION + 1]);
         $error = [
             'code' => 'website_schema_version_unsupported',
             'message' => 'This Website Project uses an unsupported schema version.',
@@ -179,7 +233,7 @@ class WebsiteSchemaVersionTest extends TestCase
         app(WebsiteDraftNormalizer::class)->normalize($website);
     }
 
-    public function test_partial_mutations_preserve_v0_storage_and_return_runtime_v2(): void
+    public function test_partial_mutations_preserve_v0_storage_and_design_save_promotes_to_v3(): void
     {
         [$event, $owner] = $this->event();
         $website = app(CreateWebsiteProject::class)->handle($event, 'Historical', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
@@ -195,7 +249,6 @@ class WebsiteSchemaVersionTest extends TestCase
             $this->assertSame($legacyStory, $story->fresh()->content);
         };
 
-        $assertVersion($this->actingAs($owner)->putJson("{$base}/design", ['designSettings' => $website->design_settings]));
         $assertVersion($this->actingAs($owner)->putJson("{$base}/sections/{$hero->id}", ['content' => ['headline' => 'Changed', 'subheadline' => '']]));
         $assertVersion($this->actingAs($owner)->putJson("{$base}/sections/{$hero->id}/appearance", ['appearance' => WebsiteSectionAppearance::DEFAULT]));
         $assertVersion($this->actingAs($owner)->putJson("{$base}/sections/{$hero->id}/enabled", ['isEnabled' => false]));
@@ -204,6 +257,13 @@ class WebsiteSchemaVersionTest extends TestCase
 
         $website->update(['name' => 'Renamed']);
         $this->assertSame(WebsiteSchema::LEGACY_SCHEMA_VERSION, $website->fresh()->schema_version);
+
+        $this->actingAs($owner)
+            ->putJson("{$base}/design", ['designSettings' => $website->design_settings])
+            ->assertOk()
+            ->assertJsonPath('data.schemaVersion', WebsiteSchema::CURRENT_SCHEMA_VERSION);
+        $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, $website->fresh()->schema_version);
+        $this->assertSame($legacyStory, $story->fresh()->content);
     }
 
     #[DataProvider('promotableSourceVersions')]

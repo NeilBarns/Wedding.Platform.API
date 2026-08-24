@@ -10,6 +10,7 @@ use App\Models\Website;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -131,11 +132,16 @@ class WebsiteProjectCreationTest extends TestCase
             'templateKey' => $template->key,
         ])->assertCreated()->assertJsonPath(
             'data.designSettings',
-            app(WebsiteCapabilityResolver::class)->globalDesignDefaults($template),
+            app(WebsiteCapabilityResolver::class)->canonicalDesignDefaults($template),
         );
         $projectB = Website::query()->findOrFail($response->json('data.id'));
 
-        $this->assertSame(['colorTheme', 'fontSet', 'artStyle'], array_keys($projectB->design_settings));
+        $this->assertSame(['colorTheme', 'fontSet', 'artStyle', 'projectDefaults'], array_keys($projectB->design_settings));
+        $this->assertSame([], $projectB->design_settings['projectDefaults']);
+        $this->assertStringContainsString(
+            '"projectDefaults":{}',
+            DB::table('websites')->where('id', $projectB->id)->value('design_settings'),
+        );
         $this->assertSame(10, $projectB->sections()->count());
         $this->assertEmpty(array_intersect(
             $projectA->sections()->pluck('id')->all(),
