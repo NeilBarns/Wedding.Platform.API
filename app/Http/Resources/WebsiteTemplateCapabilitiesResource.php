@@ -78,6 +78,13 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                         'scope' => $control->scope->value,
                     ], $element->appearance->colors),
                 ],
+                'narrativeBlockV1' => $element->type->value === 'narrativeBlock' ? [
+                    'version' => 1,
+                    'slots' => ['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'],
+                    'textAppearanceControls' => ['fontFamilyId', 'fontSize', 'lineSpacing', 'letterSpacing', 'colorId'],
+                    'fontSizeOptions' => ['xs', 's', 'm', 'l', 'xl'],
+                    'responsiveFontSizeViewports' => ['desktop', 'tablet', 'mobile'],
+                ] : null,
             ], $this->elementCapabilities),
             'sections' => array_map(fn (SectionCapability $section): array => [
                 'id' => $section->id,

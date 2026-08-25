@@ -13,6 +13,9 @@ class UpdateWebsiteSectionContentRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['content' => ['required', 'array']];
+        return [
+            'schemaVersion' => ['sometimes', 'integer', 'in:2,3,4'],
+            'content' => ['required', 'array'],
+        ];
     }
 }

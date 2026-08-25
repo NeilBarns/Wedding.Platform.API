@@ -73,4 +73,58 @@ final class StoryContentNormalizer
             'mediaFraming' => $framing === [] ? [] : [$id => $framing],
         ];
     }
+
+    /**
+     * Normalize any supported legacy Story content into the schema-v4 runtime contract.
+     * This method is pure and never persists the normalized value.
+     *
+     * @param  array<string, mixed>  $content
+     * @return array<string, mixed>
+     */
+    public function normalizeToV4(string $sectionId, array $content): array
+    {
+        $story = $this->normalize($sectionId, $content);
+        $story['elements'] = array_map(
+            fn (array $element): array => $this->normalizeNarrativeBlockToV4($element),
+            $story['elements'],
+        );
+
+        return $story;
+    }
+
+    /** @param array<string, mixed> $element */
+    public function normalizeNarrativeBlockToV4(array $element): array
+    {
+        if (isset($element['slots']) && is_array($element['slots'])) {
+            return $element;
+        }
+
+        $heading = array_key_exists('heading', $element) ? (string) $element['heading'] : '';
+        $media = is_array($element['media'] ?? null) ? $element['media'] : null;
+
+        return [
+            'id' => (string) ($element['id'] ?? ''),
+            'type' => 'narrativeBlock',
+            'isHidden' => false,
+            'slots' => [
+                'eyebrow' => $this->textSlot('', true),
+                'heading' => $this->textSlot($heading, false),
+                'divider' => ['isHidden' => true],
+                'body' => $this->textSlot((string) ($element['body'] ?? ''), false),
+                'quote' => ['isHidden' => true, 'text' => ''],
+                'media' => [
+                    'isHidden' => $media === null,
+                    'content' => $media,
+                ],
+                'caption' => $this->textSlot('', true),
+                'cta' => ['isHidden' => true, 'label' => '', 'action' => null],
+            ],
+        ];
+    }
+
+    /** @return array{isHidden: bool, text: string} */
+    private function textSlot(string $text, bool $isHidden): array
+    {
+        return ['isHidden' => $isHidden, 'text' => $text];
+    }
 }

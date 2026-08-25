@@ -144,7 +144,10 @@ class WebsiteCapabilityRegistryTest extends TestCase
 
             $serialized = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
             $this->assertSame($capabilities->elements, $serialized['elements']);
-            $this->assertSame(WebsiteSchema::CURRENT_SCHEMA_VERSION, 3);
+            $this->assertSame(4, WebsiteSchema::CURRENT_SCHEMA_VERSION);
+            $narrative = collect($serialized['elementCapabilities'])->firstWhere('type', 'narrativeBlock');
+            $this->assertSame(1, $narrative['narrativeBlockV1']['version']);
+            $this->assertSame(['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'], $narrative['narrativeBlockV1']['slots']);
             $this->assertStringNotContainsString('#', json_encode($serialized['elementCapabilities'], JSON_THROW_ON_ERROR));
         }
     }

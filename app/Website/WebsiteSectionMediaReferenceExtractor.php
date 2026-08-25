@@ -27,7 +27,17 @@ final class WebsiteSectionMediaReferenceExtractor
         $references = [];
         if (array_key_exists('elements', $content)) {
             foreach (is_array($content['elements']) ? $content['elements'] : [] as $element) {
-                if (is_array($element) && ($element['type'] ?? null) === 'narrativeBlock' && ($element['media']['type'] ?? null) === 'image') {
+                if (! is_array($element) || ($element['type'] ?? null) !== 'narrativeBlock') {
+                    continue;
+                }
+                $canonicalMedia = $element['slots']['media']['content'] ?? null;
+                if (is_array($canonicalMedia) && in_array($canonicalMedia['type'] ?? null, ['image', 'video'], true)) {
+                    $this->appendStory($references, $canonicalMedia['mediaId'] ?? null, $element['id'] ?? null, $element['slots']['heading']['text'] ?? null);
+                } elseif (is_array($canonicalMedia) && ($canonicalMedia['type'] ?? null) === 'mediaCollection') {
+                    foreach ($canonicalMedia['items'] ?? [] as $item) {
+                        $this->appendStory($references, $item['mediaId'] ?? null, $element['id'] ?? null, $element['slots']['heading']['text'] ?? null);
+                    }
+                } elseif (($element['media']['type'] ?? null) === 'image') {
                     $this->appendStory($references, $element['media']['mediaId'] ?? null, $element['id'] ?? null, $element['heading'] ?? null);
                 }
             }

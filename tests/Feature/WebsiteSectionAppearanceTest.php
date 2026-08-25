@@ -448,7 +448,7 @@ class WebsiteSectionAppearanceTest extends TestCase
             ->assertJsonPath('data.sections.2.appearance.mediaContentGap', 'spacious')
             ->assertJsonPath('data.sections.2.content.heading', 'Our beginning')
             ->assertJsonPath('data.sections.2.content.elements.0.id', 'story-legacy-'.$story->id)
-            ->assertJsonPath('data.sections.2.content.elements.0.body', 'Semantic content remains unchanged.');
+            ->assertJsonPath('data.sections.2.content.elements.0.slots.body.text', 'Semantic content remains unchanged.');
 
         $this->assertSame($legacy, $story->refresh()->appearance);
         $this->assertSame($content, $story->content);

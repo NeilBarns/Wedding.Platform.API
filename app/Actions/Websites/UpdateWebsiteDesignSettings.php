@@ -5,7 +5,6 @@ namespace App\Actions\Websites;
 use App\Models\Website;
 use App\Website\Capabilities\GlobalDesignControlId;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
-use App\Website\WebsiteSchema;
 use Illuminate\Validation\ValidationException;
 
 final class UpdateWebsiteDesignSettings
@@ -58,7 +57,9 @@ final class UpdateWebsiteDesignSettings
 
         $settings['projectDefaults'] = (object) $settings['projectDefaults'];
         $website->design_settings = $settings;
-        $website->schema_version = WebsiteSchema::CURRENT_SCHEMA_VERSION;
+        if ($website->schema_version < 3) {
+            $website->schema_version = 3;
+        }
         $website->save();
 
         return $website;

@@ -19,10 +19,10 @@ final class UpdateWebsiteSectionContent
     ) {}
 
     /** @param array<string, mixed> $content */
-    public function handle(WebsiteSection $section, array $content): WebsiteSection
+    public function handle(WebsiteSection $section, array $content, ?int $requestedSchemaVersion = null): WebsiteSection
     {
         if ($section->type === 'story') {
-            return $this->upgradeSchema->handle($section, $content);
+            return $this->upgradeSchema->handle($section, $content, $requestedSchemaVersion);
         }
 
         $validated = $this->validator->validate($section->type, $content);

@@ -114,6 +114,7 @@ class WebsiteSectionMediaTest extends TestCase
     {
         [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
         $website = $this->initializeWebsite($event);
+        $website->update(['schema_version' => 3]);
         $story = $website->sections()->where('type', 'story')->firstOrFail();
         $asset = $this->assetFor($event);
         $url = "/api/events/{$event->id}/website/sections/{$story->id}";
@@ -268,6 +269,7 @@ class WebsiteSectionMediaTest extends TestCase
     {
         [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
         $story = $this->initializeWebsite($event)->sections()->where('type', 'story')->sole();
+        $story->website()->update(['schema_version' => 3]);
         $first = $this->assetFor($event);
         $second = $this->assetFor($event);
         $foreign = $this->assetFor(Event::factory()->create());

@@ -124,6 +124,7 @@ class WebsiteDraftApiTest extends TestCase
     public function test_canonical_section_content_contracts_accept_valid_draft_payloads(): void
     {
         [$event, $owner] = $this->createEvent();
+        $event->website->update(['schema_version' => 3]);
         $payloads = [
             'hero' => ['headline' => '', 'subheadline' => 'Together'],
             'date' => ['heading' => '', 'description' => 'Save the date'],
@@ -157,6 +158,7 @@ class WebsiteDraftApiTest extends TestCase
     public function test_story_elements_round_trip_in_order_and_reject_invalid_structures(): void
     {
         [$event, $owner] = $this->createEvent();
+        $event->website->update(['schema_version' => 3]);
         $story = $event->website->sections()->where('type', 'story')->sole();
         $url = "/api/events/{$event->id}/website/sections/{$story->id}";
         $blocks = [
@@ -182,6 +184,7 @@ class WebsiteDraftApiTest extends TestCase
     public function test_historical_story_content_is_read_as_one_stable_block_without_mutating_storage(): void
     {
         [$event, $owner] = $this->createEvent();
+        $event->website->update(['schema_version' => 3]);
         $story = $event->website->sections()->where('type', 'story')->sole();
         $legacy = ['heading' => 'Our Story', 'body' => 'The original narrative'];
         $story->update(['content' => $legacy]);
