@@ -170,11 +170,7 @@ class WebsiteDraftController extends Controller
         string $section,
     ): WebsiteDraftResource {
         $sectionModel = $this->section($website, $section);
-        $updateContent->handle(
-            $sectionModel,
-            $request->validated('content'),
-            $request->validated('schemaVersion'),
-        );
+        $updateContent->handle($sectionModel, $request->validated('content'));
 
         return $this->draft($website);
     }

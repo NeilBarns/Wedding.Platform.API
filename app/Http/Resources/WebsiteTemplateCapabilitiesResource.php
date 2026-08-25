@@ -78,13 +78,9 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                         'scope' => $control->scope->value,
                     ], $element->appearance->colors),
                 ],
-                'narrativeBlockV1' => $element->type->value === 'narrativeBlock' ? [
-                    'version' => 1,
-                    'slots' => ['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'],
-                    'textAppearanceControls' => ['fontFamilyId', 'fontSize', 'lineSpacing', 'letterSpacing', 'colorId'],
-                    'fontSizeOptions' => ['xs', 's', 'm', 'l', 'xl'],
-                    'responsiveFontSizeViewports' => ['desktop', 'tablet', 'mobile'],
-                ] : null,
+                'narrativeBlock' => $element->type->value === 'narrativeBlock'
+                    ? $this->narrativeBlock()
+                    : null,
             ], $this->elementCapabilities),
             'sections' => array_map(fn (SectionCapability $section): array => [
                 'id' => $section->id,
@@ -107,6 +103,60 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'compositionGroups' => $section->compositionGroups,
                 ],
             ], $this->sections),
+        ];
+    }
+
+    private function narrativeBlock(): array
+    {
+        $placements = $this->templateKey === 'classic-filipiniana-v1'
+            ? [
+                'editorial' => ['leading', 'trailing', 'above', 'below', 'splitStart', 'splitEnd', 'inset'],
+                'mediaFirst' => ['leading', 'trailing', 'above', 'splitStart', 'splitEnd'],
+                'quoteLed' => ['leading', 'trailing', 'above', 'inset'],
+                'textOnly' => [],
+            ]
+            : [
+                'editorial' => ['leading', 'trailing', 'above', 'below', 'splitStart', 'splitEnd', 'inset'],
+                'mediaFirst' => ['leading', 'trailing', 'above', 'below', 'splitStart', 'splitEnd'],
+                'quoteLed' => ['leading', 'trailing', 'above', 'inset'],
+                'textOnly' => [],
+            ];
+        $treatments = [];
+        foreach ($placements as $presentation => $options) {
+            $treatments[$presentation] = [];
+            foreach ($options as $placement) {
+                $treatments[$presentation][$placement] = match (true) {
+                    $placement === 'inset' => ['standard'],
+                    $this->templateKey === 'classic-filipiniana-v1' && str_starts_with($placement, 'split') => ['standard', 'wide'],
+                    default => ['standard', 'wide', 'cinematic', 'fullBleed'],
+                };
+            }
+            if ($treatments[$presentation] === []) {
+                $treatments[$presentation] = (object) [];
+            }
+        }
+
+        return [
+            'slots' => ['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'],
+            'appearance' => [
+                'controls' => ['fontFamilyId', 'fontSize', 'lineSpacing', 'letterSpacing', 'colorId'],
+                'fontSizeOptions' => ['xs', 's', 'm', 'l', 'xl'],
+                'responsiveFontSizeViewports' => ['desktop', 'tablet', 'mobile'],
+            ],
+            'composition' => [
+                'presentations' => ['editorial', 'mediaFirst', 'quoteLed', 'textOnly'],
+                'mediaPlacementsByPresentation' => $placements,
+                'mediaTreatmentsByPresentationAndPlacement' => $treatments,
+                'textAlignments' => ['start', 'center', 'end'],
+                'surfaces' => ['none', 'soft', 'feature'],
+                'defaults' => [
+                    'presentation' => 'editorial',
+                    'mediaPlacementByPresentation' => ['editorial' => 'above', 'mediaFirst' => 'above', 'quoteLed' => 'inset'],
+                    'mediaTreatment' => 'standard',
+                    'textAlignmentByPresentation' => ['editorial' => 'start', 'mediaFirst' => 'start', 'quoteLed' => 'start', 'textOnly' => 'start'],
+                    'surface' => 'none',
+                ],
+            ],
         ];
     }
 

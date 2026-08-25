@@ -5,7 +5,7 @@ namespace App\Website\Elements;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
-final class NarrativeBlockV4Validator
+final class NarrativeBlockValidator
 {
     /** @param array<string, mixed> $element */
     public function validate(array $element): array
@@ -22,10 +22,16 @@ final class NarrativeBlockV4Validator
         }
 
         $rules = [
-            'element' => ['required', 'array:id,type,isHidden,slots'],
+            'element' => ['required', 'array:id,type,isHidden,slots,composition'],
             'element.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'],
             'element.type' => ['required', 'in:narrativeBlock'],
             'element.isHidden' => ['required', 'boolean'],
+            'element.composition' => ['required', 'array:presentation,mediaPlacement,mediaTreatment,textAlignment,surface'],
+            'element.composition.presentation' => ['required', 'in:editorial,mediaFirst,quoteLed,textOnly'],
+            'element.composition.mediaPlacement' => ['sometimes', 'in:leading,trailing,above,below,splitStart,splitEnd,inset'],
+            'element.composition.mediaTreatment' => ['sometimes', 'in:standard,wide,cinematic,fullBleed'],
+            'element.composition.textAlignment' => ['sometimes', 'in:start,center,end'],
+            'element.composition.surface' => ['sometimes', 'in:none,soft,feature'],
             'element.slots' => ['required', 'array:eyebrow,heading,divider,body,quote,media,caption,cta', 'required_array_keys:eyebrow,heading,divider,body,quote,media,caption,cta'],
             'element.slots.divider' => ['required', 'array:isHidden'],
             'element.slots.divider.isHidden' => ['required', 'boolean'],

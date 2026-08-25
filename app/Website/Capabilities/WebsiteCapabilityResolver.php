@@ -41,6 +41,7 @@ final class WebsiteCapabilityResolver
             ->unique()->values()->all();
 
         $capabilities = new TemplateCapabilities(
+            templateKey: $definition->key,
             globalDesign: $this->globalDesignFromDefinition($definition),
             designLibrary: $definition->designLibrary,
             projectDefaults: $this->projectDefaultsFromDefinition($definition),

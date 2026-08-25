@@ -7,10 +7,9 @@ use App\Models\MediaAsset;
 use App\Models\Website;
 use App\Models\WebsiteSection;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
-use App\Website\Elements\NarrativeBlockV4Validator;
+use App\Website\Elements\NarrativeBlockValidator;
 use App\Website\StoryContentNormalizer;
 use App\Website\WebsiteSchema;
-use App\Website\WebsiteSectionContentValidator;
 use App\Website\WebsiteSectionMediaReferences;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Support\Facades\DB;
@@ -21,17 +20,16 @@ final class UpgradeWebsiteProjectSchema
 {
     public function __construct(
         private readonly StoryContentNormalizer $normalizer,
-        private readonly WebsiteSectionContentValidator $validator,
         private readonly WebsiteTemplateRegistry $templates,
         private readonly WebsiteCapabilityResolver $capabilities,
         private readonly WebsiteSectionMediaReferences $mediaReferences,
-        private readonly NarrativeBlockV4Validator $narrativeV4,
+        private readonly NarrativeBlockValidator $narrative,
     ) {}
 
     /** @param array<string, mixed> $content */
-    public function handle(WebsiteSection $section, array $content, ?int $requestedSchemaVersion = null): WebsiteSection
+    public function handle(WebsiteSection $section, array $content): WebsiteSection
     {
-        return DB::transaction(function () use ($section, $content, $requestedSchemaVersion): WebsiteSection {
+        return DB::transaction(function () use ($section, $content): WebsiteSection {
             $website = Website::query()->lockForUpdate()->findOrFail($section->website_id);
             if ($website->schema_version < WebsiteSchema::LEGACY_SCHEMA_VERSION || $website->schema_version > WebsiteSchema::CURRENT_SCHEMA_VERSION) {
                 throw new UnsupportedWebsiteSchemaVersion($website->schema_version, WebsiteSchema::CURRENT_SCHEMA_VERSION);
@@ -43,54 +41,29 @@ final class UpgradeWebsiteProjectSchema
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($requestedSchemaVersion !== null && $requestedSchemaVersion !== $website->schema_version && $requestedSchemaVersion !== WebsiteSchema::CURRENT_SCHEMA_VERSION) {
-                throw ValidationException::withMessages(['schemaVersion' => 'The requested schema version does not match this Website.']);
-            }
-
-            $promoting = $requestedSchemaVersion === WebsiteSchema::CURRENT_SCHEMA_VERSION
-                && $website->schema_version < WebsiteSchema::CURRENT_SCHEMA_VERSION;
-            $isV4 = $website->schema_version === WebsiteSchema::CURRENT_SCHEMA_VERSION || $promoting;
-            $current = $isV4
-                ? $this->validateV4Story($this->normalizer->normalizeToV4($lockedSection->id, $lockedSection->content))
-                : $this->validator->validate('story', $this->normalizer->normalize($lockedSection->id, $lockedSection->content));
-            $validated = $isV4
-                ? $this->validateV4Story($content)
-                : $this->validator->validate('story', $content);
+            $current = $this->validateCurrentStory($this->normalizer->normalizeToCurrent($lockedSection->id, $lockedSection->content));
+            $validated = $this->validateCurrentStory($content);
             $this->validateMedia($website, $current, $validated);
 
-            if ($promoting) {
-                foreach (WebsiteSection::query()->where('website_id', $website->id)->where('type', 'story')->lockForUpdate()->get() as $story) {
-                    $canonical = $story->is($lockedSection)
-                        ? $validated
-                        : $this->validateV4Story($this->normalizer->normalizeToV4($story->id, $story->content));
-                    $story->content = $this->storageContent($canonical);
-                    $story->save();
-                }
-
-                $website->design_settings = $this->capabilities->designSettingsForStorage($website->template_key, $website->design_settings)
-                    ?? $website->design_settings;
-                $website->schema_version = WebsiteSchema::CURRENT_SCHEMA_VERSION;
-                $website->save();
-
-                return $lockedSection->fresh();
+            foreach (WebsiteSection::query()->where('website_id', $website->id)->where('type', 'story')->lockForUpdate()->get() as $story) {
+                $canonical = $story->is($lockedSection)
+                    ? $validated
+                    : $this->validateCurrentStory($this->normalizer->normalizeToCurrent($story->id, $story->content));
+                $story->content = $this->storageContent($canonical);
+                $story->save();
             }
 
-            $lockedSection->content = $this->storageContent($validated);
-            $lockedSection->save();
+            $website->design_settings = $this->capabilities->designSettingsForStorage($website->template_key, $website->design_settings)
+                ?? $website->design_settings;
+            $website->schema_version = WebsiteSchema::CURRENT_SCHEMA_VERSION;
+            $website->save();
 
-            if ($website->schema_version < 3) {
-                $website->design_settings = $this->capabilities->designSettingsForStorage($website->template_key, $website->design_settings)
-                    ?? $website->design_settings;
-                $website->schema_version = 3;
-                $website->save();
-            }
-
-            return $lockedSection;
+            return $lockedSection->fresh();
         });
     }
 
     /** @param array<string, mixed> $content */
-    private function validateV4Story(array $content): array
+    private function validateCurrentStory(array $content): array
     {
         if (array_key_exists('heading', $content) && $content['heading'] === null) {
             $content['heading'] = '';
@@ -102,11 +75,27 @@ final class UpgradeWebsiteProjectSchema
             'content.elements' => ['present', 'array', 'list', 'max:20'],
             'content.elements.*' => ['required', 'array'],
             'content.mediaFraming' => ['present', 'array'],
+            'content.mediaFraming.*' => ['present', 'array:focalPoint,zoom'],
+            'content.mediaFraming.*.focalPoint' => ['sometimes', 'array:x,y', 'required_array_keys:x,y'],
+            'content.mediaFraming.*.focalPoint.x' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
+            'content.mediaFraming.*.focalPoint.y' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
+            'content.mediaFraming.*.zoom' => ['sometimes', 'numeric', 'between:1,3'],
         ])->validate()['content'];
-        $validated['elements'] = array_map(fn (array $element): array => $this->narrativeV4->validate($element), $validated['elements']);
+        $validated['elements'] = array_map($this->narrative->validate(...), $validated['elements']);
         $ids = array_column($validated['elements'], 'id');
         if (count($ids) !== count(array_unique($ids))) {
             throw ValidationException::withMessages(['content.elements' => 'Narrative Block IDs must be unique.']);
+        }
+        $imageElementIds = collect($validated['elements'])
+            ->filter(fn (array $element): bool => ($element['slots']['media']['content']['type'] ?? null) === 'image')
+            ->pluck('id')
+            ->flip();
+        foreach ($validated['mediaFraming'] as $elementId => $_framing) {
+            if (! $imageElementIds->has((string) $elementId)) {
+                throw ValidationException::withMessages([
+                    "content.mediaFraming.{$elementId}" => 'Framing must reference a Narrative Block with image media.',
+                ]);
+            }
         }
 
         return $validated;

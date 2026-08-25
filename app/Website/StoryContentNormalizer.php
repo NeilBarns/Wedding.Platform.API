@@ -75,25 +75,38 @@ final class StoryContentNormalizer
     }
 
     /**
-     * Normalize any supported legacy Story content into the schema-v4 runtime contract.
+     * Normalize any supported legacy Story shape into the slot-based intermediate contract.
      * This method is pure and never persists the normalized value.
      *
      * @param  array<string, mixed>  $content
      * @return array<string, mixed>
      */
-    public function normalizeToV4(string $sectionId, array $content): array
+    private function normalizeLegacyShape(string $sectionId, array $content): array
     {
         $story = $this->normalize($sectionId, $content);
         $story['elements'] = array_map(
-            fn (array $element): array => $this->normalizeNarrativeBlockToV4($element),
+            fn (array $element): array => $this->normalizeLegacyNarrativeBlock($element),
             $story['elements'],
         );
 
         return $story;
     }
 
+    /** @param array<string, mixed> $content */
+    public function normalizeToCurrent(string $sectionId, array $content): array
+    {
+        $story = $this->normalizeLegacyShape($sectionId, $content);
+        $story['elements'] = array_map(function (array $element): array {
+            $element['composition'] ??= ['presentation' => 'editorial'];
+
+            return $element;
+        }, $story['elements']);
+
+        return $story;
+    }
+
     /** @param array<string, mixed> $element */
-    public function normalizeNarrativeBlockToV4(array $element): array
+    public function normalizeLegacyNarrativeBlock(array $element): array
     {
         if (isset($element['slots']) && is_array($element['slots'])) {
             return $element;

@@ -10,6 +10,7 @@ final readonly class TemplateCapabilities
      * @param  list<SectionCapability>  $sections
      */
     public function __construct(
+        public string $templateKey,
         public GlobalDesignCapability $globalDesign,
         public TemplateDesignLibrary $designLibrary,
         public ProjectDefaultsCapability $projectDefaults,

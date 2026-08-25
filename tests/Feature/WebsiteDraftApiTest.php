@@ -8,6 +8,7 @@ use App\Models\Event;
 use App\Models\EventMembership;
 use App\Models\User;
 use App\Models\WebsiteSection;
+use App\Website\StoryContentNormalizer;
 use App\Website\WebsiteSchema;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -128,9 +129,9 @@ class WebsiteDraftApiTest extends TestCase
         $payloads = [
             'hero' => ['headline' => '', 'subheadline' => 'Together'],
             'date' => ['heading' => '', 'description' => 'Save the date'],
-            'story' => ['heading' => 'Our Story', 'intro' => null, 'elements' => [[
+            'story' => app(StoryContentNormalizer::class)->normalizeToCurrent('story', ['heading' => 'Our Story', 'intro' => null, 'elements' => [[
                 'id' => 'story-one', 'type' => 'narrativeBlock', 'body' => 'Plain text',
-            ]], 'mediaFraming' => []],
+            ]], 'mediaFraming' => []]),
             'schedule' => ['heading' => '', 'items' => [[
                 'time' => '3:00 PM', 'title' => 'Ceremony', 'description' => '',
             ]]],
@@ -165,7 +166,8 @@ class WebsiteDraftApiTest extends TestCase
             ['id' => 'first', 'type' => 'narrativeBlock', 'body' => 'First chapter'],
             ['id' => 'second', 'type' => 'narrativeBlock', 'heading' => 'The proposal', 'body' => 'Second chapter'],
         ];
-        $content = ['heading' => 'Our Story', 'intro' => 'How it began', 'elements' => $blocks, 'mediaFraming' => []];
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, ['heading' => 'Our Story', 'intro' => 'How it began', 'elements' => $blocks, 'mediaFraming' => []]);
+        $blocks = $content['elements'];
 
         $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
             ->assertJsonPath('data.sections.2.content.elements.0.id', 'first')
@@ -195,7 +197,7 @@ class WebsiteDraftApiTest extends TestCase
         $secondStory = collect($second->json('data.sections'))->firstWhere('id', $story->id);
 
         $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['elements'][0]['id']);
-        $this->assertSame('The original narrative', $firstStory['content']['elements'][0]['body']);
+        $this->assertSame('The original narrative', $firstStory['content']['elements'][0]['slots']['body']['text']);
         $this->assertSame($firstStory['content'], $secondStory['content']);
         $this->assertSame($legacy, $story->refresh()->content);
     }

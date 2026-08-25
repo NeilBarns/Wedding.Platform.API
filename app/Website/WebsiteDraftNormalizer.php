@@ -42,22 +42,16 @@ final class WebsiteDraftNormalizer
             is_array($storedDesignSettings) ? $storedDesignSettings : [],
         );
 
-        $wireVersion = $sourceVersion >= WebsiteSchema::CURRENT_SCHEMA_VERSION
-            ? WebsiteSchema::CURRENT_SCHEMA_VERSION
-            : max(2, $sourceVersion);
-
         return [
-            'schemaVersion' => $wireVersion,
+            'schemaVersion' => WebsiteSchema::CURRENT_SCHEMA_VERSION,
             'id' => $website->id,
             'eventId' => $website->event_id,
             'name' => $website->name,
             'templateKey' => $website->template_key,
-            'designSettings' => $wireVersion === 2
-                ? array_intersect_key($designSettings ?? (is_array($storedDesignSettings) ? $storedDesignSettings : []), array_flip(['colorTheme', 'fontSet', 'artStyle']))
-                : ($designSettings === null ? $storedDesignSettings : [
-                    ...$designSettings,
-                    'projectDefaults' => (object) $designSettings['projectDefaults'],
-                ]),
+            'designSettings' => $designSettings === null ? $storedDesignSettings : [
+                ...$designSettings,
+                'projectDefaults' => (object) $designSettings['projectDefaults'],
+            ],
             'projectDesignDefaults' => $resolved === null ? null : [
                 'headingFontId' => $resolved->headingFontId,
                 'bodyFontId' => $resolved->bodyFontId,
@@ -67,8 +61,8 @@ final class WebsiteDraftNormalizer
             ],
             'sections' => $website->sections->map(fn (WebsiteSection $section): array => [
                 'section' => $section,
-                'content' => $section->type === 'story' && $wireVersion === WebsiteSchema::CURRENT_SCHEMA_VERSION
-                    ? $this->storyContent->normalizeToV4($section->id, $section->content)
+                'content' => $section->type === 'story'
+                    ? $this->storyContent->normalizeToCurrent($section->id, $section->content)
                     : $this->sectionContent->normalize($section->id, $section->type, $section->content),
             ])->values()->all(),
         ];

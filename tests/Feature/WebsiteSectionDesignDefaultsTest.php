@@ -32,7 +32,7 @@ class WebsiteSectionDesignDefaultsTest extends TestCase
 
         $response = $this->actingAs($owner)->getJson($this->base($event, $project))->assertOk();
         $index = $this->sectionIndex($response->json('data.sections'), 'story');
-        $response->assertJsonPath('data.schemaVersion', 4)
+        $response->assertJsonPath('data.schemaVersion', 5)
             ->assertJsonPath("data.sections.{$index}.designDefaults", [])
             ->assertJsonPath("data.sections.{$index}.resolvedDesignContext.headingFontId", 'editorial-serif')
             ->assertJsonPath("data.sections.{$index}.resolvedDesignContext.bodyFontId", 'modern-sans')
