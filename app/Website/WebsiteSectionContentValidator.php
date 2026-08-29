@@ -44,9 +44,24 @@ final class WebsiteSectionContentValidator
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
             'date', 'dressCode' => $this->stringContentRules(['heading' => 255, 'description' => 5000]),
             'story' => [
-                'content' => ['required', 'array:heading,intro,elements,mediaFraming'],
+                'content' => ['required', 'array:eyebrow,eyebrowIsHidden,heading,intro,headingIsHidden,introIsHidden,singletonAppearance,elements,mediaFraming,structureOrder'],
+                'content.eyebrow' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'content.eyebrowIsHidden' => ['sometimes', 'boolean'],
                 'content.heading' => ['present', 'nullable', 'string', 'max:255'],
                 'content.intro' => ['present', 'nullable', 'string', 'max:5000'],
+                'content.headingIsHidden' => ['sometimes', 'boolean'],
+                'content.introIsHidden' => ['sometimes', 'boolean'],
+                'content.singletonAppearance' => ['sometimes', 'array:eyebrow,heading,intro'],
+                'content.singletonAppearance.*' => ['sometimes', 'array:fontFamilyId,fontSize,lineSpacing,letterSpacing,colorId,alignment'],
+                'content.singletonAppearance.*.fontFamilyId' => ['sometimes', 'string', 'max:255', 'not_regex:/^\s*$/'],
+                'content.singletonAppearance.*.fontSize' => ['sometimes', 'array:desktop,tablet,mobile'],
+                'content.singletonAppearance.*.fontSize.*' => ['sometimes', 'in:xs,s,m,l,xl'],
+                'content.singletonAppearance.*.lineSpacing' => ['sometimes', 'in:tight,normal,relaxed'],
+                'content.singletonAppearance.*.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
+                'content.singletonAppearance.*.colorId' => ['sometimes', 'string', 'max:255', 'not_regex:/^\s*$/'],
+                'content.singletonAppearance.eyebrow.alignment' => ['sometimes', 'in:start,center,end'],
+                'content.singletonAppearance.heading.alignment' => ['sometimes', 'in:start,center,end'],
+                'content.singletonAppearance.intro.alignment' => ['sometimes', 'in:start,center,end'],
                 'content.elements' => ['present', 'array', 'list', 'max:20'],
                 'content.elements.*' => ['required', 'array'],
                 'content.mediaFraming' => ['present', 'array'],
@@ -55,6 +70,8 @@ final class WebsiteSectionContentValidator
                 'content.mediaFraming.*.focalPoint.x' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
                 'content.mediaFraming.*.focalPoint.y' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
                 'content.mediaFraming.*.zoom' => ['sometimes', 'numeric', 'between:1,3'],
+                'content.structureOrder' => ['sometimes', 'array', 'list', 'max:23'],
+                'content.structureOrder.*' => ['required', 'string'],
             ],
             'venue' => $this->singleMediaRules($this->stringContentRules([
                 'heading' => 255,
@@ -151,6 +168,11 @@ final class WebsiteSectionContentValidator
                     "content.mediaFraming.{$elementId}" => 'Framing must reference a Story element with image media.',
                 ]);
             }
+        }
+        if (array_key_exists('structureOrder', $validated) && ! StoryStructureOrder::isCanonical($validated['structureOrder'], array_column($validated['elements'], 'id'))) {
+            throw ValidationException::withMessages([
+                'content.structureOrder' => 'Story structure order must be a complete canonical permutation.',
+            ]);
         }
 
         return $validated;

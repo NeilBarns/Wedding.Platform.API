@@ -44,6 +44,41 @@ class StoryContentV2Test extends TestCase
         $this->assertSame($content, $normalizer->normalize('ignored', $normalizer->normalize('ignored', $content)));
     }
 
+    public function test_story_header_visibility_is_sparse_and_normalizes_without_mutating_legacy_intent(): void
+    {
+        $normalizer = app(StoryContentNormalizer::class);
+        $legacy = ['heading' => 'Story', 'intro' => 'Intro', 'elements' => [], 'mediaFraming' => []];
+
+        $this->assertSame($legacy, $normalizer->normalize('story', $legacy));
+
+        $hidden = [...$legacy, 'eyebrow' => 'Our story', 'eyebrowIsHidden' => true, 'headingIsHidden' => true, 'introIsHidden' => false];
+        $this->assertSame($hidden, $normalizer->normalize('story', $hidden));
+        $this->assertSame($hidden, app(WebsiteSectionContentValidator::class)->validate('story', $hidden));
+
+        $emptyEyebrow = [...$legacy, 'eyebrow' => null, 'eyebrowIsHidden' => false];
+        $this->assertSame($emptyEyebrow, $normalizer->normalize('story', $emptyEyebrow));
+    }
+
+    public function test_story_structure_order_is_sparse_and_accepts_a_complete_permutation(): void
+    {
+        $normalizer = app(StoryContentNormalizer::class);
+        $legacy = ['heading' => 'Story', 'intro' => null, 'elements' => [], 'mediaFraming' => []];
+        $this->assertSame($legacy, $normalizer->normalize('story', $legacy));
+        $this->assertArrayNotHasKey('structureOrder', $normalizer->normalize('story', $legacy));
+
+        $content = [...$legacy, 'elements' => [
+            ['id' => 'first', 'type' => 'narrativeBlock', 'body' => 'First'],
+            ['id' => 'second', 'type' => 'narrativeBlock', 'body' => 'Second'],
+        ], 'structureOrder' => [
+            'story:heading', 'narrative:first', 'story:eyebrow', 'story:intro', 'narrative:second',
+        ]];
+        $this->assertSame($content, $normalizer->normalize('story', $content));
+        $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate('story', $content));
+
+        $malformed = [...$legacy, 'structureOrder' => ['story:heading']];
+        $this->assertSame($legacy, $normalizer->normalize('story', $malformed));
+    }
+
     public function test_media_reference_scanning_covers_all_three_raw_generations(): void
     {
         $references = app(WebsiteSectionMediaReferences::class);
@@ -63,6 +98,42 @@ class StoryContentV2Test extends TestCase
         ], 'mediaFraming' => []];
 
         $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate('story', $content));
+    }
+
+    public function test_story_singleton_appearance_is_sparse_preserved_and_strictly_tokenized(): void
+    {
+        $content = [
+            'heading' => 'Story',
+            'intro' => 'Intro',
+            'elements' => [],
+            'mediaFraming' => [],
+            'singletonAppearance' => [
+                'eyebrow' => ['fontFamilyId' => 'inter', 'fontSize' => ['mobile' => 's'], 'colorId' => 'terracotta-accent', 'alignment' => 'center'],
+                'heading' => ['fontFamilyId' => 'editorial-serif', 'lineSpacing' => 'tight', 'letterSpacing' => 'wide', 'alignment' => 'center'],
+                'intro' => ['alignment' => 'end'],
+            ],
+        ];
+
+        $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate('story', $content));
+        $this->assertSame($content, app(StoryContentNormalizer::class)->normalize('story', $content));
+
+        foreach ([
+            ['eyebrow', 'alignment', 'left'],
+            ['heading', 'fontSize', ['desktop' => 'xxl']],
+            ['heading', 'lineSpacing', 'loose'],
+            ['intro', 'letterSpacing', 'extra-wide'],
+            ['intro', 'alignment', 'left'],
+        ] as [$field, $key, $value]) {
+            try {
+                app(WebsiteSectionContentValidator::class)->validate('story', [
+                    ...$content,
+                    'singletonAppearance' => [$field => [$key => $value]],
+                ]);
+                $this->fail("Expected {$field}.{$key} to fail validation.");
+            } catch (ValidationException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     #[DataProvider('invalidStories')]
@@ -89,6 +160,15 @@ class StoryContentV2Test extends TestCase
             'orphan framing' => [[...$base, 'mediaFraming' => ['missing' => ['zoom' => 1.5]]]],
             'framing without media' => [[...$base, 'elements' => [['id' => 'one', 'type' => 'narrativeBlock', 'body' => '']], 'mediaFraming' => ['one' => ['zoom' => 1.5]]]],
             'invalid framing range' => [[...$base, 'elements' => [['id' => 'one', 'type' => 'narrativeBlock', 'body' => '', 'media' => ['type' => 'image', 'mediaId' => '01M0Q08NQ9XJB9A7B5SGC45YD9']]], 'mediaFraming' => ['one' => ['zoom' => 4]]]],
+            'duplicate structure ref' => [[...$base, 'structureOrder' => ['story:eyebrow', 'story:heading', 'story:heading']]],
+            'missing singleton structure ref' => [[...$base, 'structureOrder' => ['story:eyebrow', 'story:heading']]],
+            'unknown structure ref' => [[...$base, 'structureOrder' => ['story:eyebrow', 'story:heading', 'story:unknown']]],
+            'missing block structure ref' => [[...$base, 'elements' => [['id' => 'one', 'type' => 'narrativeBlock', 'body' => '']], 'structureOrder' => ['story:eyebrow', 'story:heading', 'story:intro']]],
+            'extra block structure ref' => [[...$base, 'structureOrder' => ['story:eyebrow', 'story:heading', 'story:intro', 'narrative:missing']]],
+            'narrative projection mismatch' => [[...$base, 'elements' => [
+                ['id' => 'one', 'type' => 'narrativeBlock', 'body' => ''],
+                ['id' => 'two', 'type' => 'narrativeBlock', 'body' => ''],
+            ], 'structureOrder' => ['story:eyebrow', 'story:heading', 'story:intro', 'narrative:two', 'narrative:one']]],
         ];
     }
 }

@@ -8,7 +8,7 @@ use Illuminate\Validation\ValidationException;
 final class NarrativeBlockValidator
 {
     /** @param array<string, mixed> $element */
-    public function validate(array $element): array
+    public function validate(array $element, array $allowedFontIdsByRole = []): array
     {
         // Laravel's global ConvertEmptyStringsToNull middleware runs before API
         // validation; restore explicit empty slot text because empty is semantic.
@@ -60,6 +60,12 @@ final class NarrativeBlockValidator
 
         $validated = Validator::make(['element' => $element], $rules)->validate()['element'];
         $validated['id'] = trim($validated['id']);
+        foreach (['eyebrow' => 'body', 'heading' => 'heading', 'body' => 'body', 'quote' => 'body', 'caption' => 'body', 'cta' => 'body'] as $slot => $role) {
+            $fontId = $validated['slots'][$slot]['appearance']['fontFamilyId'] ?? null;
+            if (is_string($fontId) && $allowedFontIdsByRole !== [] && ! in_array($fontId, $allowedFontIdsByRole[$role] ?? [], true)) {
+                throw ValidationException::withMessages(["element.slots.{$slot}.appearance.fontFamilyId" => 'The selected font is not supported for this role.']);
+            }
+        }
         $this->validateMedia($validated['slots']['media']['content']);
         $this->validateAction($validated['slots']['cta']['action']);
 

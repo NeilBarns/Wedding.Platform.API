@@ -32,6 +32,9 @@ class WebsiteSectionResource extends JsonResource
         if ($template?->presentationFallbackFor($this->type, $appearance['presentation'] ?? '') !== null) {
             $appearance = $template->normalizeSectionAppearance($this->type, $appearance);
         }
+        if ($this->type === 'story') {
+            $appearance = $this->storyAuthoringAppearance($appearance);
+        }
 
         $resolvedContext = null;
         if ($template !== null && $this->relationLoaded('website')) {
@@ -66,8 +69,26 @@ class WebsiteSectionResource extends JsonResource
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),
             'itemMediaCapability' => $template?->itemMediaCapabilityFor($this->type),
-            'presentationCapability' => $template?->presentationCapabilityFor($this->type),
+            'presentationCapability' => $this->type === 'story' ? null : $template?->presentationCapabilityFor($this->type),
         ];
+    }
+
+    /** @param array<string, mixed> $appearance */
+    private function storyAuthoringAppearance(array $appearance): array
+    {
+        $current = array_intersect_key($appearance, array_flip(['headingAlignment', 'bodyAlignment', 'backgroundTreatment']));
+        $current['emphasis'] = 'inherit';
+        foreach ($appearance['responsive'] ?? [] as $viewport => $override) {
+            if (! is_array($override)) {
+                continue;
+            }
+            $alignment = array_intersect_key($override, array_flip(['headingAlignment', 'bodyAlignment']));
+            if ($alignment !== []) {
+                $current['responsive'][$viewport] = $alignment;
+            }
+        }
+
+        return $current;
     }
 
     /** @return array<string, mixed> */

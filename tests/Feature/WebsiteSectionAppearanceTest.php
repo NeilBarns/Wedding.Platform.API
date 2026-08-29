@@ -161,19 +161,19 @@ class WebsiteSectionAppearanceTest extends TestCase
     public function test_semantic_media_spacing_and_content_gap_are_strict_and_presentation_scoped(): void
     {
         [$event, $owner] = $this->eventWithOwner();
-        $story = $event->website->sections()->where('type', 'story')->sole();
+        $story = $event->website->sections()->where('type', 'hero')->sole();
         $url = "/api/events/{$event->id}/website/sections/{$story->id}/appearance";
         $base = WebsiteSectionAppearance::DEFAULT;
         $spacing = ['top' => 'none', 'right' => 'small', 'bottom' => 'medium', 'left' => 'large'];
-        $appearance = [...$base, 'presentation' => 'portraitStory', 'mediaSpacing' => $spacing, 'mediaContentGap' => 'spacious'];
+        $appearance = [...$base, 'presentation' => 'classic', 'mediaSpacing' => $spacing, 'mediaContentGap' => 'spacious'];
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
-            ->assertJsonPath('data.sections.2.presentationCapability.options.1.mediaControls.mediaSpacing.default.top', 'medium')
-            ->assertJsonPath('data.sections.2.presentationCapability.options.1.mediaControls.mediaContentGaps.default', 'comfortable');
+            ->assertJsonPath('data.sections.0.presentationCapability.options.0.mediaControls.mediaSpacing.default.top', 'medium')
+            ->assertJsonPath('data.sections.0.presentationCapability.options.0.mediaControls.mediaContentGaps.default', 'comfortable');
         $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
         $this->assertSame($appearance, $story->refresh()->appearance);
 
-        $linked = [...$base, 'presentation' => 'portraitStory', 'mediaSpacing' => array_fill_keys(['top', 'right', 'bottom', 'left'], 'large'), 'mediaContentGap' => 'comfortable'];
+        $linked = [...$base, 'presentation' => 'classic', 'mediaSpacing' => array_fill_keys(['top', 'right', 'bottom', 'left'], 'large'), 'mediaContentGap' => 'comfortable'];
         $this->actingAs($owner)->putJson($url, ['appearance' => $linked])->assertOk();
 
         foreach ([
@@ -189,6 +189,29 @@ class WebsiteSectionAppearanceTest extends TestCase
         }
 
         $this->actingAs($owner)->putJson($url, ['appearance' => $base])->assertOk();
+    }
+
+    public function test_story_advertises_only_current_authoring_controls_and_preserves_legacy_storage(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $legacy = [...WebsiteSectionAppearance::DEFAULT, 'emphasis' => 'featured', 'presentation' => 'portraitStory', 'mediaPlacement' => 'left', 'mediaSize' => 'feature'];
+        $story->update(['appearance' => $legacy]);
+
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
+            ->assertJsonPath('data.sections.2.presentationCapability', null)
+            ->assertJsonPath('data.sections.2.appearance.emphasis', 'inherit')
+            ->assertJsonMissingPath('data.sections.2.appearance.presentation')
+            ->assertJsonMissingPath('data.sections.2.appearance.mediaPlacement');
+
+        $appearance = [...WebsiteSectionAppearance::DEFAULT, 'backgroundTreatment' => 'soft'];
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$story->id}/appearance", compact('appearance'))->assertOk();
+        $stored = $story->refresh()->appearance;
+        $this->assertSame('soft', $stored['backgroundTreatment']);
+        $this->assertSame('featured', $stored['emphasis']);
+        $this->assertSame('portraitStory', $stored['presentation']);
+        $this->assertSame('left', $stored['mediaPlacement']);
+        $this->assertSame('feature', $stored['mediaSize']);
     }
 
     public function test_sparse_responsive_overrides_round_trip_without_changing_desktop_or_content(): void
@@ -374,25 +397,16 @@ class WebsiteSectionAppearanceTest extends TestCase
         }
     }
 
-    public function test_classic_portrait_story_accepts_all_tablet_placements_without_broadening_mobile(): void
+    public function test_story_rejects_new_section_level_presentation_and_media_authoring(): void
     {
         [$event, $owner] = $this->eventWithOwner();
         $story = $event->website->sections()->where('type', 'story')->sole();
         $url = "/api/events/{$event->id}/website/sections/{$story->id}/appearance";
-        $base = [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'portraitStory', 'mediaPlacement' => 'left'];
-
-        foreach (['top', 'bottom', 'left', 'right'] as $placement) {
-            $appearance = [...$base, 'responsive' => ['tablet' => ['mediaPlacement' => $placement]]];
-            $response = $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
-            $placement === 'top'
-                ? $response->assertJsonMissingPath('data.sections.2.appearance.responsive')
-                : $response->assertJsonPath('data.sections.2.appearance.responsive.tablet.mediaPlacement', $placement);
-        }
-
-        foreach (['left', 'right'] as $placement) {
-            $appearance = [...$base, 'responsive' => ['mobile' => ['mediaPlacement' => $placement]]];
-            $this->actingAs($owner)->putJson($url, compact('appearance'))->assertUnprocessable();
-        }
+        $base = WebsiteSectionAppearance::DEFAULT;
+        $this->actingAs($owner)->putJson($url, ['appearance' => [...$base, 'presentation' => 'portraitStory']])->assertUnprocessable();
+        $this->actingAs($owner)->putJson($url, ['appearance' => [...$base, 'mediaPlacement' => 'left']])->assertUnprocessable();
+        $this->actingAs($owner)->putJson($url, ['appearance' => [...$base, 'responsive' => ['tablet' => ['mediaPlacement' => 'left']]]])->assertUnprocessable();
+        $this->actingAs($owner)->putJson($url, ['appearance' => [...$base, 'emphasis' => 'featured']])->assertUnprocessable();
     }
 
     public function test_classic_venue_accepts_all_tablet_placements_and_draft_exposes_the_capability(): void
@@ -440,12 +454,12 @@ class WebsiteSectionAppearanceTest extends TestCase
         $story->update(['appearance' => $legacy, 'content' => $content]);
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
-            ->assertJsonPath('data.sections.2.appearance.presentation', 'textFirst')
-            ->assertJsonPath('data.sections.2.appearance.frameStyle', 'fineLine')
-            ->assertJsonPath('data.sections.2.appearance.cornerStyle', 'rounded')
-            ->assertJsonPath('data.sections.2.appearance.shadowStyle', 'soft')
-            ->assertJsonPath('data.sections.2.appearance.mediaSpacing', $spacing)
-            ->assertJsonPath('data.sections.2.appearance.mediaContentGap', 'spacious')
+            ->assertJsonMissingPath('data.sections.2.appearance.presentation')
+            ->assertJsonMissingPath('data.sections.2.appearance.frameStyle')
+            ->assertJsonMissingPath('data.sections.2.appearance.cornerStyle')
+            ->assertJsonMissingPath('data.sections.2.appearance.shadowStyle')
+            ->assertJsonMissingPath('data.sections.2.appearance.mediaSpacing')
+            ->assertJsonMissingPath('data.sections.2.appearance.mediaContentGap')
             ->assertJsonPath('data.sections.2.content.heading', 'Our beginning')
             ->assertJsonPath('data.sections.2.content.elements.0.id', 'story-legacy-'.$story->id)
             ->assertJsonPath('data.sections.2.content.elements.0.slots.body.text', 'Semantic content remains unchanged.');

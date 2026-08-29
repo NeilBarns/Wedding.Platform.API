@@ -73,9 +73,20 @@ final class UpdateWebsiteSectionAppearance
         }
 
         foreach (['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'emphasis'] as $setting) {
+            if ($section->type === 'story' && $setting === 'emphasis') {
+                if (($appearance[$setting] ?? null) !== 'inherit') {
+                    throw ValidationException::withMessages(['appearance.emphasis' => 'Story emphasis is no longer an authored appearance control.']);
+                }
+
+                continue;
+            }
             if (! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
                 throw ValidationException::withMessages(["appearance.{$setting}" => "The selected {$setting} is invalid for this Section."]);
             }
+        }
+
+        if ($section->type === 'story') {
+            $appearance = $this->preserveLegacyStoryAppearance($section->appearance, $appearance);
         }
 
         if (isset($appearance['responsive'])) {
@@ -103,6 +114,29 @@ final class UpdateWebsiteSectionAppearance
         $section->save();
 
         return $section;
+    }
+
+    /** @param array<string, mixed> $stored @param array<string, mixed> $authored */
+    private function preserveLegacyStoryAppearance(array $stored, array $authored): array
+    {
+        foreach (['emphasis', 'presentation', 'mediaPlacement', 'mediaSize', 'frameStyle', 'cornerStyle', 'shadowStyle', 'overlayStrength', 'foregroundColor', 'mediaSpacing', 'mediaContentGap'] as $key) {
+            if (array_key_exists($key, $stored)) {
+                $authored[$key] = $stored[$key];
+            } else {
+                unset($authored[$key]);
+            }
+        }
+        foreach ($stored['responsive'] ?? [] as $viewport => $override) {
+            if (! is_array($override)) {
+                continue;
+            }
+            $legacy = array_diff_key($override, array_flip(['headingAlignment', 'bodyAlignment']));
+            if ($legacy !== []) {
+                $authored['responsive'][$viewport] = [...$legacy, ...($authored['responsive'][$viewport] ?? [])];
+            }
+        }
+
+        return $authored;
     }
 
     /** @param array<string, mixed> $responsive */

@@ -432,6 +432,9 @@ final class WebsiteCapabilityResolver
             'backgroundTreatment' => 'backgroundTreatments',
             'emphasis' => 'emphasisOptions',
         ] as $id => $group) {
+            if ($sectionId === 'story' && $id === 'emphasis') {
+                continue;
+            }
             if (isset($appearanceOptions[$group], $appearanceDefaults[$id])) {
                 $controls[] = $this->optionControl(
                     $id,
@@ -444,7 +447,7 @@ final class WebsiteCapabilityResolver
             }
         }
 
-        $presentationDefinition = $template->presentationCapabilityFor($sectionId);
+        $presentationDefinition = $sectionId === 'story' ? null : $template->presentationCapabilityFor($sectionId);
         $presentations = [];
         if ($presentationDefinition !== null) {
             $controls[] = $this->optionControl(

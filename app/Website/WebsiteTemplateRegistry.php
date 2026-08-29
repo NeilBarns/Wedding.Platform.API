@@ -9,6 +9,7 @@ use App\Website\Capabilities\DesignColorRole;
 use App\Website\Capabilities\ElementColorRole;
 use App\Website\Capabilities\FontFamilyCapability;
 use App\Website\Capabilities\PalettePresetCapability;
+use App\Website\Capabilities\PlatformFontRegistry;
 use App\Website\Capabilities\ProjectColorRole;
 use App\Website\Capabilities\TemplateDesignLibrary;
 use App\Website\Capabilities\TypographyPresetCapability;
@@ -345,12 +346,7 @@ final class WebsiteTemplateRegistry
                 'burgundy' => ['displayName' => 'Burgundy', 'roles' => ['canvas' => '#f7eeea', 'surface' => '#ecddda', 'text' => '#3d292d', 'textMuted' => '#715d61', 'accent' => '#7d3443', 'accentContrast' => '#ffffff', 'border' => '#82696d', 'ornament' => '#7b7955']],
                 'neutral' => ['displayName' => 'Warm Neutral', 'roles' => ['canvas' => '#f5f1eb', 'surface' => '#e9e3dc', 'text' => '#35312e', 'textMuted' => '#69625d', 'accent' => '#74645a', 'accentContrast' => '#ffffff', 'border' => '#7c746e', 'ornament' => '#777363']],
             ],
-            fontFamilies: [
-                new FontFamilyCapability('editorial-serif', 'Editorial Serif', [TypographyRole::Heading]),
-                new FontFamilyCapability('modern-sans', 'Modern Sans', [TypographyRole::Heading, TypographyRole::Body]),
-                new FontFamilyCapability('romantic-serif', 'Romantic Serif', [TypographyRole::Heading]),
-                new FontFamilyCapability('classic-serif', 'Classic Serif', [TypographyRole::Body]),
-            ],
+            fontFamilies: [...(new PlatformFontRegistry)->classicLegacyFonts(), ...(new PlatformFontRegistry)->platformFonts()],
             typographyPresets: [
                 new TypographyPresetCapability('editorial', 'Editorial', 'editorial-serif', 'modern-sans'),
                 new TypographyPresetCapability('romantic', 'Romantic', 'romantic-serif', 'classic-serif'),
@@ -361,6 +357,7 @@ final class WebsiteTemplateRegistry
                 $this->readableTextColor('classic-wine-text', 'Wine Text', '#5a2635'),
                 $this->readableTextColor('classic-indigo-text', 'Indigo Text', '#2f3556'),
             ],
+            fontRecommendations: ['heading' => ['cormorant-garamond', 'playfair-display', 'cinzel', 'libre-baskerville', 'eb-garamond', 'marcellus'], 'body' => ['cormorant-garamond', 'libre-baskerville', 'lora', 'inter', 'dm-sans'], 'accent' => ['great-vibes', 'cinzel', 'parisienne', 'cormorant-upright']],
         );
     }
 
@@ -374,12 +371,7 @@ final class WebsiteTemplateRegistry
                 'plum' => ['displayName' => 'Plum', 'roles' => ['canvas' => '#f7f2f6', 'surface' => '#e9dde7', 'text' => '#302330', 'textMuted' => '#6e5a6c', 'accent' => '#5f405f', 'accentContrast' => '#ffffff', 'border' => '#927b8f']],
                 'navy' => ['displayName' => 'Navy', 'roles' => ['canvas' => '#f1f4f7', 'surface' => '#dde4eb', 'text' => '#182432', 'textMuted' => '#596775', 'accent' => '#263c5a', 'accentContrast' => '#ffffff', 'border' => '#77889b']],
             ],
-            fontFamilies: [
-                new FontFamilyCapability('editorial-serif', 'Editorial Serif', [TypographyRole::Heading]),
-                new FontFamilyCapability('modern-sans', 'Modern Sans', [TypographyRole::Heading, TypographyRole::Body]),
-                new FontFamilyCapability('fashion-serif', 'Fashion Serif', [TypographyRole::Heading]),
-                new FontFamilyCapability('fashion-sans', 'Fashion Sans', [TypographyRole::Body]),
-            ],
+            fontFamilies: [...(new PlatformFontRegistry)->modernLegacyFonts(), ...(new PlatformFontRegistry)->platformFonts()],
             typographyPresets: [
                 new TypographyPresetCapability('editorial', 'Editorial', 'editorial-serif', 'modern-sans'),
                 new TypographyPresetCapability('fashion', 'Fashion', 'fashion-serif', 'fashion-sans'),
@@ -390,6 +382,7 @@ final class WebsiteTemplateRegistry
                 $this->readableTextColor('modern-plum-text', 'Plum Text', '#4d294b'),
                 $this->readableTextColor('modern-russet-text', 'Russet Text', '#5c302a'),
             ],
+            fontRecommendations: ['heading' => ['playfair-display', 'dm-sans', 'inter', 'space-grotesk', 'bodoni-moda', 'archivo-black'], 'body' => ['inter', 'dm-sans', 'source-sans-3', 'work-sans', 'lato'], 'accent' => ['cinzel', 'great-vibes', 'bebas-neue', 'poiret-one']],
         );
     }
 
@@ -399,7 +392,7 @@ final class WebsiteTemplateRegistry
      * @param  list<TypographyPresetCapability>  $typographyPresets
      * @param  list<DesignColorCapability>  $additionalColors
      */
-    private function designLibrary(array $palettes, array $fontFamilies, array $typographyPresets, array $additionalColors = []): TemplateDesignLibrary
+    private function designLibrary(array $palettes, array $fontFamilies, array $typographyPresets, array $additionalColors = [], array $fontRecommendations = []): TemplateDesignLibrary
     {
         $colors = [];
         $palettePresets = [];
@@ -434,7 +427,7 @@ final class WebsiteTemplateRegistry
             $palettePresets[] = new PalettePresetCapability($presetId, $palette['displayName'], $roles);
         }
 
-        return new TemplateDesignLibrary([...$colors, ...$additionalColors], $fontFamilies, $palettePresets, $typographyPresets);
+        return new TemplateDesignLibrary([...$colors, ...$additionalColors], $fontFamilies, $palettePresets, $typographyPresets, $fontRecommendations);
     }
 
     private function readableTextColor(string $id, string $displayName, string $value): DesignColorCapability

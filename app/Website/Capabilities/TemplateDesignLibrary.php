@@ -15,5 +15,6 @@ final readonly class TemplateDesignLibrary
         public array $fontFamilies,
         public array $palettePresets,
         public array $typographyPresets,
+        public array $fontRecommendations = [],
     ) {}
 }

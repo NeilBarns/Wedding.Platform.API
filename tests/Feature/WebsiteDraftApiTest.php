@@ -113,7 +113,7 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.capabilities.sections.2.elements.allowedTypes', ['narrativeBlock'])
             ->assertJsonPath('data.template.capabilities.sections.2.elements.maxCount', 20)
             ->assertJsonPath('data.template.capabilities.sections.2.elements.compositionGroups', null)
-            ->assertJsonPath('data.sections.2.presentationCapability.default', 'portraitStory')
+            ->assertJsonPath('data.sections.2.presentationCapability', null)
             ->assertJsonPath('data.sections.2.mediaCapability.mode', 'multiple');
         $project = $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$website->id}")->assertOk();
 
@@ -175,12 +175,85 @@ class WebsiteDraftApiTest extends TestCase
         $this->assertSame($content, $story->refresh()->content);
         $this->assertSame($content, $story->refresh()->content);
 
+        $visibility = [...$content, 'eyebrow' => 'Once upon a time', 'eyebrowIsHidden' => true, 'headingIsHidden' => true, 'introIsHidden' => false, 'structureOrder' => [
+            'story:heading', 'narrative:first', 'story:eyebrow', 'story:intro', 'narrative:second',
+        ]];
+        $this->actingAs($owner)->putJson($url, ['content' => $visibility])->assertOk()
+            ->assertJsonPath('data.sections.2.content.eyebrow', 'Once upon a time')
+            ->assertJsonPath('data.sections.2.content.eyebrowIsHidden', true)
+            ->assertJsonPath('data.sections.2.content.headingIsHidden', true)
+            ->assertJsonPath('data.sections.2.content.introIsHidden', false);
+        $this->assertSame($visibility, $story->refresh()->content);
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")->assertOk()
+            ->assertJsonPath('data.sections.2.content.structureOrder', $visibility['structureOrder']);
+
         $duplicate = [...$content, 'elements' => [$blocks[0], [...$blocks[1], 'id' => 'first']]];
         $this->actingAs($owner)->putJson($url, ['content' => $duplicate])->assertUnprocessable();
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => array_fill(0, 21, $blocks[0])]])
             ->assertUnprocessable()->assertJsonValidationErrors('content.elements');
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'unexpected' => true]])->assertUnprocessable();
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => [['id' => 'broken', 'type' => 'narrativeBlock', 'body' => []]]]])->assertUnprocessable();
+    }
+
+    public function test_narrative_font_overrides_use_platform_role_validation(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
+            'heading' => 'Our Story',
+            'intro' => null,
+            'elements' => [['id' => 'font-block', 'type' => 'narrativeBlock', 'heading' => 'Chapter', 'body' => 'Text']],
+            'mediaFraming' => [],
+        ]);
+        $content['elements'][0]['slots']['heading']['appearance']['fontFamilyId'] = 'cormorant-garamond';
+        $content['elements'][0]['slots']['body']['appearance']['fontFamilyId'] = 'inter';
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+
+        $broadRole = $content;
+        $broadRole['elements'][0]['slots']['body']['appearance']['fontFamilyId'] = 'great-vibes';
+        $this->actingAs($owner)->putJson($url, ['content' => $broadRole])->assertOk();
+
+        $unknown = $content;
+        $unknown['elements'][0]['slots']['heading']['appearance']['fontFamilyId'] = 'unknown-font';
+        $this->actingAs($owner)->putJson($url, ['content' => $unknown])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('element.slots.heading.appearance.fontFamilyId');
+    }
+
+    public function test_story_singleton_appearance_uses_template_role_ids_and_round_trips_sparsely(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
+            'heading' => 'Our Story',
+            'intro' => 'How it began',
+            'elements' => [],
+            'mediaFraming' => [],
+        ]);
+        $content['singletonAppearance'] = [
+            'eyebrow' => ['fontFamilyId' => 'modern-sans', 'colorId' => 'terracotta-text', 'alignment' => 'center'],
+            'heading' => ['fontFamilyId' => 'editorial-serif', 'fontSize' => ['mobile' => 'l'], 'colorId' => 'terracotta-text', 'alignment' => 'center'],
+            'intro' => ['fontFamilyId' => 'modern-sans', 'lineSpacing' => 'relaxed', 'letterSpacing' => 'wide', 'alignment' => 'end'],
+        ];
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+        $this->assertSame($content, $story->refresh()->content);
+
+        foreach ([
+            ['eyebrow', 'fontFamilyId', 'unknown-font'],
+            ['heading', 'fontFamilyId', 'classic-serif'],
+            ['intro', 'colorId', 'unknown-color'],
+            ['eyebrow', 'alignment', 'left'],
+        ] as [$field, $key, $value]) {
+            $invalid = $content;
+            $invalid['singletonAppearance'][$field][$key] = $value;
+            $this->actingAs($owner)->putJson($url, ['content' => $invalid])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors("content.singletonAppearance.{$field}.{$key}");
+        }
     }
 
     public function test_historical_story_content_is_read_as_one_stable_block_without_mutating_storage(): void

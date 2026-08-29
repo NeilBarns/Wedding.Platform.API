@@ -6,17 +6,31 @@ final class StoryContentNormalizer
 {
     /**
      * @param  array<string, mixed>  $content
-     * @return array{heading: string, intro: string|null, elements: list<array<string, mixed>>, mediaFraming: array<string, mixed>}
+     * @return array{eyebrow?: string|null, eyebrowIsHidden?: bool, heading: string, intro: string|null, headingIsHidden?: bool, introIsHidden?: bool, elements: list<array<string, mixed>>, mediaFraming: array<string, mixed>, structureOrder?: list<mixed>}
      */
     public function normalize(string $sectionId, array $content): array
     {
         if (array_key_exists('elements', $content)) {
-            return [
+            $normalized = [
                 'heading' => (string) ($content['heading'] ?? ''),
                 'intro' => isset($content['intro']) ? (string) $content['intro'] : null,
                 'elements' => is_array($content['elements']) ? array_values($content['elements']) : [],
                 'mediaFraming' => is_array($content['mediaFraming'] ?? null) ? $content['mediaFraming'] : [],
             ];
+            if (array_key_exists('eyebrow', $content)) {
+                $normalized['eyebrow'] = isset($content['eyebrow']) ? (string) $content['eyebrow'] : null;
+            }
+            foreach (['eyebrowIsHidden', 'headingIsHidden', 'introIsHidden'] as $visibility) {
+                if (array_key_exists($visibility, $content)) {
+                    $normalized[$visibility] = $content[$visibility] === true;
+                }
+            }
+            if (isset($content['singletonAppearance']) && is_array($content['singletonAppearance'])) {
+                $normalized['singletonAppearance'] = $content['singletonAppearance'];
+            }
+            $this->preserveCanonicalStructureOrder($content, $normalized);
+
+            return $normalized;
         }
 
         if (array_key_exists('blocks', $content)) {
@@ -46,12 +60,23 @@ final class StoryContentNormalizer
                 $elements[] = $element;
             }
 
-            return [
+            $normalized = [
                 'heading' => (string) ($content['heading'] ?? ''),
                 'intro' => isset($content['intro']) ? (string) $content['intro'] : null,
                 'elements' => $elements,
                 'mediaFraming' => $mediaFraming,
             ];
+            if (array_key_exists('eyebrow', $content)) {
+                $normalized['eyebrow'] = isset($content['eyebrow']) ? (string) $content['eyebrow'] : null;
+            }
+            foreach (['eyebrowIsHidden', 'headingIsHidden', 'introIsHidden'] as $visibility) {
+                if (array_key_exists($visibility, $content)) {
+                    $normalized[$visibility] = $content[$visibility] === true;
+                }
+            }
+            $this->preserveCanonicalStructureOrder($content, $normalized);
+
+            return $normalized;
         }
 
         $body = (string) ($content['body'] ?? '');
@@ -66,12 +91,38 @@ final class StoryContentNormalizer
         }
         $framing = $hasMedia ? array_intersect_key($media, array_flip(['focalPoint', 'zoom'])) : [];
 
-        return [
+        $normalized = [
             'heading' => (string) ($content['heading'] ?? ''),
             'intro' => null,
             'elements' => $hasLegacyBlock ? [$element] : [],
             'mediaFraming' => $framing === [] ? [] : [$id => $framing],
         ];
+        if (array_key_exists('eyebrow', $content)) {
+            $normalized['eyebrow'] = isset($content['eyebrow']) ? (string) $content['eyebrow'] : null;
+        }
+        foreach (['eyebrowIsHidden', 'headingIsHidden', 'introIsHidden'] as $visibility) {
+            if (array_key_exists($visibility, $content)) {
+                $normalized[$visibility] = $content[$visibility] === true;
+            }
+        }
+        $this->preserveCanonicalStructureOrder($content, $normalized);
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     * @param  array<string, mixed>  $normalized
+     */
+    private function preserveCanonicalStructureOrder(array $source, array &$normalized): void
+    {
+        if (! array_key_exists('structureOrder', $source) || ! is_array($source['structureOrder'])) {
+            return;
+        }
+        $order = array_values($source['structureOrder']);
+        if (StoryStructureOrder::isCanonical($order, array_column($normalized['elements'], 'id'))) {
+            $normalized['structureOrder'] = $order;
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Website\Capabilities\ContainerColorRole;
 use App\Website\Capabilities\ElementColorRole;
 use App\Website\Capabilities\GlobalDesignControlId;
 use App\Website\Capabilities\GlobalDesignControlType;
+use App\Website\Capabilities\PlatformFontRegistry;
 use App\Website\Capabilities\ProjectColorRole;
 use App\Website\Capabilities\TypographyRole;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
@@ -21,6 +22,54 @@ use Tests\TestCase;
 
 class WebsiteCapabilityRegistryTest extends TestCase
 {
+    public function test_full_platform_font_registry_is_unique_complete_and_system_safe(): void
+    {
+        $fonts = collect(app(PlatformFontRegistry::class)->platformFonts());
+        $this->assertCount(59, $fonts);
+        $this->assertCount(59, $fonts->pluck('id')->unique());
+        $this->assertCount(57, $fonts->where('source.type', 'googleFonts'));
+
+        foreach ($fonts->where('source.type', 'googleFonts') as $font) {
+            $this->assertNotEmpty($font->source['upstreamUrl']);
+            $this->assertNotEmpty($font->source['version']);
+            $this->assertNotEmpty($font->license['id']);
+            $this->assertNotEmpty($font->weights);
+            $this->assertNotEmpty($font->styles);
+        }
+
+        $this->assertSame('system', $fonts->firstWhere('id', 'times-new-roman')->source['type']);
+        $this->assertSame('system', $fonts->firstWhere('id', 'courier-new')->source['type']);
+        $this->assertSame('APACHE-2.0', $fonts->firstWhere('id', 'homemade-apple')->license['id']);
+    }
+
+    public function test_platform_fonts_and_template_recommendations_are_serialized_without_changing_defaults(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+        $expectedRealIds = ['cormorant-garamond', 'playfair-display', 'inter', 'dm-sans', 'great-vibes', 'cinzel', 'jetbrains-mono'];
+
+        foreach ([WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1] as $templateKey) {
+            $template = app(WebsiteTemplateRegistry::class)->get($templateKey);
+            $capabilities = $resolver->template($template);
+            $payload = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
+            $families = collect($payload['designLibrary']['fontFamilies'])->keyBy('id');
+
+            foreach ($expectedRealIds as $id) {
+                $this->assertSame('googleFonts', $families[$id]['source']['type']);
+                $this->assertSame('OFL-1.1', $families[$id]['license']['id']);
+                $this->assertNotEmpty($families[$id]['fallback']);
+            }
+            $this->assertSame('legacyAlias', $families['editorial-serif']['source']['type']);
+            $this->assertNotEmpty($payload['designLibrary']['fontRecommendations']['heading']);
+            $this->assertNotEmpty($payload['designLibrary']['fontRecommendations']['body']);
+            $this->assertNotEmpty($payload['designLibrary']['fontRecommendations']['accent']);
+            foreach ($payload['designLibrary']['fontRecommendations'] as $recommendations) {
+                foreach ($recommendations as $id) {
+                    $this->assertTrue($families->has($id));
+                }
+            }
+        }
+    }
+
     public function test_every_production_template_emits_valid_deterministic_capabilities(): void
     {
         $templates = app(WebsiteTemplateRegistry::class);
@@ -41,7 +90,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
 
             foreach ($capabilities->sections as $section) {
                 $this->assertContains($section->id, $knownSections);
-                $sourcePresentations = $template->presentationCapabilityFor($section->id);
+                $sourcePresentations = $section->id === 'story' ? null : $template->presentationCapabilityFor($section->id);
                 $this->assertSame($sourcePresentations['default'] ?? null, $section->defaultPresentation);
                 $this->assertSame(
                     array_column($sourcePresentations['options'] ?? [], 'key'),
@@ -215,12 +264,15 @@ class WebsiteCapabilityRegistryTest extends TestCase
         $this->assertNull($resolver->controlsForViewport($classic, 'hero', 'classic', 'watch'));
         $this->assertFalse($resolver->allowsElement($classic, 'story', 'video'));
 
-        $presentation = $resolver->presentation($classic, 'story');
-        $this->assertSame('portraitStory', $presentation->id);
-        $tablet = collect($resolver->controlsForViewport($classic, 'story', 'portraitStory', 'tablet'))->keyBy('id');
-        $mobile = collect($resolver->controlsForViewport($classic, 'story', 'portraitStory', 'mobile'))->keyBy('id');
-        $this->assertSame('top', $tablet['mediaPlacement']->default);
-        $this->assertSame(['top', 'bottom', 'left', 'right'], array_column($tablet['mediaPlacement']->options, 'key'));
+        $this->assertNull($resolver->presentation($classic, 'story'));
+        $story = $resolver->section($classic, 'story');
+        $this->assertNull($story->defaultPresentation);
+        $this->assertSame([], $story->presentations);
+        $this->assertNotContains('emphasis', array_map(fn ($control): string => $control->id, $story->appearanceControls));
+
+        $presentation = $resolver->presentation($classic, 'hero');
+        $this->assertSame('classic', $presentation->id);
+        $mobile = collect($resolver->controlsForViewport($classic, 'hero', 'classic', 'mobile'))->keyBy('id');
         $this->assertSame(['top', 'bottom'], array_column($mobile['mediaPlacement']->options, 'key'));
         $this->assertSame('balanced', $mobile['mediaSize']->default);
     }
