@@ -14,6 +14,7 @@ final readonly class TemplateCapabilities
         public GlobalDesignCapability $globalDesign,
         public TemplateDesignLibrary $designLibrary,
         public ProjectDefaultsCapability $projectDefaults,
+        public ProjectColorLibraryCapability $projectColorLibrary,
         public array $elements,
         public array $elementCapabilities,
         public array $sections,

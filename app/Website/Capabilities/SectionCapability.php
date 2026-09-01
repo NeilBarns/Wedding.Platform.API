@@ -18,5 +18,6 @@ final readonly class SectionCapability
         public ?array $allowedElementTypes = null,
         public ?int $maximumElementCount = null,
         public null $compositionGroups = null,
+        public ?StoryDecorativeAppearanceCapability $decorativeAppearance = null,
     ) {}
 }

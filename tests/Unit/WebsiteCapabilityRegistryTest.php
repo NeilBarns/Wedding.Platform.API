@@ -197,7 +197,56 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $narrative = collect($serialized['elementCapabilities'])->firstWhere('type', 'narrativeBlock');
             $this->assertSame(['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'], $narrative['narrativeBlock']['slots']);
             $this->assertSame(['editorial', 'mediaFirst', 'quoteLed', 'textOnly'], $narrative['narrativeBlock']['composition']['presentations']);
+            $this->assertSame(['square', 'soft', 'rounded'], $narrative['narrativeBlock']['appearance']['media']['cornerStyles']);
+            $expectedFrames = $template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
+                ? [['key' => 'ornamentalCorners', 'displayName' => 'Ornamental Corners', 'supportsColor' => true, 'sizes' => ['small', 'medium', 'large']]]
+                : [];
+            $this->assertSame($expectedFrames, $narrative['narrativeBlock']['appearance']['media']['frameStyles']);
+            $this->assertNotEmpty($narrative['narrativeBlock']['appearance']['media']['frameColorIds']);
+            $this->assertNotEmpty($narrative['narrativeBlock']['appearance']['backgroundColorIds']);
+            $expectedDecorative = $template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
+                ? ['textures' => ['none', 'paper', 'fabric'], 'patterns' => ['none', 'botanical']]
+                : ['textures' => ['none'], 'patterns' => ['none']];
+            $this->assertSame($expectedDecorative, $narrative['narrativeBlock']['appearance']['decorativeAppearance']);
+            foreach ($narrative['narrativeBlock']['appearance']['backgroundColorIds'] as $colorId) {
+                $this->assertContains(ContainerColorRole::BackgroundColor, $colors[$colorId]->allowedContainerRoles);
+            }
             $this->assertStringNotContainsString('#', json_encode($serialized['elementCapabilities'], JSON_THROW_ON_ERROR));
+        }
+    }
+
+    public function test_story_decorative_capabilities_are_template_narrowed_and_path_free(): void
+    {
+        $resolver = app(WebsiteCapabilityResolver::class);
+
+        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
+            $story = $resolver->section($template, 'story');
+            $this->assertNotNull($story?->decorativeAppearance);
+            $this->assertContains('paper', $story->decorativeAppearance->textures);
+            $this->assertContains('none', $story->decorativeAppearance->patterns);
+            $this->assertContains('none', $story->decorativeAppearance->overlays);
+            $this->assertContains('none', $story->decorativeAppearance->frames);
+            $background = collect($story->appearanceControls)->firstWhere('id', 'backgroundTreatment');
+            $this->assertSame(['inherit', 'custom'], array_column($background->options, 'key'));
+            $this->assertNotEmpty($story->decorativeAppearance->backgroundColorIds);
+            $libraryColors = collect($resolver->template($template)->designLibrary->colors)->keyBy('id');
+            $libraryColorIds = $libraryColors->keys()->all();
+            $this->assertSame([], array_diff($story->decorativeAppearance->backgroundColorIds, $libraryColorIds));
+            foreach ($story->decorativeAppearance->backgroundColorIds as $colorId) {
+                $this->assertContains(ContainerColorRole::BackgroundColor, $libraryColors[$colorId]->allowedContainerRoles);
+            }
+            $expectedBackgrounds = $template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
+                ? ['terracotta-canvas', 'terracotta-accent', 'olive-accent', 'sage-accent', 'burgundy-accent']
+                : ['ink-canvas', 'stone-accent', 'blush-accent', 'plum-accent', 'navy-accent'];
+            foreach ($expectedBackgrounds as $colorId) {
+                $this->assertContains($colorId, $story->decorativeAppearance->backgroundColorIds);
+            }
+            $this->assertNotContains($template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 ? 'classic-wine-text' : 'modern-plum-text', $story->decorativeAppearance->backgroundColorIds);
+            $serialized = collect((new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request())['sections'])->firstWhere('id', 'story');
+            $this->assertSame($story->decorativeAppearance->textures, $serialized['decorativeAppearance']['textures']);
+            $this->assertSame($story->decorativeAppearance->backgroundColorIds, $serialized['decorativeAppearance']['backgroundColorIds']);
+            $this->assertStringNotContainsString('/template-assets/', json_encode($serialized['decorativeAppearance'], JSON_THROW_ON_ERROR));
+            $this->assertStringNotContainsString('http', json_encode($serialized['decorativeAppearance'], JSON_THROW_ON_ERROR));
         }
     }
 

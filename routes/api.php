@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}/websites', [WebsiteDraftController::class, 'projects']);
     Route::post('/events/{event}/websites', [WebsiteDraftController::class, 'storeProject']);
     Route::get('/events/{event}/websites/{website}', [WebsiteDraftController::class, 'showProject']);
+    Route::post('/events/{event}/websites/{website}/colors', [WebsiteDraftController::class, 'addProjectColor']);
     Route::put('/events/{event}/websites/{website}/design', [WebsiteDraftController::class, 'updateProjectDesign']);
     Route::put('/events/{event}/websites/{website}/sections/order', [WebsiteDraftController::class, 'reorderProjectSections']);
     Route::put('/events/{event}/websites/{website}/sections/{section}/enabled', [WebsiteDraftController::class, 'updateProjectSectionEnabled']);

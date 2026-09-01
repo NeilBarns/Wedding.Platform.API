@@ -69,7 +69,7 @@ class WebsiteDesignSettingsTest extends TestCase
     {
         [$event, $owner] = $this->eventWithOwner();
         $before = $event->website->sections()->get()->map->only(['id', 'content', 'sort_order', 'is_enabled'])->all();
-        $settings = ['colorTheme' => 'sage', 'fontSet' => 'romantic', 'artStyle' => 'botanical', 'projectDefaults' => []];
+        $settings = ['colorTheme' => 'sage', 'fontSet' => 'romantic', 'artStyle' => 'botanical', 'projectDefaults' => [], 'customColors' => []];
 
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/design", ['designSettings' => $settings])
             ->assertOk()->assertJsonPath('data.designSettings', $settings);

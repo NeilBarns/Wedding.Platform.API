@@ -5,7 +5,9 @@ namespace App\Actions\Websites;
 use App\Models\WebsiteSection;
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\SectionCapability;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\ProjectColorLibrary;
 use App\Website\WebsiteSectionAppearance;
 use Illuminate\Validation\ValidationException;
 
@@ -65,6 +67,13 @@ final class UpdateWebsiteSectionAppearance
             $this->validateResponsiveOverrides($templateKey, $section->type, $activePresentation, $appearance['responsive']);
             $expectedKeys[] = 'responsive';
         }
+        if (array_key_exists('decorativeAppearance', $appearance)) {
+            if (isset($appearance['decorativeAppearance']['background']['customColor']) && is_string($appearance['decorativeAppearance']['background']['customColor'])) {
+                $appearance['decorativeAppearance']['background']['customColor'] = strtoupper($appearance['decorativeAppearance']['background']['customColor']);
+            }
+            $this->validateStoryDecorativeAppearance($sectionCapability, $section->type, $appearance['decorativeAppearance'], $section->website->design_settings);
+            $expectedKeys[] = 'decorativeAppearance';
+        }
 
         sort($expectedKeys);
         sort($actualKeys);
@@ -80,7 +89,9 @@ final class UpdateWebsiteSectionAppearance
 
                 continue;
             }
-            if (! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
+            $legacyStoryBackground = $section->type === 'story' && $setting === 'backgroundTreatment'
+                && in_array($appearance[$setting] ?? null, ['plain', 'soft', 'accent'], true);
+            if (! $legacyStoryBackground && ! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
                 throw ValidationException::withMessages(["appearance.{$setting}" => "The selected {$setting} is invalid for this Section."]);
             }
         }
@@ -137,6 +148,53 @@ final class UpdateWebsiteSectionAppearance
         }
 
         return $authored;
+    }
+
+    /** @param array<string, mixed> $designSettings */
+    private function validateStoryDecorativeAppearance(SectionCapability $capability, string $sectionType, mixed $value, array $designSettings): void
+    {
+        if ($sectionType !== 'story' || $capability->decorativeAppearance === null || ! is_array($value)) {
+            throw ValidationException::withMessages(['appearance.decorativeAppearance' => 'Decorative appearance is not supported by this Section.']);
+        }
+        $rootKeys = array_keys($value);
+        sort($rootKeys);
+        if (array_diff($rootKeys, ['background', 'frame']) !== []) {
+            throw ValidationException::withMessages(['appearance.decorativeAppearance' => 'Decorative appearance contains unsupported properties.']);
+        }
+        if (array_key_exists('background', $value)) {
+            if (! is_array($value['background']) || array_diff(array_keys($value['background']), ['texture', 'textureStrength', 'pattern', 'patternStrength', 'overlay', 'colorId', 'customColor']) !== []) {
+                throw ValidationException::withMessages(['appearance.decorativeAppearance.background' => 'Decorative background contains unsupported properties.']);
+            }
+            foreach (['texture' => 'textures', 'pattern' => 'patterns', 'overlay' => 'overlays'] as $field => $allowed) {
+                if (array_key_exists($field, $value['background']) && (! is_string($value['background'][$field]) || ! in_array($value['background'][$field], $capability->decorativeAppearance->{$allowed}, true))) {
+                    throw ValidationException::withMessages(["appearance.decorativeAppearance.background.{$field}" => "The selected {$field} is not supported by this Template."]);
+                }
+            }
+            if (array_key_exists('textureStrength', $value['background']) && (! is_int($value['background']['textureStrength']) || $value['background']['textureStrength'] < 10 || $value['background']['textureStrength'] > 100)) {
+                throw ValidationException::withMessages(['appearance.decorativeAppearance.background.textureStrength' => 'Texture strength must be an integer between 10 and 100.']);
+            }
+            if (array_key_exists('patternStrength', $value['background']) && (! is_int($value['background']['patternStrength']) || $value['background']['patternStrength'] < 10 || $value['background']['patternStrength'] > 100)) {
+                throw ValidationException::withMessages(['appearance.decorativeAppearance.background.patternStrength' => 'Pattern strength must be an integer between 10 and 100.']);
+            }
+            if (array_key_exists('customColor', $value['background']) && (! is_string($value['background']['customColor']) || preg_match('/^#[0-9A-F]{6}$/', $value['background']['customColor']) !== 1)) {
+                throw ValidationException::withMessages(['appearance.decorativeAppearance.background.customColor' => 'Custom color must use #RRGGBB format.']);
+            }
+            if (array_key_exists('colorId', $value['background'])) {
+                $projectColorIds = array_column((new ProjectColorLibrary)->normalize($designSettings['customColors'] ?? []), 'id');
+                $allowedColorIds = [...$capability->decorativeAppearance->backgroundColorIds, ...$projectColorIds];
+                if (! is_string($value['background']['colorId']) || ! in_array($value['background']['colorId'], $allowedColorIds, true)) {
+                    throw ValidationException::withMessages(['appearance.decorativeAppearance.background.colorId' => 'The selected background color is not supported by this Website.']);
+                }
+            }
+        }
+        if (array_key_exists('frame', $value)) {
+            if (! is_array($value['frame']) || array_diff(array_keys($value['frame']), ['style']) !== []) {
+                throw ValidationException::withMessages(['appearance.decorativeAppearance.frame' => 'Decorative frame contains unsupported properties.']);
+            }
+            if (array_key_exists('style', $value['frame']) && (! is_string($value['frame']['style']) || ! in_array($value['frame']['style'], $capability->decorativeAppearance->frames, true))) {
+                throw ValidationException::withMessages(['appearance.decorativeAppearance.frame.style' => 'The selected frame is not supported by this Template.']);
+            }
+        }
     }
 
     /** @param array<string, mixed> $responsive */

@@ -3,6 +3,7 @@
 namespace App\Website\Capabilities;
 
 use App\Website\Elements\WebsiteElementType;
+use App\Website\ProjectColorLibrary;
 use App\Website\WebsiteSectionAppearance;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateDefinition;
@@ -45,6 +46,7 @@ final class WebsiteCapabilityResolver
             globalDesign: $this->globalDesignFromDefinition($definition),
             designLibrary: $definition->designLibrary,
             projectDefaults: $this->projectDefaultsFromDefinition($definition),
+            projectColorLibrary: new ProjectColorLibraryCapability(true, ProjectColorLibrary::MAXIMUM, ProjectColorLibrary::FORMAT),
             elements: $elements,
             elementCapabilities: $this->elementCapabilitiesFromDefinition($definition),
             sections: $sections,
@@ -109,7 +111,7 @@ final class WebsiteCapabilityResolver
         );
     }
 
-    /** @return array{colorTheme: string, fontSet: string, artStyle: string, projectDefaults: array<string, string>}|null */
+    /** @return array{colorTheme: string, fontSet: string, artStyle: string, projectDefaults: array<string, string>, customColors: list<array{id: string, value: string}>}|null */
     public function normalizeDesignSettings(string|WebsiteTemplateDefinition $template, mixed $settings): ?array
     {
         $definition = is_string($template) ? $this->templates->get($template) : $template;
@@ -122,6 +124,7 @@ final class WebsiteCapabilityResolver
         return [
             ...$definition->normalizeDesignSettings($stored),
             'projectDefaults' => $this->normalizeProjectDefaultOverrides($definition, $stored['projectDefaults'] ?? null),
+            'customColors' => (new ProjectColorLibrary)->normalize($stored['customColors'] ?? []),
         ];
     }
 
@@ -436,11 +439,18 @@ final class WebsiteCapabilityResolver
                 continue;
             }
             if (isset($appearanceOptions[$group], $appearanceDefaults[$id])) {
+                $options = $appearanceOptions[$group];
+                if ($sectionId === 'story' && $id === 'backgroundTreatment') {
+                    $options = [
+                        ['key' => 'inherit', 'displayName' => 'Use Template'],
+                        ['key' => 'custom', 'displayName' => 'Custom'],
+                    ];
+                }
                 $controls[] = $this->optionControl(
                     $id,
                     in_array($id, WebsiteSectionAppearance::RESPONSIVE_SETTINGS, true) ? AppearanceControlScope::Responsive : AppearanceControlScope::Shared,
                     $appearanceDefaults[$id],
-                    $appearanceOptions[$group],
+                    $options,
                     $template,
                     $sectionId,
                 );
@@ -487,7 +497,33 @@ final class WebsiteCapabilityResolver
             contextDefaults: $this->contextDefaultsForSection($template, $sectionId),
             allowedElementTypes: $allowedElements,
             maximumElementCount: $allowedElements === null ? null : 20,
+            decorativeAppearance: $sectionId === 'story' ? $this->storyDecorativeAppearance($template) : null,
         );
+    }
+
+    private function storyDecorativeAppearance(WebsiteTemplateDefinition $template): StoryDecorativeAppearanceCapability
+    {
+        $backgroundColorIds = collect($template->designLibrary->colors)
+            ->filter(fn ($color): bool => in_array(ContainerColorRole::BackgroundColor, $color->allowedContainerRoles, true))
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        return $template->key === 'classic-filipiniana-v1'
+            ? new StoryDecorativeAppearanceCapability(
+                textures: ['none', 'paper', 'fabric', 'grain'],
+                patterns: ['none', 'botanical', 'heritage'],
+                overlays: ['none', 'soft', 'warm', 'deep'],
+                frames: ['none', 'fine', 'ornamental', 'corners'],
+                backgroundColorIds: $backgroundColorIds,
+            )
+            : new StoryDecorativeAppearanceCapability(
+                textures: ['none', 'paper', 'grain'],
+                patterns: ['none', 'geometric', 'botanical'],
+                overlays: ['none', 'soft', 'deep'],
+                frames: ['none', 'fine', 'corners'],
+                backgroundColorIds: $backgroundColorIds,
+            );
     }
 
     /** @return list<AppearanceControlCapability> */

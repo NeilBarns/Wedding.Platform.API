@@ -16,7 +16,7 @@ class NarrativeCompositionTest extends TestCase
         $story = app(StoryContentNormalizer::class)->normalizeToCurrent('story', ['heading' => '', 'intro' => null, 'elements' => [$legacy], 'mediaFraming' => []]);
 
         $this->assertArrayNotHasKey('composition', $legacy);
-        $this->assertSame(['presentation' => 'editorial'], $story['elements'][0]['composition']);
+        $this->assertSame([], $story['elements'][0]['composition']);
         $this->assertSame($story['elements'][0], app(NarrativeBlockValidator::class)->validate($story['elements'][0]));
     }
 
@@ -34,6 +34,34 @@ class NarrativeCompositionTest extends TestCase
         $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block));
     }
 
+    public function test_presentation_free_composition_round_trips_sparsely(): void
+    {
+        $block = $this->canonical();
+        $this->assertSame([], $block['composition']);
+        $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block));
+
+        $block['composition'] = ['mediaPlacement' => 'splitStart', 'mediaTreatment' => 'wide', 'textAlignment' => 'center'];
+        $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block, [], [], 'classic-filipiniana-v1'));
+    }
+
+    public function test_presentation_free_treatment_is_validated_for_effective_placement(): void
+    {
+        $block = $this->canonical();
+        $block['composition'] = ['mediaPlacement' => 'inset', 'mediaTreatment' => 'wide'];
+
+        $this->expectException(ValidationException::class);
+        app(NarrativeBlockValidator::class)->validate($block);
+    }
+
+    public function test_every_current_presentation_value_round_trips_unchanged(): void
+    {
+        foreach (['editorial', 'mediaFirst', 'quoteLed', 'textOnly'] as $presentation) {
+            $block = $this->canonical();
+            $block['composition']['presentation'] = $presentation;
+            $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block));
+        }
+    }
+
     #[DataProvider('invalidCompositionProvider')]
     public function test_current_contract_rejects_invalid_composition(callable $mutate): void
     {
@@ -47,7 +75,6 @@ class NarrativeCompositionTest extends TestCase
             'missing composition' => [fn (array $block): array => tap($block, function (&$value): void {
                 unset($value['composition']);
             })],
-            'missing presentation' => [fn (array $block): array => tap($block, fn (&$value) => $value['composition'] = [])],
             'invalid presentation' => [fn (array $block): array => tap($block, fn (&$value) => $value['composition']['presentation'] = 'gallery')],
             'invalid placement' => [fn (array $block): array => tap($block, fn (&$value) => $value['composition']['mediaPlacement'] = 'absolute')],
             'invalid treatment' => [fn (array $block): array => tap($block, fn (&$value) => $value['composition']['mediaTreatment'] = 'raw')],

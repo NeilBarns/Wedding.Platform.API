@@ -76,7 +76,7 @@ class WebsiteSectionResource extends JsonResource
     /** @param array<string, mixed> $appearance */
     private function storyAuthoringAppearance(array $appearance): array
     {
-        $current = array_intersect_key($appearance, array_flip(['headingAlignment', 'bodyAlignment', 'backgroundTreatment']));
+        $current = array_intersect_key($appearance, array_flip(['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'decorativeAppearance']));
         $current['emphasis'] = 'inherit';
         foreach ($appearance['responsive'] ?? [] as $viewport => $override) {
             if (! is_array($override)) {

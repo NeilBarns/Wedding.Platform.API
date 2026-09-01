@@ -6,10 +6,13 @@ use App\Exceptions\UnsupportedWebsiteSchemaVersion;
 use App\Models\MediaAsset;
 use App\Models\Website;
 use App\Models\WebsiteSection;
+use App\Website\Capabilities\ContainerColorRole;
 use App\Website\Capabilities\ElementColorRole;
+use App\Website\Capabilities\NarrativeDecorativeAppearanceCapability;
 use App\Website\Capabilities\TypographyRole;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
 use App\Website\Elements\NarrativeBlockValidator;
+use App\Website\ProjectColorLibrary;
 use App\Website\StoryContentNormalizer;
 use App\Website\StoryStructureOrder;
 use App\Website\WebsiteSchema;
@@ -44,14 +47,14 @@ final class UpgradeWebsiteProjectSchema
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $current = $this->validateCurrentStory($this->normalizer->normalizeToCurrent($lockedSection->id, $lockedSection->content), $website->template_key);
-            $validated = $this->validateCurrentStory($content, $website->template_key);
+            $current = $this->validateCurrentStory($this->normalizer->normalizeToCurrent($lockedSection->id, $lockedSection->content), $website);
+            $validated = $this->validateCurrentStory($content, $website);
             $this->validateMedia($website, $current, $validated);
 
             foreach (WebsiteSection::query()->where('website_id', $website->id)->where('type', 'story')->lockForUpdate()->get() as $story) {
                 $canonical = $story->is($lockedSection)
                     ? $validated
-                    : $this->validateCurrentStory($this->normalizer->normalizeToCurrent($story->id, $story->content), $website->template_key);
+                    : $this->validateCurrentStory($this->normalizer->normalizeToCurrent($story->id, $story->content), $website);
                 $story->content = $this->storageContent($canonical);
                 $story->save();
             }
@@ -66,7 +69,7 @@ final class UpgradeWebsiteProjectSchema
     }
 
     /** @param array<string, mixed> $content */
-    private function validateCurrentStory(array $content, string $templateKey): array
+    private function validateCurrentStory(array $content, Website $website): array
     {
         if (array_key_exists('heading', $content) && $content['heading'] === null) {
             $content['heading'] = '';
@@ -101,8 +104,8 @@ final class UpgradeWebsiteProjectSchema
             'content.structureOrder' => ['sometimes', 'array', 'list', 'max:23'],
             'content.structureOrder.*' => ['required', 'string'],
         ])->validate()['content'];
-        $allowedFonts = $this->allowedFonts($templateKey);
-        $allowedColors = $this->allowedColors($templateKey);
+        $allowedFonts = $this->allowedFonts($website->template_key);
+        $allowedColors = $this->allowedColors($website);
         foreach (['eyebrow' => 'body', 'heading' => 'heading', 'intro' => 'body'] as $field => $role) {
             $appearance = $validated['singletonAppearance'][$field] ?? [];
             $fontId = $appearance['fontFamilyId'] ?? null;
@@ -114,7 +117,7 @@ final class UpgradeWebsiteProjectSchema
                 throw ValidationException::withMessages(["content.singletonAppearance.{$field}.colorId" => 'The selected color is not supported for this role.']);
             }
         }
-        $validated['elements'] = array_map(fn (array $element): array => $this->narrative->validate($element, $allowedFonts), $validated['elements']);
+        $validated['elements'] = array_map(fn (array $element): array => $this->narrative->validate($element, $allowedFonts, $allowedColors, $website->template_key), $validated['elements']);
         $ids = array_column($validated['elements'], 'id');
         if (count($ids) !== count(array_unique($ids))) {
             throw ValidationException::withMessages(['content.elements' => 'Narrative Block IDs must be unique.']);
@@ -149,14 +152,28 @@ final class UpgradeWebsiteProjectSchema
     }
 
     /** @return array{heading: list<string>, body: list<string>} */
-    private function allowedColors(string $templateKey): array
+    private function allowedColors(Website $website): array
     {
-        $appearance = collect($this->capabilities->template($templateKey)?->elementCapabilities)
+        $appearance = collect($this->capabilities->template($website->template_key)?->elementCapabilities)
             ->first(fn ($element): bool => $element->type->value === 'narrativeBlock')?->appearance;
+        $projectColorIds = array_column((new ProjectColorLibrary)->normalize($website->design_settings['customColors'] ?? []), 'id');
+        $backgroundColorIds = collect($this->capabilities->template($website->template_key)?->designLibrary->colors)
+            ->filter(fn ($color): bool => in_array(ContainerColorRole::BackgroundColor, $color->allowedContainerRoles, true))
+            ->pluck('id')
+            ->all();
+        $frameColorIds = collect($this->capabilities->template($website->template_key)?->designLibrary->colors)
+            ->filter(fn ($color): bool => in_array(ContainerColorRole::AccentColor, $color->allowedContainerRoles, true))
+            ->pluck('id')
+            ->all();
+        $decorative = NarrativeDecorativeAppearanceCapability::forTemplate($website->template_key);
 
         return [
-            'heading' => collect($appearance?->colors)->first(fn ($color): bool => $color->role === ElementColorRole::HeadingColor)?->allowedColorIds ?? [],
-            'body' => collect($appearance?->colors)->first(fn ($color): bool => $color->role === ElementColorRole::TextColor)?->allowedColorIds ?? [],
+            'heading' => [...(collect($appearance?->colors)->first(fn ($color): bool => $color->role === ElementColorRole::HeadingColor)?->allowedColorIds ?? []), ...$projectColorIds],
+            'body' => [...(collect($appearance?->colors)->first(fn ($color): bool => $color->role === ElementColorRole::TextColor)?->allowedColorIds ?? []), ...$projectColorIds],
+            'background' => [...$backgroundColorIds, ...$projectColorIds],
+            'frame' => [...$frameColorIds, ...$projectColorIds],
+            'textures' => $decorative->textures,
+            'patterns' => $decorative->patterns,
         ];
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Websites\AddWebsiteProjectColor;
 use App\Actions\Websites\CreateWebsiteProject;
 use App\Actions\Websites\InitializeEventWebsite;
 use App\Actions\Websites\ReorderWebsiteSections;
@@ -13,6 +14,7 @@ use App\Actions\Websites\UpdateWebsiteSectionDesignDefaults;
 use App\Exceptions\IncompatibleWebsiteTemplate;
 use App\Exceptions\UnknownWebsiteTemplate;
 use App\Exceptions\WebsiteAlreadyInitialized;
+use App\Http\Requests\AddWebsiteProjectColorRequest;
 use App\Http\Requests\CreateWebsiteProjectRequest;
 use App\Http\Requests\InitializeWebsiteRequest;
 use App\Http\Requests\ReorderWebsiteSectionsRequest;
@@ -74,6 +76,18 @@ class WebsiteDraftController extends Controller
         $eventModel = $this->authorizedEvent($event);
 
         return $this->draft($this->website($eventModel, $website));
+    }
+
+    public function addProjectColor(
+        AddWebsiteProjectColorRequest $request,
+        AddWebsiteProjectColor $addColor,
+        string $event,
+        string $website,
+    ): JsonResponse {
+        $eventModel = $this->authorizedEvent($event);
+        $project = $addColor->handle($this->website($eventModel, $website), $request->validated('value'));
+
+        return $this->draft($project)->response()->setStatusCode(201);
     }
 
     public function store(

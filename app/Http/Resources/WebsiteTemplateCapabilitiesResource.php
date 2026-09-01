@@ -4,9 +4,11 @@ namespace App\Http\Resources;
 
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlType;
+use App\Website\Capabilities\ContainerColorRole;
 use App\Website\Capabilities\ContextDefaultsCapability;
 use App\Website\Capabilities\ElementCapability;
 use App\Website\Capabilities\GlobalDesignControlCapability;
+use App\Website\Capabilities\NarrativeDecorativeAppearanceCapability;
 use App\Website\Capabilities\PresentationCapability;
 use App\Website\Capabilities\SectionCapability;
 use Illuminate\Http\Request;
@@ -72,6 +74,11 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'accentColor' => ['allowedColorIds' => $this->projectDefaults->colors->accentColorIds],
                 ],
             ],
+            'projectColorLibrary' => [
+                'enabled' => $this->projectColorLibrary->enabled,
+                'maximum' => $this->projectColorLibrary->maximum,
+                'format' => $this->projectColorLibrary->format,
+            ],
             'elements' => $this->elements,
             'elementCapabilities' => array_map(fn (ElementCapability $element): array => [
                 'type' => $element->type->value,
@@ -111,6 +118,13 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                     'maxCount' => $section->maximumElementCount,
                     'compositionGroups' => $section->compositionGroups,
                 ],
+                'decorativeAppearance' => $section->decorativeAppearance === null ? null : [
+                    'textures' => $section->decorativeAppearance->textures,
+                    'patterns' => $section->decorativeAppearance->patterns,
+                    'overlays' => $section->decorativeAppearance->overlays,
+                    'frames' => $section->decorativeAppearance->frames,
+                    'backgroundColorIds' => $section->decorativeAppearance->backgroundColorIds,
+                ],
             ], $this->sections),
         ];
     }
@@ -144,22 +158,45 @@ class WebsiteTemplateCapabilitiesResource extends JsonResource
                 $treatments[$presentation] = (object) [];
             }
         }
+        $mediaPlacements = $placements['editorial'];
+        $mediaTreatmentsByPlacement = $treatments['editorial'];
 
         return [
             'slots' => ['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'],
             'appearance' => [
                 'controls' => ['fontFamilyId', 'fontSize', 'lineSpacing', 'letterSpacing', 'colorId'],
+                'backgroundColorIds' => collect($this->designLibrary->colors)
+                    ->filter(fn ($color): bool => in_array(ContainerColorRole::BackgroundColor, $color->allowedContainerRoles, true))
+                    ->pluck('id')
+                    ->values()
+                    ->all(),
+                'decorativeAppearance' => ['textures' => NarrativeDecorativeAppearanceCapability::forTemplate($this->templateKey)->textures, 'patterns' => NarrativeDecorativeAppearanceCapability::forTemplate($this->templateKey)->patterns],
+                'media' => [
+                    'cornerStyles' => ['square', 'soft', 'rounded'],
+                    'frameStyles' => $this->templateKey === 'classic-filipiniana-v1'
+                        ? [['key' => 'ornamentalCorners', 'displayName' => 'Ornamental Corners', 'supportsColor' => true, 'sizes' => ['small', 'medium', 'large']]]
+                        : [],
+                    'frameColorIds' => collect($this->designLibrary->colors)
+                        ->filter(fn ($color): bool => in_array(ContainerColorRole::AccentColor, $color->allowedContainerRoles, true))
+                        ->pluck('id')
+                        ->values()
+                        ->all(),
+                ],
                 'fontSizeOptions' => ['xs', 's', 'm', 'l', 'xl'],
                 'responsiveFontSizeViewports' => ['desktop', 'tablet', 'mobile'],
             ],
             'composition' => [
                 'presentations' => ['editorial', 'mediaFirst', 'quoteLed', 'textOnly'],
+                'mediaPlacements' => $mediaPlacements,
+                'mediaTreatmentsByPlacement' => $mediaTreatmentsByPlacement,
                 'mediaPlacementsByPresentation' => $placements,
                 'mediaTreatmentsByPresentationAndPlacement' => $treatments,
                 'textAlignments' => ['start', 'center', 'end'],
                 'surfaces' => ['none', 'soft', 'feature'],
                 'defaults' => [
                     'presentation' => 'editorial',
+                    'mediaPlacement' => 'above',
+                    'textAlignment' => 'start',
                     'mediaPlacementByPresentation' => ['editorial' => 'above', 'mediaFirst' => 'above', 'quoteLed' => 'inset'],
                     'mediaTreatment' => 'standard',
                     'textAlignmentByPresentation' => ['editorial' => 'start', 'mediaFirst' => 'start', 'quoteLed' => 'start', 'textOnly' => 'start'],

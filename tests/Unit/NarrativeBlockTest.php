@@ -37,6 +37,51 @@ class NarrativeBlockTest extends TestCase
         $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block));
     }
 
+    public function test_media_corner_appearance_is_sparse_validated_and_preserved(): void
+    {
+        foreach (['square', 'soft', 'rounded'] as $cornerStyle) {
+            $block = $this->canonical();
+            $block['slots']['media']['appearance'] = ['cornerStyle' => $cornerStyle];
+            $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block));
+            $this->assertSame($block, app(StoryContentNormalizer::class)->normalizeLegacyNarrativeBlock($block));
+        }
+
+        $sparse = $this->canonical();
+        $this->assertArrayNotHasKey('appearance', $sparse['slots']['media']);
+        $this->assertSame($sparse, app(NarrativeBlockValidator::class)->validate($sparse));
+    }
+
+    public function test_media_frame_appearance_accepts_none_and_semantic_ids_and_preserves_corners(): void
+    {
+        foreach (['none', 'ornamentalCorners'] as $frameStyle) {
+            $block = $this->canonical();
+            $block['slots']['media']['appearance'] = ['cornerStyle' => 'soft', 'frameStyle' => $frameStyle];
+            $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block));
+            $this->assertSame($block, app(StoryContentNormalizer::class)->normalizeLegacyNarrativeBlock($block));
+        }
+    }
+
+    public function test_media_frame_color_and_size_are_sparse_validated_against_website_colors(): void
+    {
+        foreach (['small', 'medium', 'large'] as $frameSize) {
+            $block = $this->canonical();
+            $block['slots']['media']['appearance'] = [
+                'frameStyle' => 'ornamentalCorners',
+                'frameColorId' => 'accent',
+                'frameSize' => $frameSize,
+            ];
+            $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block, [], ['frame' => ['accent']]));
+        }
+
+        $projectColor = 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3G';
+        $block = $this->canonical();
+        $block['slots']['media']['appearance'] = ['frameColorId' => $projectColor];
+        $this->assertSame($block, app(NarrativeBlockValidator::class)->validate($block, [], ['frame' => [$projectColor]]));
+
+        $this->expectException(ValidationException::class);
+        app(NarrativeBlockValidator::class)->validate($block, [], ['frame' => []]);
+    }
+
     #[DataProvider('invalidProvider')]
     public function test_current_contract_rejects_unknown_recursive_and_untyped_values(callable $mutate): void
     {
@@ -53,6 +98,12 @@ class NarrativeBlockTest extends TestCase
             'raw css' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['heading']['appearance'] = ['color' => '#fff'])],
             'unknown action' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['cta']['action'] = ['type' => 'javascript'])],
             'invalid media' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['content'] = ['type' => 'audio', 'mediaId' => '01M0Q08NQ9XJB9A7B5SGC45YD9'])],
+            'invalid media corner' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['appearance'] = ['cornerStyle' => 'pill'])],
+            'invalid media frame type' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['appearance'] = ['frameStyle' => 12])],
+            'invalid media frame identifier' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['appearance'] = ['frameStyle' => '../frame'])],
+            'invalid media frame size' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['appearance'] = ['frameSize' => 'extraLarge'])],
+            'invalid media frame color type' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['appearance'] = ['frameColorId' => ['raw' => '#fff']])],
+            'unknown media appearance' => [fn (array $block): array => tap($block, fn (&$value) => $value['slots']['media']['appearance'] = ['radius' => '12px'])],
         ];
     }
 

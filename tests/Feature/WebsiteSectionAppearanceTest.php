@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\Events\CreateEvent;
+use App\Actions\Websites\AddWebsiteProjectColor;
 use App\Models\Event;
 use App\Models\User;
 use App\Models\Website;
@@ -470,6 +471,117 @@ class WebsiteSectionAppearanceTest extends TestCase
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$story->id}/appearance", [
             'appearance' => $legacy,
         ])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
+    }
+
+    public function test_story_decorative_appearance_round_trips_sparse_semantic_intent_and_rejects_paths_and_unsupported_values(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$story->id}/appearance";
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'backgroundTreatment' => 'soft',
+            'decorativeAppearance' => [
+                'background' => ['texture' => 'paper', 'textureStrength' => 55, 'pattern' => 'botanical', 'patternStrength' => 50, 'overlay' => 'warm', 'customColor' => '#1A2B3C'],
+                'frame' => ['style' => 'ornamental'],
+            ],
+        ];
+
+        $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
+            ->assertJsonPath('data.sections.2.appearance.decorativeAppearance', $appearance['decorativeAppearance']);
+        $this->assertSame($appearance, $story->refresh()->appearance);
+
+        foreach ([10, 100, 55] as $textureStrength) {
+            $accepted = $appearance;
+            $accepted['decorativeAppearance']['background']['textureStrength'] = $textureStrength;
+            $this->actingAs($owner)->putJson($url, ['appearance' => $accepted])->assertOk()
+                ->assertJsonPath('data.sections.2.appearance.decorativeAppearance.background.textureStrength', $textureStrength);
+            $this->assertSame($accepted, $story->refresh()->appearance);
+        }
+
+        foreach ([10, 100, 50] as $patternStrength) {
+            $accepted = $appearance;
+            $accepted['decorativeAppearance']['background']['patternStrength'] = $patternStrength;
+            $this->actingAs($owner)->putJson($url, ['appearance' => $accepted])->assertOk()
+                ->assertJsonPath('data.sections.2.appearance.decorativeAppearance.background.patternStrength', $patternStrength);
+            $this->assertSame($accepted, $story->refresh()->appearance);
+        }
+
+        $custom = $appearance;
+        $custom['backgroundTreatment'] = 'custom';
+        $custom['decorativeAppearance']['background']['customColor'] = '#a1b2c3';
+        $this->actingAs($owner)->putJson($url, ['appearance' => $custom])->assertOk()
+            ->assertJsonPath('data.sections.2.appearance.backgroundTreatment', 'custom')
+            ->assertJsonPath('data.sections.2.appearance.decorativeAppearance.background.customColor', '#A1B2C3');
+        $this->assertSame('#A1B2C3', $story->refresh()->appearance['decorativeAppearance']['background']['customColor']);
+        $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
+
+        foreach ([
+            ['background' => ['pattern' => 'geometric']],
+            ['background' => ['textureUrl' => '/template-assets/classic-filipiniana/textures/paper.webp']],
+            ['frame' => ['style' => 'classic-paper-01']],
+            ['background' => ['texture' => 'paper', 'textureStrength' => 9]],
+            ['background' => ['texture' => 'paper', 'textureStrength' => 101]],
+            ['background' => ['texture' => 'paper', 'textureStrength' => 55.5]],
+            ['background' => ['texture' => 'paper', 'textureStrength' => '55']],
+            ['background' => ['texture' => 'paper', 'textureOpacity' => 0.5]],
+            ['background' => ['pattern' => 'botanical', 'patternStrength' => 9]],
+            ['background' => ['pattern' => 'botanical', 'patternStrength' => 101]],
+            ['background' => ['pattern' => 'botanical', 'patternStrength' => 50.5]],
+            ['background' => ['pattern' => 'botanical', 'patternStrength' => '50']],
+            ['background' => ['pattern' => 'botanical', 'patternOpacity' => 0.5]],
+            ['background' => ['customColor' => '#FFF']],
+            ['background' => ['customColor' => '#11223344']],
+            ['background' => ['customColor' => 'rgb(1, 2, 3)']],
+            ['background' => ['customColor' => 'rgba(1, 2, 3, .5)']],
+            ['background' => ['customColor' => 'var(--accent)']],
+            ['background' => ['customColor' => 'linear-gradient(red, blue)']],
+            ['background' => ['customColor' => 'url(https://example.com/a.png)']],
+        ] as $invalidDecoration) {
+            $invalid = [...$appearance, 'decorativeAppearance' => $invalidDecoration];
+            $this->actingAs($owner)->putJson($url, ['appearance' => $invalid])->assertUnprocessable();
+            $this->assertSame($appearance, $story->refresh()->appearance);
+        }
+    }
+
+    public function test_story_background_color_references_are_capability_and_project_scoped(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $website = $event->website;
+        $story = $website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$story->id}/appearance";
+        $capability = app(WebsiteCapabilityResolver::class)->section($website->template_key, 'story');
+        $templateColorId = $capability->decorativeAppearance->backgroundColorIds[0];
+        $projectColorId = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0]['id'];
+
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'backgroundTreatment' => 'custom',
+            'decorativeAppearance' => ['background' => ['colorId' => $templateColorId]],
+        ];
+        $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
+            ->assertJsonPath('data.sections.2.appearance.decorativeAppearance.background.colorId', $templateColorId);
+        $this->assertSame($templateColorId, $story->refresh()->appearance['decorativeAppearance']['background']['colorId']);
+
+        $appearance['decorativeAppearance']['background']['colorId'] = $projectColorId;
+        $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk()
+            ->assertJsonPath('data.sections.2.appearance.decorativeAppearance.background.colorId', $projectColorId);
+
+        [$otherEvent] = $this->eventWithOwner();
+        $foreignColorId = app(AddWebsiteProjectColor::class)->handle($otherEvent->website, '#2b2b2b')->design_settings['customColors'][0]['id'];
+        foreach (['terracotta-text', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F', $foreignColorId, '#123456'] as $invalidColorId) {
+            $invalid = $appearance;
+            $invalid['decorativeAppearance']['background']['colorId'] = $invalidColorId;
+            $this->actingAs($owner)->putJson($url, ['appearance' => $invalid])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('appearance.decorativeAppearance.background.colorId');
+            $this->assertSame($projectColorId, $story->refresh()->appearance['decorativeAppearance']['background']['colorId']);
+        }
+
+        foreach (['plain', 'soft', 'accent'] as $legacyTreatment) {
+            $legacy = [...WebsiteSectionAppearance::DEFAULT, 'backgroundTreatment' => $legacyTreatment];
+            $this->actingAs($owner)->putJson($url, ['appearance' => $legacy])->assertOk();
+        }
     }
 
     public function test_invalid_missing_and_extra_appearance_values_are_rejected(): void

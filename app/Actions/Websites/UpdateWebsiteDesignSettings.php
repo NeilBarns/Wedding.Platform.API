@@ -5,6 +5,7 @@ namespace App\Actions\Websites;
 use App\Models\Website;
 use App\Website\Capabilities\GlobalDesignControlId;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\ProjectColorLibrary;
 use Illuminate\Validation\ValidationException;
 
 final class UpdateWebsiteDesignSettings
@@ -16,6 +17,14 @@ final class UpdateWebsiteDesignSettings
     {
         if ($this->capabilities->globalDesign($website->template_key) === null) {
             throw ValidationException::withMessages(['designSettings' => 'The assigned Template is not supported.']);
+        }
+
+        $colors = (new ProjectColorLibrary)->normalize($website->design_settings['customColors'] ?? []);
+        if (array_key_exists('customColors', $settings)) {
+            if ($settings['customColors'] !== $colors) {
+                throw ValidationException::withMessages(['designSettings.customColors' => 'Project colors must be changed through the color-library endpoint.']);
+            }
+            unset($settings['customColors']);
         }
 
         $expectedKeys = [...array_map(fn (GlobalDesignControlId $id): string => $id->value, GlobalDesignControlId::cases()), 'projectDefaults'];
@@ -56,6 +65,7 @@ final class UpdateWebsiteDesignSettings
         }
 
         $settings['projectDefaults'] = (object) $settings['projectDefaults'];
+        $settings['customColors'] = $colors;
         $website->design_settings = $settings;
         if ($website->schema_version < 3) {
             $website->schema_version = 3;

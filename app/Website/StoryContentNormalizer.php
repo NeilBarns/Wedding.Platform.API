@@ -148,7 +148,7 @@ final class StoryContentNormalizer
     {
         $story = $this->normalizeLegacyShape($sectionId, $content);
         $story['elements'] = array_map(function (array $element): array {
-            $element['composition'] ??= ['presentation' => 'editorial'];
+            $element['composition'] ??= [];
 
             return $element;
         }, $story['elements']);

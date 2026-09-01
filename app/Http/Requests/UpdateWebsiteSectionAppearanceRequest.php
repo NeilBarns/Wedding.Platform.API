@@ -14,7 +14,7 @@ class UpdateWebsiteSectionAppearanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'appearance' => ['required', 'array:headingAlignment,bodyAlignment,backgroundTreatment,emphasis,presentation,mediaPlacement,mediaSize,frameStyle,cornerStyle,shadowStyle,overlayStrength,foregroundColor,mediaSpacing,mediaContentGap,responsive'],
+            'appearance' => ['required', 'array:headingAlignment,bodyAlignment,backgroundTreatment,emphasis,presentation,mediaPlacement,mediaSize,frameStyle,cornerStyle,shadowStyle,overlayStrength,foregroundColor,mediaSpacing,mediaContentGap,responsive,decorativeAppearance'],
             'appearance.headingAlignment' => ['required', 'string'],
             'appearance.bodyAlignment' => ['required', 'string'],
             'appearance.backgroundTreatment' => ['required', 'string'],
@@ -28,6 +28,17 @@ class UpdateWebsiteSectionAppearanceRequest extends FormRequest
             'appearance.overlayStrength' => ['sometimes', 'numeric'],
             'appearance.foregroundColor' => ['sometimes', 'string'],
             'appearance.mediaSpacing' => ['sometimes', 'array:top,right,bottom,left'],
+            'appearance.decorativeAppearance' => ['sometimes', 'array:background,frame'],
+            'appearance.decorativeAppearance.background' => ['sometimes', 'array:texture,textureStrength,pattern,patternStrength,overlay,colorId,customColor'],
+            'appearance.decorativeAppearance.background.texture' => ['sometimes', 'string', 'max:64'],
+            'appearance.decorativeAppearance.background.textureStrength' => ['sometimes', 'integer', 'between:10,100'],
+            'appearance.decorativeAppearance.background.pattern' => ['sometimes', 'string', 'max:64'],
+            'appearance.decorativeAppearance.background.patternStrength' => ['sometimes', 'integer', 'between:10,100'],
+            'appearance.decorativeAppearance.background.overlay' => ['sometimes', 'string', 'max:64'],
+            'appearance.decorativeAppearance.background.colorId' => ['sometimes', 'string', 'max:128'],
+            'appearance.decorativeAppearance.background.customColor' => ['sometimes', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'appearance.decorativeAppearance.frame' => ['sometimes', 'array:style'],
+            'appearance.decorativeAppearance.frame.style' => ['sometimes', 'string', 'max:64'],
             'appearance.mediaSpacing.top' => ['required_with:appearance.mediaSpacing', 'string'],
             'appearance.mediaSpacing.right' => ['required_with:appearance.mediaSpacing', 'string'],
             'appearance.mediaSpacing.bottom' => ['required_with:appearance.mediaSpacing', 'string'],

@@ -20,6 +20,10 @@ class UpdateWebsiteDesignSettingsRequest extends FormRequest
             'designSettings.artStyle' => ['required', 'string'],
             'designSettings.projectDefaults' => ['present', 'array'],
             'designSettings.projectDefaults.*' => ['string'],
+            'designSettings.customColors' => ['sometimes', 'array', 'max:32'],
+            'designSettings.customColors.*' => ['required', 'array:id,value'],
+            'designSettings.customColors.*.id' => ['required', 'string'],
+            'designSettings.customColors.*.value' => ['required', 'string'],
         ];
     }
 }

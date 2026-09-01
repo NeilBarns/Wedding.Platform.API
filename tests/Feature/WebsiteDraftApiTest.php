@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Actions\Events\CreateEvent;
+use App\Actions\Websites\AddWebsiteProjectColor;
+use App\Actions\Websites\CreateWebsiteProject;
 use App\Enums\EventMembershipRole;
 use App\Models\Event;
 use App\Models\EventMembership;
@@ -222,6 +224,25 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonValidationErrors('element.slots.heading.appearance.fontFamilyId');
     }
 
+    public function test_narrative_media_corners_round_trip_sparsely(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $story = $event->website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
+            'heading' => 'Our Story',
+            'intro' => null,
+            'elements' => [['id' => 'corner-block', 'type' => 'narrativeBlock', 'body' => 'Text']],
+            'mediaFraming' => [],
+        ]);
+        $frameColorId = $event->website->template_key === 'classic-filipiniana-v1' ? 'terracotta-accent' : 'ink-accent';
+        $content['elements'][0]['slots']['media']['appearance'] = ['cornerStyle' => 'rounded', 'frameStyle' => 'none', 'frameColorId' => $frameColorId, 'frameSize' => 'large'];
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
+            ->assertJsonPath('data.sections.2.content.elements.0.slots.media.appearance.cornerStyle', 'rounded');
+        $this->assertSame(['cornerStyle' => 'rounded', 'frameStyle' => 'none', 'frameColorId' => $frameColorId, 'frameSize' => 'large'], $story->refresh()->content['elements'][0]['slots']['media']['appearance']);
+    }
+
     public function test_story_singleton_appearance_uses_template_role_ids_and_round_trips_sparsely(): void
     {
         [$event, $owner] = $this->createEvent();
@@ -253,6 +274,138 @@ class WebsiteDraftApiTest extends TestCase
             $this->actingAs($owner)->putJson($url, ['content' => $invalid])
                 ->assertUnprocessable()
                 ->assertJsonValidationErrors("content.singletonAppearance.{$field}.{$key}");
+        }
+    }
+
+    public function test_story_text_color_references_are_role_and_project_scoped(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $website = $event->website;
+        $story = $website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}";
+        $projectColor = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0];
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
+            'heading' => 'Our Story',
+            'intro' => 'How it began',
+            'elements' => [['id' => 'color-block', 'type' => 'narrativeBlock', 'heading' => 'Chapter', 'body' => 'Text']],
+            'mediaFraming' => [],
+        ]);
+        $content['singletonAppearance'] = [
+            'heading' => ['colorId' => 'terracotta-accent'],
+            'intro' => ['colorId' => $projectColor['id']],
+        ];
+        $content['elements'][0]['slots']['heading']['appearance']['colorId'] = $projectColor['id'];
+        $content['elements'][0]['slots']['body']['appearance']['colorId'] = 'terracotta-text';
+
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+        $this->assertSame($projectColor['id'], $story->refresh()->content['singletonAppearance']['intro']['colorId']);
+
+        $withoutColor = $content;
+        unset($withoutColor['singletonAppearance']['intro']['colorId']);
+        $this->actingAs($owner)->putJson($url, ['content' => $withoutColor])->assertOk();
+
+        $other = app(CreateWebsiteProject::class)->handle($event, 'Other Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $otherColor = app(AddWebsiteProjectColor::class)->handle($other, '#2b2b2b')->design_settings['customColors'][0]['id'];
+        foreach ([
+            ['singletonAppearance', 'intro', 'colorId', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F'],
+            ['singletonAppearance', 'intro', 'colorId', $otherColor],
+            ['singletonAppearance', 'intro', 'colorId', 'terracotta-accent'],
+            ['singletonAppearance', 'intro', 'colorId', '#123456'],
+            ['elements', 0, 'slots', 'body', 'appearance', 'colorId', $otherColor],
+        ] as $path) {
+            $value = array_pop($path);
+            $invalid = $content;
+            data_set($invalid, implode('.', $path), $value);
+            $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable();
+        }
+    }
+
+    public function test_narrative_background_color_references_are_background_role_and_project_scoped(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $website = $event->website;
+        $story = $website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}";
+        $projectColorId = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0]['id'];
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
+            'heading' => 'Our Story',
+            'intro' => 'How it began',
+            'elements' => [['id' => 'background-block', 'type' => 'narrativeBlock', 'heading' => 'Chapter', 'body' => 'Text']],
+            'mediaFraming' => [],
+        ]);
+
+        $content['elements'][0]['appearance'] = ['backgroundColorId' => 'terracotta-accent'];
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+        $this->assertSame('terracotta-accent', $story->refresh()->content['elements'][0]['appearance']['backgroundColorId']);
+
+        $content['elements'][0]['appearance']['backgroundColorId'] = $projectColorId;
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+        $this->assertSame($projectColorId, $story->refresh()->content['elements'][0]['appearance']['backgroundColorId']);
+
+        $withoutBackground = $content;
+        unset($withoutBackground['elements'][0]['appearance']);
+        $this->actingAs($owner)->putJson($url, ['content' => $withoutBackground])->assertOk();
+
+        foreach (['none', 'soft', 'feature'] as $surface) {
+            $legacy = $withoutBackground;
+            $legacy['elements'][0]['composition']['surface'] = $surface;
+            $this->actingAs($owner)->putJson($url, ['content' => $legacy])->assertOk();
+        }
+
+        foreach ([10, 55, 100] as $strength) {
+            $decorated = $withoutBackground;
+            $decorated['elements'][0]['appearance'] = ['decorativeAppearance' => ['background' => ['texture' => 'fabric', 'textureStrength' => $strength, 'pattern' => 'botanical', 'patternStrength' => $strength]]];
+            $this->actingAs($owner)->putJson($url, ['content' => $decorated])->assertOk();
+            $this->assertSame($strength, $story->refresh()->content['elements'][0]['appearance']['decorativeAppearance']['background']['textureStrength']);
+        }
+        foreach ([
+            ['texture' => 'classic-fabric-01'], ['texture' => '/asset.png'], ['texture' => 'https://example.test/a.png'],
+            ['pattern' => 'geometric'], ['textureStrength' => 9], ['textureStrength' => 101], ['textureStrength' => 50.5], ['textureStrength' => '50'], ['opacity' => 0.5],
+        ] as $background) {
+            $invalid = $withoutBackground;
+            $invalid['elements'][0]['appearance'] = ['decorativeAppearance' => ['background' => $background]];
+            $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable();
+        }
+
+        $other = app(CreateWebsiteProject::class)->handle($event, 'Other Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $foreignColorId = app(AddWebsiteProjectColor::class)->handle($other, '#2b2b2b')->design_settings['customColors'][0]['id'];
+        foreach (['terracotta-text', '#123456', 'red', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F', $foreignColorId] as $invalidColorId) {
+            $invalid = $withoutBackground;
+            $invalid['elements'][0]['appearance'] = ['backgroundColorId' => $invalidColorId];
+            $this->actingAs($owner)->putJson($url, ['content' => $invalid])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('element.appearance.backgroundColorId');
+        }
+    }
+
+    public function test_narrative_media_frame_color_is_frame_role_and_project_scoped(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $website = $event->website;
+        $story = $website->sections()->where('type', 'story')->sole();
+        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}";
+        $projectColorId = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0]['id'];
+        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
+            'heading' => 'Our Story',
+            'intro' => null,
+            'elements' => [['id' => 'frame-block', 'type' => 'narrativeBlock', 'body' => 'Text']],
+            'mediaFraming' => [],
+        ]);
+
+        foreach (['terracotta-accent', $projectColorId] as $colorId) {
+            $content['elements'][0]['slots']['media']['appearance'] = ['frameStyle' => 'ornamentalCorners', 'frameColorId' => $colorId, 'frameSize' => 'medium'];
+            $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+            $this->assertSame($colorId, $story->refresh()->content['elements'][0]['slots']['media']['appearance']['frameColorId']);
+        }
+
+        $other = app(CreateWebsiteProject::class)->handle($event, 'Other Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
+        $foreignColorId = app(AddWebsiteProjectColor::class)->handle($other, '#2b2b2b')->design_settings['customColors'][0]['id'];
+        foreach (['terracotta-text', '#123456', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F', $foreignColorId] as $invalidColorId) {
+            $invalid = $content;
+            $invalid['elements'][0]['slots']['media']['appearance']['frameColorId'] = $invalidColorId;
+            $this->actingAs($owner)->putJson($url, ['content' => $invalid])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('element.slots.media.appearance.frameColorId');
         }
     }
 

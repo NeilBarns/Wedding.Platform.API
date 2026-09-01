@@ -421,6 +421,9 @@ final class WebsiteTemplateRegistry
                     DesignColorRole::Accent->value => [ContainerColorRole::HeadingColor, ContainerColorRole::AccentColor],
                     default => [],
                 };
+                if (in_array($role, [DesignColorRole::Canvas->value, DesignColorRole::Surface->value, DesignColorRole::Accent->value], true)) {
+                    $allowedContainerRoles[] = ContainerColorRole::BackgroundColor;
+                }
                 $colors[] = new DesignColorCapability($colorId, $palette['displayName'].' '.$roleLabels[$role], $value, $allowedProjectRoles, $allowedElementRoles, $allowedContainerRoles);
                 $roles[$role] = $colorId;
             }
