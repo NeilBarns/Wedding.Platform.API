@@ -86,7 +86,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $capabilities = $resolver->template($template);
             $this->assertNotNull($capabilities);
             $this->assertSame($template->supportedSectionTypes, array_map(fn ($section): string => $section->id, $capabilities->sections));
-            $this->assertEqualsCanonicalizing(['narrativeBlock'], $capabilities->elements);
+            $this->assertEqualsCanonicalizing(['text', 'richText', 'divider', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
 
             foreach ($capabilities->sections as $section) {
                 $this->assertContains($section->id, $knownSections);
@@ -121,13 +121,21 @@ class WebsiteCapabilityRegistryTest extends TestCase
         }
     }
 
-    public function test_story_is_the_only_element_authoring_section_and_allows_narrative_blocks_only(): void
+    public function test_element_authoring_is_limited_to_story_date_and_dress_code(): void
     {
         $resolver = app(WebsiteCapabilityResolver::class);
 
         foreach (array_keys(app(WebsiteTemplateRegistry::class)->all()) as $templateKey) {
             $template = $resolver->template($templateKey);
             foreach ($template->sections as $section) {
+                if (in_array($section->id, ['date', 'dressCode'], true)) {
+                    $this->assertSame(['text', 'richText', 'divider', 'compositionGroup'], $section->allowedElementTypes);
+                    $this->assertSame(20, $section->maximumElementCount);
+                    $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'text'));
+                    $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'compositionGroup'));
+
+                    continue;
+                }
                 if ($section->id !== 'story') {
                     $this->assertNull($section->allowedElementTypes);
                     $this->assertNull($section->maximumElementCount);
@@ -161,6 +169,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             foreach ([
                 'heading' => [['heading'], ['headingColor']],
                 'text' => [['body'], ['textColor']],
+                'richText' => [['body'], ['textColor']],
                 'quote' => [['body'], ['textColor']],
                 'narrativeBlock' => [['heading', 'body'], ['headingColor', 'textColor']],
             ] as $type => [$typographyRoles, $colorRoles]) {

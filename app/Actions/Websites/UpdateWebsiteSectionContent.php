@@ -4,6 +4,10 @@ namespace App\Actions\Websites;
 
 use App\Models\MediaAsset;
 use App\Models\WebsiteSection;
+use App\Website\Capabilities\ElementColorRole;
+use App\Website\Capabilities\TypographyRole;
+use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\ProjectColorLibrary;
 use App\Website\WebsiteSectionContentValidator;
 use App\Website\WebsiteSectionMediaReferences;
 use App\Website\WebsiteTemplateRegistry;
@@ -16,6 +20,7 @@ final class UpdateWebsiteSectionContent
         private readonly WebsiteTemplateRegistry $templates,
         private readonly WebsiteSectionMediaReferences $mediaReferences,
         private readonly UpgradeWebsiteProjectSchema $upgradeSchema,
+        private readonly WebsiteCapabilityResolver $capabilities,
     ) {}
 
     /** @param array<string, mixed> $content */
@@ -25,10 +30,22 @@ final class UpdateWebsiteSectionContent
             return $this->upgradeSchema->handle($section, $content);
         }
 
-        $validated = $this->validator->validate($section->type, $content);
+        $website = $section->website()->firstOrFail();
+        $sectionCapability = $this->capabilities->section($website->template_key, $section->type);
+        $textCapability = collect($this->capabilities->template($website->template_key)?->elementCapabilities)
+            ->first(fn ($element): bool => $element->type->value === 'text')?->appearance;
+        $allowedFontIds = collect($textCapability?->typography)->first(fn ($control): bool => $control->role === TypographyRole::Body)?->allowedFontIds;
+        $allowedColorIds = collect($textCapability?->colors)->first(fn ($control): bool => $control->role === ElementColorRole::TextColor)?->allowedColorIds;
+        $projectColorIds = array_column((new ProjectColorLibrary)->normalize($website->design_settings['customColors'] ?? []), 'id');
+        $validated = $this->validator->validate(
+            $section->type,
+            $content,
+            $sectionCapability?->allowedElementTypes,
+            $allowedFontIds,
+            $allowedColorIds === null ? null : [...$allowedColorIds, ...$projectColorIds],
+        );
         $currentMedia = $section->content['media'] ?? null;
         $nextMedia = $validated['media'] ?? null;
-        $website = $section->website()->firstOrFail();
         if ($section->type !== 'story' && $currentMedia !== $nextMedia && $this->templates->get($website->template_key)?->mediaCapabilityFor($section->type) === null) {
             throw ValidationException::withMessages(['content.media' => 'This Template does not support Media for this Section.']);
         }

@@ -2,19 +2,23 @@
 
 namespace App\Website;
 
+use App\Website\Elements\SectionChildFlowValidator;
 use App\Website\Elements\WebsiteElementValidator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 final class WebsiteSectionContentValidator
 {
-    public function __construct(private readonly WebsiteElementValidator $elements) {}
+    public function __construct(
+        private readonly WebsiteElementValidator $elements,
+        private readonly SectionChildFlowValidator $childFlows,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $content
      * @return array<string, mixed>
      */
-    public function validate(string $sectionType, array $content): array
+    public function validate(string $sectionType, array $content, ?array $allowedElementTypes = null, ?array $allowedFontIds = null, ?array $allowedColorIds = null): array
     {
         $rules = $this->rulesFor($sectionType);
 
@@ -28,6 +32,36 @@ final class WebsiteSectionContentValidator
             return $this->validateStory($content, $rules);
         }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
+        if (in_array($sectionType, ['date', 'dressCode'], true) && isset($validated['childFlow'])) {
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'divider', 'compositionGroup']);
+            $textElements = [];
+            $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
+                if (in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
+                    $textElements[] = [$element, $path];
+                }
+                if (($element['type'] ?? null) === 'compositionGroup') {
+                    foreach ($element['children'] as $index => $child) {
+                        $collectText($child, "{$path}.children.{$index}");
+                    }
+                }
+            };
+            foreach ($validated['childFlow']['elements'] as $index => $element) {
+                $collectText($element, "{$index}");
+            }
+            foreach ($textElements as [$element, $path]) {
+                if (! in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
+                    continue;
+                }
+                $fontId = in_array($element['type'], ['text', 'richText'], true) ? ($element['appearance']['fontFamilyId'] ?? null) : null;
+                if (is_string($fontId) && $allowedFontIds !== null && ! in_array($fontId, $allowedFontIds, true)) {
+                    throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.fontFamilyId" => 'The selected Text font is not supported by this Template.']);
+                }
+                $colorId = $element['appearance']['colorId'] ?? null;
+                if (is_string($colorId) && $allowedColorIds !== null && ! in_array($colorId, $allowedColorIds, true)) {
+                    throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.colorId" => 'The selected Text color is not supported by this Website.']);
+                }
+            }
+        }
         array_walk_recursive($validated, function (mixed &$value, string|int $key) use ($sectionType): void {
             if ($value === null && $key !== 'media' && ! ($sectionType === 'people' && $key === 'role')) {
                 $value = '';
@@ -42,7 +76,7 @@ final class WebsiteSectionContentValidator
     {
         return match ($sectionType) {
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
-            'date', 'dressCode' => $this->stringContentRules(['heading' => 255, 'description' => 5000]),
+            'date', 'dressCode' => $this->childFlowRules($this->stringContentRules(['heading' => 255, 'description' => 5000])),
             'story' => [
                 'content' => ['required', 'array:eyebrow,eyebrowIsHidden,heading,intro,headingIsHidden,introIsHidden,singletonAppearance,elements,mediaFraming,structureOrder'],
                 'content.eyebrow' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -191,6 +225,15 @@ final class WebsiteSectionContentValidator
         foreach ($fields as $field => $maximum) {
             $rules["content.{$field}"] = ['present', 'nullable', 'string', "max:{$maximum}"];
         }
+
+        return $rules;
+    }
+
+    /** @param array<string, list<string>> $rules @return array<string, list<string>> */
+    private function childFlowRules(array $rules): array
+    {
+        $rules['content'][1] .= ',childFlow';
+        $rules['content.childFlow'] = ['sometimes', 'array'];
 
         return $rules;
     }

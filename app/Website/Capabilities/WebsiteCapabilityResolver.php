@@ -325,7 +325,7 @@ final class WebsiteCapabilityResolver
         return array_map(function (WebsiteElementType $type) use ($headingTypography, $bodyTypography, $headingColor, $textColor): ElementCapability {
             $appearance = match ($type) {
                 WebsiteElementType::Heading => new ElementAppearanceCapability([$headingTypography], [$headingColor]),
-                WebsiteElementType::Text, WebsiteElementType::Quote => new ElementAppearanceCapability([$bodyTypography], [$textColor]),
+                WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Quote => new ElementAppearanceCapability([$bodyTypography], [$textColor]),
                 WebsiteElementType::NarrativeBlock => new ElementAppearanceCapability(
                     [$headingTypography, $bodyTypography],
                     [$headingColor, $textColor],
@@ -487,7 +487,11 @@ final class WebsiteCapabilityResolver
             }
         }
 
-        $allowedElements = $sectionId === 'story' ? [WebsiteElementType::NarrativeBlock->value] : null;
+        $allowedElements = match ($sectionId) {
+            'story' => [WebsiteElementType::NarrativeBlock->value],
+            'date', 'dressCode' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Divider->value, WebsiteElementType::CompositionGroup->value],
+            default => null,
+        };
 
         return new SectionCapability(
             id: $sectionId,

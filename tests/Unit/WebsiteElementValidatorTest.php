@@ -32,7 +32,7 @@ class WebsiteElementValidatorTest extends TestCase
 
         return [
             'heading' => [['id' => 'heading-1', 'type' => 'heading', 'text' => 'Welcome']],
-            'text' => [['id' => 'text-1', 'type' => 'text', 'text' => 'Body']],
+            'text' => [['id' => 'text-1', 'type' => 'text', 'text' => 'Body', 'appearance' => []]],
             'image' => [['id' => 'image-1', 'type' => 'image', 'mediaId' => $mediaId]],
             'divider' => [['id' => 'divider-1', 'type' => 'divider']],
             'quote' => [['id' => 'quote-1', 'type' => 'quote', 'text' => 'Always', 'attribution' => 'Us']],
@@ -48,7 +48,7 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_active_vocabulary_is_bounded_and_does_not_accept_deferred_types(): void
     {
         $this->assertSame([
-            'heading', 'text', 'image', 'divider', 'quote', 'cta', 'mediaCollection',
+            'heading', 'text', 'richText', 'image', 'divider', 'quote', 'cta', 'mediaCollection',
             'narrativeBlock', 'compositionGroup', 'eventDate', 'eventTime', 'countdown',
         ], array_column(WebsiteElementType::cases(), 'value'));
 
@@ -89,6 +89,41 @@ class WebsiteElementValidatorTest extends TestCase
         $validated = $this->validator->validate(['id' => '  arbitrary-client-id  ', 'type' => 'divider']);
 
         $this->assertSame('arbitrary-client-id', $validated['id']);
+    }
+
+    public function test_legacy_divider_appearance_is_migrated_to_the_locked_contract(): void
+    {
+        $validated = $this->validator->validate([
+            'id' => 'divider',
+            'type' => 'divider',
+            'appearance' => ['styleId' => 'botanical-vine', 'width' => 'full', 'opacity' => 75],
+        ]);
+
+        $this->assertSame([
+            'width' => 100,
+            'opacity' => 75,
+            'assetId' => 'botanical-vine',
+        ], $validated['appearance']);
+    }
+
+    public function test_divider_accepts_only_a_normalized_integer_width_scale(): void
+    {
+        $base = ['id' => 'divider', 'type' => 'divider'];
+        $validated = $this->validator->validate([...$base, 'appearance' => ['width' => 37]]);
+        $this->assertSame(37, $validated['appearance']['width']);
+        $this->assertInvalid([...$base, 'appearance' => ['width' => -1]]);
+        $this->assertInvalid([...$base, 'appearance' => ['width' => 101]]);
+        $this->assertInvalid([...$base, 'appearance' => ['width' => 37.5]]);
+    }
+
+    public function test_divider_accepts_continuous_integer_opacity(): void
+    {
+        $base = ['id' => 'divider', 'type' => 'divider'];
+        $validated = $this->validator->validate([...$base, 'appearance' => ['opacity' => 63]]);
+        $this->assertSame(63, $validated['appearance']['opacity']);
+        $this->assertInvalid([...$base, 'appearance' => ['opacity' => 24]]);
+        $this->assertInvalid([...$base, 'appearance' => ['opacity' => 101]]);
+        $this->assertInvalid([...$base, 'appearance' => ['opacity' => 63.5]]);
     }
 
     public function test_text_limits_and_required_fields_are_enforced(): void

@@ -110,7 +110,8 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.headingColor.allowedColorIds.0', 'terracotta-text')
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.bodyColor.allowedColorIds.0', 'terracotta-text')
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.accentColor.allowedColorIds.0', 'terracotta-accent')
-            ->assertJsonPath('data.template.capabilities.elements', ['narrativeBlock'])
+            ->assertJsonPath('data.template.capabilities.elements', ['text', 'richText', 'divider', 'compositionGroup', 'narrativeBlock'])
+            ->assertJsonPath('data.template.capabilities.sections.1.elements.allowedTypes', ['text', 'richText', 'divider', 'compositionGroup'])
             ->assertJsonPath('data.template.capabilities.sections.2.id', 'story')
             ->assertJsonPath('data.template.capabilities.sections.2.elements.allowedTypes', ['narrativeBlock'])
             ->assertJsonPath('data.template.capabilities.sections.2.elements.maxCount', 20)
@@ -195,6 +196,41 @@ class WebsiteDraftApiTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('content.elements');
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'unexpected' => true]])->assertUnprocessable();
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => [['id' => 'broken', 'type' => 'narrativeBlock', 'body' => []]]]])->assertUnprocessable();
+    }
+
+    public function test_date_and_dress_code_text_and_rich_text_child_flows_round_trip_without_a_schema_bump(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $schemaVersion = $event->website->schema_version;
+        foreach (['date', 'dressCode'] as $type) {
+            $section = $event->website->sections()->where('type', $type)->sole();
+            $content = [
+                'heading' => $type === 'date' ? 'When' : 'Attire',
+                'description' => 'Details',
+                'childFlow' => [
+                    'elements' => [
+                        ['id' => "{$type}-before", 'type' => 'text', 'text' => 'Before'],
+                        ['id' => "{$type}-rich", 'type' => 'richText', 'document' => ['type' => 'doc', 'children' => [
+                            ['type' => 'paragraph', 'children' => [['text' => 'A longer note', 'marks' => ['bold' => true]]]],
+                            ['type' => 'orderedList', 'items' => [[['text' => 'First']], [['text' => 'Second', 'marks' => ['link' => 'https://example.com']]]]],
+                        ]]],
+                        ['id' => "{$type}-after", 'type' => 'text', 'text' => 'After'],
+                    ],
+                    'order' => [
+                        ['kind' => 'element', 'id' => "{$type}-before"],
+                        ['kind' => 'element', 'id' => "{$type}-rich"],
+                        ['kind' => 'specialized', 'key' => 'content'],
+                        ['kind' => 'element', 'id' => "{$type}-after"],
+                    ],
+                ],
+            ];
+            $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $content])->assertOk();
+            $this->assertSame($content, $section->refresh()->content);
+        }
+
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")->assertOk()
+            ->assertJsonPath('data.schemaVersion', $schemaVersion);
+        $this->assertSame($schemaVersion, $event->website->refresh()->schema_version);
     }
 
     public function test_narrative_font_overrides_use_platform_role_validation(): void
