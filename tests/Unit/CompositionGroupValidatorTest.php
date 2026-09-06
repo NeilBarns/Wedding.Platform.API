@@ -22,7 +22,7 @@ class CompositionGroupValidatorTest extends TestCase
         $group = ['id' => 'outer', 'type' => 'compositionGroup', 'children' => [
             ['id' => 'text', 'type' => 'text', 'text' => 'Hello'],
             ['id' => 'inner', 'type' => 'compositionGroup', 'children' => [['id' => 'rich', 'type' => 'richText', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]]], 'layout' => ['direction' => 'vertical']],
-        ], 'layout' => ['width' => 'narrow', 'direction' => 'horizontal', 'gap' => 'l', 'padding' => ['top' => 's', 'right' => 'm', 'bottom' => 's', 'left' => 'm'], 'alignment' => 'center', 'columns' => 'equal-2', 'responsive' => ['mobile' => ['direction' => 'vertical', 'gap' => 's']]]];
+        ], 'layout' => ['width' => 'narrow', 'direction' => 'horizontal', 'gap' => 'l', 'padding' => ['top' => 's', 'right' => 'm', 'bottom' => 's', 'left' => 'm'], 'alignment' => 'center', 'columns' => 'equal-2', 'responsive' => ['tablet' => ['width' => 'medium'], 'mobile' => ['width' => 'full', 'direction' => 'vertical', 'gap' => 's']]]];
         $this->assertSame($group, $this->validator->validate($group));
     }
 
@@ -33,6 +33,23 @@ class CompositionGroupValidatorTest extends TestCase
             ['type' => 'bulletList', 'items' => [[['text' => 'One', 'marks' => ['italic' => true]]], [['text' => 'Two']]]],
         ]]];
         $group = ['id' => 'group', 'type' => 'compositionGroup', 'children' => [$richText], 'layout' => ['direction' => 'vertical']];
+
+        $this->assertSame($group, $this->validator->validate($group));
+    }
+
+    public function test_group_accepts_background_appearance(): void
+    {
+        $group = ['id' => 'group', 'type' => 'compositionGroup', 'children' => [], 'appearance' => ['backgroundColorId' => 'sage-accent', 'shadow' => 'medium', 'decorativeAppearance' => ['background' => ['texture' => 'paper', 'textureStrength' => 40, 'pattern' => 'botanical', 'patternStrength' => 60]]]];
+
+        $this->assertSame($group, $this->validator->validate($group));
+    }
+
+    public function test_group_and_nested_generic_children_preserve_hidden_state(): void
+    {
+        $group = ['id' => 'outer', 'type' => 'compositionGroup', 'isHidden' => true, 'children' => [
+            ['id' => 'text', 'type' => 'text', 'text' => 'Hidden child', 'isHidden' => true],
+            ['id' => 'inner', 'type' => 'compositionGroup', 'isHidden' => true, 'children' => []],
+        ]];
 
         $this->assertSame($group, $this->validator->validate($group));
     }
@@ -53,6 +70,7 @@ class CompositionGroupValidatorTest extends TestCase
         foreach ([
             ['id' => 'old', 'type' => 'compositionGroup', 'composition' => 'flow', 'children' => []],
             ['id' => 'bad', 'type' => 'compositionGroup', 'children' => [], 'layout' => ['gap' => 'huge']],
+            ['id' => 'unsupported', 'type' => 'compositionGroup', 'children' => [['id' => 'heading', 'type' => 'heading', 'text' => 'No']]],
             ['id' => 'one', 'type' => 'compositionGroup', 'children' => [['id' => 'two', 'type' => 'compositionGroup', 'children' => [['id' => 'three', 'type' => 'compositionGroup', 'children' => []]]]]],
         ] as $element) {
             try {

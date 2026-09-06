@@ -8,6 +8,7 @@ use App\Actions\Websites\CreateWebsiteProject;
 use App\Enums\EventMembershipRole;
 use App\Models\Event;
 use App\Models\EventMembership;
+use App\Models\MediaAsset;
 use App\Models\User;
 use App\Models\WebsiteSection;
 use App\Website\StoryContentNormalizer;
@@ -110,8 +111,8 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.headingColor.allowedColorIds.0', 'terracotta-text')
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.bodyColor.allowedColorIds.0', 'terracotta-text')
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.accentColor.allowedColorIds.0', 'terracotta-accent')
-            ->assertJsonPath('data.template.capabilities.elements', ['text', 'richText', 'divider', 'compositionGroup', 'narrativeBlock'])
-            ->assertJsonPath('data.template.capabilities.sections.1.elements.allowedTypes', ['text', 'richText', 'divider', 'compositionGroup'])
+            ->assertJsonPath('data.template.capabilities.elements', ['text', 'richText', 'divider', 'media', 'compositionGroup', 'narrativeBlock'])
+            ->assertJsonPath('data.template.capabilities.sections.1.elements.allowedTypes', ['text', 'richText', 'divider', 'media', 'compositionGroup'])
             ->assertJsonPath('data.template.capabilities.sections.2.id', 'story')
             ->assertJsonPath('data.template.capabilities.sections.2.elements.allowedTypes', ['narrativeBlock'])
             ->assertJsonPath('data.template.capabilities.sections.2.elements.maxCount', 20)
@@ -209,7 +210,7 @@ class WebsiteDraftApiTest extends TestCase
                 'description' => 'Details',
                 'childFlow' => [
                     'elements' => [
-                        ['id' => "{$type}-before", 'type' => 'text', 'text' => 'Before'],
+                        ['id' => "{$type}-before", 'type' => 'text', 'text' => 'Before', 'isHidden' => true],
                         ['id' => "{$type}-rich", 'type' => 'richText', 'document' => ['type' => 'doc', 'children' => [
                             ['type' => 'paragraph', 'children' => [['text' => 'A longer note', 'marks' => ['bold' => true]]]],
                             ['type' => 'orderedList', 'items' => [[['text' => 'First']], [['text' => 'Second', 'marks' => ['link' => 'https://example.com']]]]],
@@ -482,6 +483,39 @@ class WebsiteDraftApiTest extends TestCase
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$schedule->id}", [
             'content' => ['heading' => '', 'items' => 'wrong'],
         ])->assertUnprocessable()->assertJsonValidationErrors('content.items');
+    }
+
+    public function test_direct_and_nested_media_round_trip_and_reject_foreign_event_assets(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        [$foreignEvent] = $this->createEvent();
+        $asset = MediaAsset::query()->create(['event_id' => $event->id, 'created_by_user_id' => $owner->id, 'original_filename' => 'ours.jpg', 'mime_type' => 'image/jpeg', 'extension' => 'jpg', 'width' => 1200, 'height' => 800, 'size_bytes' => 100, 'storage_disk' => 'local', 'original_path' => 'test/ours.jpg']);
+        $asset->variants()->create(['variant_key' => 'web', 'mime_type' => 'image/webp', 'width' => 1200, 'height' => 800, 'size_bytes' => 80, 'storage_disk' => 'local', 'storage_path' => 'test/ours.webp']);
+        $foreign = MediaAsset::query()->create(['event_id' => $foreignEvent->id, 'original_filename' => 'foreign.jpg', 'mime_type' => 'image/jpeg', 'extension' => 'jpg', 'width' => 1200, 'height' => 800, 'size_bytes' => 100, 'storage_disk' => 'local', 'original_path' => 'test/foreign.jpg']);
+        $section = $event->website->sections()->where('type', 'date')->sole();
+        $media = ['id' => 'direct-media', 'type' => 'media', 'items' => [['id' => 'image-one', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'], ['id' => 'image-two', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail']], 'presentation' => ['mode' => 'carousel', 'carousel' => ['style' => 'peek', 'loop' => true]]];
+        $nested = [
+            'id' => 'group', 'type' => 'compositionGroup', 'children' => [[
+                'id' => 'nested-media', 'type' => 'media',
+                'items' => [
+                    ['id' => 'image-three', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'],
+                    ['id' => 'image-four', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail'],
+                    ['id' => 'image-five', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Flowers'],
+                ],
+                'presentation' => ['mode' => 'carousel', 'carousel' => ['style' => 'peek'], 'responsive' => ['mobile' => ['mode' => 'carousel']]],
+            ]],
+        ];
+        $content = ['heading' => '', 'description' => '', 'childFlow' => ['elements' => [$media, $nested], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => 'direct-media'], ['kind' => 'element', 'id' => 'group']]]];
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $content])->assertOk();
+        $this->assertSame($content, $section->refresh()->content);
+        $draftSection = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()->json('data.sections'))->firstWhere('id', $section->id);
+        $this->assertSame($content, $draftSection['content']);
+        $this->assertArrayHasKey($asset->id, $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()->json('data.media'));
+
+        $foreignContent = $content;
+        $foreignContent['childFlow']['elements'][0]['items'][0]['mediaId'] = $foreign->id;
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $foreignContent])->assertUnprocessable();
     }
 
     public function test_gallery_rejects_client_created_media_items_and_unknown_sections_are_not_editable(): void

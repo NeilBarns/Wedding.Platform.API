@@ -78,12 +78,14 @@ final class WebsiteElementValidator
                 $element['appearance']['opacity'] = (int) $element['appearance']['opacity'];
             }
         }
+        if ($type === WebsiteElementType::Media) $this->assertMediaItemShapes($element['items'] ?? []);
 
         $rules = match ($type) {
             WebsiteElementType::Heading => $this->textRules('heading', 255),
             WebsiteElementType::Text => $this->textElementRules(),
             WebsiteElementType::RichText => $this->richTextElementRules(),
             WebsiteElementType::Image => $this->imageRules(),
+            WebsiteElementType::Media => $this->mediaRules(),
             WebsiteElementType::Divider => $this->dividerRules(),
             WebsiteElementType::Quote => $this->quoteRules(),
             WebsiteElementType::Cta => $this->ctaRules($element),
@@ -94,6 +96,10 @@ final class WebsiteElementValidator
             WebsiteElementType::Countdown => $this->baseRules('countdown'),
             WebsiteElementType::CompositionGroup => throw new \LogicException('Composition Groups are validated separately.'),
         };
+
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
+            $rules['element.isHidden'] = ['sometimes', 'boolean'];
+        }
 
         $validated = Validator::make(['element' => $element], $rules)->validate()['element'];
         $validated['id'] = trim($validated['id']);
@@ -107,6 +113,27 @@ final class WebsiteElementValidator
 
                 return $item;
             }, $validated['items']);
+        }
+        if ($type === WebsiteElementType::Media) {
+            $kinds = [];
+            foreach ($validated['items'] as $index => $item) {
+                $kinds[$item['type']] = true;
+                if ($item['type'] === 'image' && ($item['decorative'] ?? false) !== true && trim($item['alt'] ?? '') === '') {
+                    throw ValidationException::withMessages(["element.items.{$index}.alt" => 'Alt text is required unless the image is decorative.']);
+                }
+            }
+            if (count($kinds) > 1) throw ValidationException::withMessages(['element.items' => 'Mixed image and video collections are not supported yet.']);
+            if (count(array_filter($validated['items'], fn (array $item): bool => $item['type'] === 'video')) > 1) throw ValidationException::withMessages(['element.items' => 'Media supports only one video.']);
+            $mode = $validated['presentation']['mode'] ?? null;
+            if ($mode === 'single' && count($validated['items']) !== 1) throw ValidationException::withMessages(['element.presentation.mode' => 'Single presentation requires exactly one item.']);
+            if ($mode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(['element.presentation.mode' => 'Carousel presentation requires at least two images.']);
+            if ($mode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(['element.presentation.mode' => 'Stacked presentation requires two to five images.']);
+            foreach (['tablet', 'mobile'] as $viewport) {
+                $responsiveMode = $validated['presentation']['responsive'][$viewport]['mode'] ?? null;
+                if ($responsiveMode === 'single' && count($validated['items']) !== 1) throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Single presentation requires exactly one item.']);
+                if ($responsiveMode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Carousel presentation requires at least two images.']);
+                if ($responsiveMode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Stacked presentation requires two to five images.']);
+            }
         }
         if ($type === WebsiteElementType::Text) {
             $validated['text'] = $this->normalizeText($validated['text']);
@@ -160,7 +187,7 @@ final class WebsiteElementValidator
     private function textElementRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,text,appearance'],
+            'element' => ['required', 'array:id,type,text,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:text'],
             'element.text' => ['present', 'string', 'max:5000'],
@@ -195,7 +222,7 @@ final class WebsiteElementValidator
     private function richTextElementRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,document,appearance'],
+            'element' => ['required', 'array:id,type,document,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:richText'],
             'element.document' => ['required', 'array:type,children'],
@@ -224,7 +251,7 @@ final class WebsiteElementValidator
     private function dividerRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,appearance'],
+            'element' => ['required', 'array:id,type,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:divider'],
             'element.appearance' => ['sometimes', 'array:assetId,width,alignment,colorId,opacity'],
@@ -418,6 +445,41 @@ final class WebsiteElementValidator
             'element.items.*.id' => $this->idRules(),
             'element.items.*.mediaId' => ['required', 'string', 'ulid'],
         ];
+    }
+
+    /** @return array<string, list<string>> */
+    private function mediaRules(): array
+    {
+        return [
+            'element' => ['required', 'array:id,type,items,presentation,appearance,isHidden'],
+            'element.id' => $this->idRules(), 'element.type' => ['required', 'in:media'],
+            'element.items' => ['present', 'array', 'list', 'max:8'], 'element.items.*' => ['required', 'array'],
+            'element.items.*.id' => $this->idRules(), 'element.items.*.type' => ['required', 'in:image,video'],
+            'element.items.*.mediaId' => ['required_if:element.items.*.type,image', 'string', 'ulid'],
+            'element.items.*.alt' => ['sometimes', 'string', 'max:500'], 'element.items.*.decorative' => ['sometimes', 'boolean'],
+            'element.items.*.focalPoint' => ['sometimes', 'array:x,y'], 'element.items.*.focalPoint.x' => ['required_with:element.items.*.focalPoint', 'numeric', 'between:0,1'], 'element.items.*.focalPoint.y' => ['required_with:element.items.*.focalPoint', 'numeric', 'between:0,1'],
+            'element.items.*.zoom' => ['sometimes', 'numeric', 'between:1,3'],
+            'element.items.*.url' => ['required_if:element.items.*.type,video', 'string', 'max:2048', 'url:https'], 'element.items.*.controls' => ['sometimes', 'boolean'],
+            'element.presentation' => ['sometimes', 'array:mode,width,alignment,aspectRatio,fit,carousel,stacked,responsive'], 'element.presentation.mode' => ['sometimes', 'in:single,carousel,stacked'], 'element.presentation.width' => ['sometimes', 'in:small,medium,large,full'], 'element.presentation.alignment' => ['sometimes', 'in:start,center,end'], 'element.presentation.aspectRatio' => ['sometimes', 'in:natural,square,portrait,landscape,wide'], 'element.presentation.fit' => ['sometimes', 'in:cover,contain'],
+            'element.presentation.carousel' => ['sometimes', 'array:style,autoplay,interval,arrows,dots,loop'], 'element.presentation.carousel.style' => ['sometimes', 'in:standard,peek'], 'element.presentation.carousel.autoplay' => ['sometimes', 'boolean'], 'element.presentation.carousel.interval' => ['sometimes', 'integer', 'between:2000,15000'], 'element.presentation.carousel.arrows' => ['sometimes', 'boolean'], 'element.presentation.carousel.dots' => ['sometimes', 'boolean'], 'element.presentation.carousel.loop' => ['sometimes', 'boolean'],
+            'element.presentation.stacked' => ['sometimes', 'array:style'], 'element.presentation.stacked.style' => ['sometimes', 'in:polaroid,soft-overlap,editorial'],
+            'element.presentation.responsive' => ['sometimes', 'array:tablet,mobile'], 'element.presentation.responsive.*' => ['sometimes', 'array:mode,width,aspectRatio'], 'element.presentation.responsive.*.mode' => ['sometimes', 'in:single,carousel,stacked'], 'element.presentation.responsive.*.width' => ['sometimes', 'in:small,medium,large,full'], 'element.presentation.responsive.*.aspectRatio' => ['sometimes', 'in:natural,square,portrait,landscape,wide'],
+            'element.appearance' => ['sometimes', 'array:corners,frame,shadow'], 'element.appearance.corners' => ['sometimes', 'in:square,soft,rounded,pill'], 'element.appearance.frame' => ['sometimes', 'in:none,line,mat'], 'element.appearance.shadow' => ['sometimes', 'in:none,soft,medium,strong'],
+        ];
+    }
+
+    private function assertMediaItemShapes(mixed $items): void
+    {
+        if (! is_array($items)) return;
+        foreach ($items as $index => $item) {
+            if (! is_array($item)) continue;
+            $allowed = ($item['type'] ?? null) === 'video'
+                ? ['id', 'type', 'url', 'controls']
+                : ['id', 'type', 'mediaId', 'alt', 'decorative', 'focalPoint', 'zoom'];
+            if (array_diff(array_keys($item), $allowed) !== []) {
+                throw ValidationException::withMessages(["element.items.{$index}" => 'The Media item contains unsupported properties.']);
+            }
+        }
     }
 
     /** @return array<string, list<string>> */

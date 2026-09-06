@@ -67,6 +67,22 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
         ], $this->extractor->extract('section', 'people', $content));
     }
 
+    public function test_extracts_direct_and_nested_media_elements_but_not_direct_video_urls(): void
+    {
+        $content = ['childFlow' => ['elements' => [
+            ['id' => 'direct', 'type' => 'media', 'items' => [['id' => 'one', 'type' => 'image', 'mediaId' => 'media-one', 'alt' => 'One']]],
+            ['id' => 'group', 'type' => 'compositionGroup', 'children' => [
+                ['id' => 'nested', 'type' => 'media', 'items' => [['id' => 'two', 'type' => 'image', 'mediaId' => 'media-two', 'alt' => 'Two']]],
+                ['id' => 'video', 'type' => 'media', 'items' => [['id' => 'clip', 'type' => 'video', 'url' => 'https://example.com/video.mp4']]],
+            ]],
+        ]]];
+
+        $this->assertSame([
+            ['mediaId' => 'media-one', 'reference' => ['type' => 'sectionMedia']],
+            ['mediaId' => 'media-two', 'reference' => ['type' => 'sectionMedia']],
+        ], $this->extractor->extract('date', 'date', $content));
+    }
+
     #[DataProvider('emptyAndMalformedCases')]
     public function test_skips_null_absent_and_malformed_references(string $type, array $content): void
     {

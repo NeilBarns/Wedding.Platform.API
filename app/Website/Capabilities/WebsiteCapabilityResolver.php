@@ -330,6 +330,7 @@ final class WebsiteCapabilityResolver
                     [$headingTypography, $bodyTypography],
                     [$headingColor, $textColor],
                 ),
+                WebsiteElementType::Media => new ElementAppearanceCapability([], []),
                 default => null,
             };
 
@@ -489,7 +490,7 @@ final class WebsiteCapabilityResolver
 
         $allowedElements = match ($sectionId) {
             'story' => [WebsiteElementType::NarrativeBlock->value],
-            'date', 'dressCode' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Divider->value, WebsiteElementType::CompositionGroup->value],
+            'date', 'dressCode' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
             default => null,
         };
 

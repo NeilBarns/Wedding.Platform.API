@@ -7,12 +7,31 @@ final class WebsiteSectionMediaReferenceExtractor
     /** @param array<string, mixed> $content */
     public function extract(string $sectionId, string $sectionType, array $content): array
     {
-        return match ($sectionType) {
+        $references = match ($sectionType) {
             'hero', 'venue' => $this->sectionMedia($content),
             'story' => $this->story($sectionId, $content),
             'people' => $this->people($content),
             default => [],
         };
+        $this->appendElementMedia($references, $content['childFlow']['elements'] ?? []);
+
+        return $references;
+    }
+
+    /** @param array<int, mixed> $elements */
+    private function appendElementMedia(array &$references, mixed $elements): void
+    {
+        if (! is_array($elements)) return;
+        foreach ($elements as $element) {
+            if (! is_array($element)) continue;
+            if (($element['type'] ?? null) === 'media') {
+                foreach (is_array($element['items'] ?? null) ? $element['items'] : [] as $item) {
+                    if (! is_array($item)) continue;
+                    if (is_string($item['mediaId'] ?? null)) $references[] = ['mediaId' => $item['mediaId'], 'reference' => ['type' => 'sectionMedia']];
+                }
+            }
+            if (($element['type'] ?? null) === 'compositionGroup') $this->appendElementMedia($references, $element['children'] ?? []);
+        }
     }
 
     private function sectionMedia(array $content): array

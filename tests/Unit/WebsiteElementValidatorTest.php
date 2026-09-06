@@ -26,6 +26,20 @@ class WebsiteElementValidatorTest extends TestCase
         $this->assertSame($element, $this->validator->validate($element));
     }
 
+    public function test_generic_primitives_accept_and_preserve_hidden_state(): void
+    {
+        $elements = [
+            ['id' => 'text', 'type' => 'text', 'text' => 'Copy', 'isHidden' => true],
+            ['id' => 'rich', 'type' => 'richText', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
+            ['id' => 'media', 'type' => 'media', 'items' => [], 'isHidden' => true],
+            ['id' => 'divider', 'type' => 'divider', 'isHidden' => true],
+        ];
+
+        foreach ($elements as $element) {
+            $this->assertSame($element, $this->validator->validate($element));
+        }
+    }
+
     public static function validPrimitiveProvider(): array
     {
         $mediaId = '01J00000000000000000000000';
@@ -34,6 +48,7 @@ class WebsiteElementValidatorTest extends TestCase
             'heading' => [['id' => 'heading-1', 'type' => 'heading', 'text' => 'Welcome']],
             'text' => [['id' => 'text-1', 'type' => 'text', 'text' => 'Body', 'appearance' => []]],
             'image' => [['id' => 'image-1', 'type' => 'image', 'mediaId' => $mediaId]],
+            'media' => [['id' => 'media-1', 'type' => 'media', 'items' => [['id' => 'item-1', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Wedding portrait']]]],
             'divider' => [['id' => 'divider-1', 'type' => 'divider']],
             'quote' => [['id' => 'quote-1', 'type' => 'quote', 'text' => 'Always', 'attribution' => 'Us']],
             'cta' => [['id' => 'cta-1', 'type' => 'cta', 'label' => 'Respond', 'action' => ['type' => 'rsvp']]],
@@ -48,7 +63,7 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_active_vocabulary_is_bounded_and_does_not_accept_deferred_types(): void
     {
         $this->assertSame([
-            'heading', 'text', 'richText', 'image', 'divider', 'quote', 'cta', 'mediaCollection',
+            'heading', 'text', 'richText', 'image', 'media', 'divider', 'quote', 'cta', 'mediaCollection',
             'narrativeBlock', 'compositionGroup', 'eventDate', 'eventTime', 'countdown',
         ], array_column(WebsiteElementType::cases(), 'value'));
 
@@ -194,6 +209,40 @@ class WebsiteElementValidatorTest extends TestCase
             ['id' => 'duplicate', 'mediaId' => $first],
             ['id' => 'duplicate', 'mediaId' => $second],
         ]]]);
+    }
+
+    public function test_media_enforces_accessibility_and_homogeneous_collections(): void
+    {
+        $mediaId = (string) Str::ulid();
+        $secondMediaId = (string) Str::ulid();
+        $this->assertSame(['id' => 'empty', 'type' => 'media', 'items' => []], $this->validator->validate(['id' => 'empty', 'type' => 'media', 'items' => []]));
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId]]]);
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'autoplay' => true]]]);
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [
+            ['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Portrait'],
+            ['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4'],
+        ]]);
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Portrait', 'caption' => 'No embedded captions']]]);
+        $video = ['id' => 'media', 'type' => 'media', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'controls' => true]]];
+        $this->assertSame($video, $this->validator->validate($video));
+        $carousel = ['id' => 'media', 'type' => 'media', 'items' => [
+            ['id' => 'one', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'One'],
+            ['id' => 'two', 'type' => 'image', 'mediaId' => $secondMediaId, 'alt' => 'Two'],
+        ], 'presentation' => ['mode' => 'carousel', 'alignment' => 'center', 'fit' => 'cover', 'carousel' => ['style' => 'peek', 'autoplay' => true, 'interval' => 5000, 'arrows' => true, 'dots' => true, 'loop' => false], 'responsive' => ['mobile' => ['mode' => 'carousel', 'width' => 'full', 'aspectRatio' => 'square']]], 'appearance' => ['corners' => 'soft', 'frame' => 'line', 'shadow' => 'medium']];
+        $this->assertSame($carousel, $this->validator->validate($carousel));
+        $this->assertInvalid([...$carousel, 'presentation' => [...$carousel['presentation'], 'carousel' => ['style' => 'cinematic']]]);
+        for ($count = 2; $count <= 5; $count++) {
+            $stacked = ['id' => 'stacked', 'type' => 'media', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, $count)), 'presentation' => ['mode' => 'stacked', 'stacked' => ['style' => 'polaroid'], 'responsive' => ['mobile' => ['mode' => 'stacked']]]];
+            $this->assertSame($stacked, $this->validator->validate($stacked));
+        }
+        $sixStacked = ['id' => 'stacked', 'type' => 'media', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, 6)), 'presentation' => ['mode' => 'stacked']];
+        $this->assertInvalid($sixStacked);
+        $this->assertInvalid(['id' => 'stacked-video', 'type' => 'media', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4']], 'presentation' => ['mode' => 'stacked']]);
+        foreach (['grid', 'masonry', 'stack'] as $legacyMode) $this->assertInvalid([...$carousel, 'presentation' => ['mode' => $legacyMode]]);
+        $this->assertInvalid([...$carousel, 'presentation' => ['mode' => 'carousel', 'columns' => 3]]);
+        $this->assertInvalid([...$carousel, 'motion' => ['type' => 'fade']]);
+        $this->assertInvalid([...$carousel, 'appearance' => ['frameSize' => 'large']]);
+        $this->assertInvalid([...$carousel, 'presentation' => ['responsive' => ['mobile' => ['alignment' => 'end']]]]);
     }
 
     public function test_narrative_block_enforces_canonical_media_and_body_contract(): void

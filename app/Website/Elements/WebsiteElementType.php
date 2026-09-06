@@ -8,6 +8,7 @@ enum WebsiteElementType: string
     case Text = 'text';
     case RichText = 'richText';
     case Image = 'image';
+    case Media = 'media';
     case Divider = 'divider';
     case Quote = 'quote';
     case Cta = 'cta';

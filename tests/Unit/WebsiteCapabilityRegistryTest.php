@@ -86,7 +86,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $capabilities = $resolver->template($template);
             $this->assertNotNull($capabilities);
             $this->assertSame($template->supportedSectionTypes, array_map(fn ($section): string => $section->id, $capabilities->sections));
-            $this->assertEqualsCanonicalizing(['text', 'richText', 'divider', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
+            $this->assertEqualsCanonicalizing(['text', 'richText', 'divider', 'media', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
 
             foreach ($capabilities->sections as $section) {
                 $this->assertContains($section->id, $knownSections);
@@ -129,7 +129,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $template = $resolver->template($templateKey);
             foreach ($template->sections as $section) {
                 if (in_array($section->id, ['date', 'dressCode'], true)) {
-                    $this->assertSame(['text', 'richText', 'divider', 'compositionGroup'], $section->allowedElementTypes);
+                    $this->assertSame(['text', 'richText', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
                     $this->assertSame(20, $section->maximumElementCount);
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'text'));
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'compositionGroup'));
@@ -199,6 +199,8 @@ class WebsiteCapabilityRegistryTest extends TestCase
             foreach (['image', 'divider', 'cta', 'mediaCollection', 'compositionGroup', 'eventDate', 'eventTime', 'countdown'] as $type) {
                 $this->assertNull($elements[$type]->appearance);
             }
+            $this->assertSame([], $elements['media']->appearance->typography);
+            $this->assertSame([], $elements['media']->appearance->colors);
 
             $serialized = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
             $this->assertSame($capabilities->elements, $serialized['elements']);

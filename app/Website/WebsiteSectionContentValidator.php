@@ -33,7 +33,7 @@ final class WebsiteSectionContentValidator
         }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
         if (in_array($sectionType, ['date', 'dressCode'], true) && isset($validated['childFlow'])) {
-            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'divider', 'compositionGroup']);
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'divider', 'media', 'compositionGroup']);
             $textElements = [];
             $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
                 if (in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
