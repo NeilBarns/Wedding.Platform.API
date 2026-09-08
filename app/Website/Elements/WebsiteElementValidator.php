@@ -3,6 +3,7 @@
 namespace App\Website\Elements;
 
 use App\Website\Capabilities\PlatformFontRegistry;
+use Closure;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -74,6 +75,7 @@ final class WebsiteElementValidator
         }
         if ($type === WebsiteElementType::Media) {
             $this->assertMediaItemShapes($element['items'] ?? []);
+            $this->assertMediaJsonTypes($element);
         }
 
         $rules = match ($type) {
@@ -132,9 +134,6 @@ final class WebsiteElementValidator
             if ($mode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) {
                 throw ValidationException::withMessages(['element.presentation.mode' => 'Carousel presentation requires at least two images.']);
             }
-            if ($mode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) {
-                throw ValidationException::withMessages(['element.presentation.mode' => 'Stacked presentation requires two to five images.']);
-            }
             foreach (['tablet', 'mobile'] as $viewport) {
                 $responsiveMode = $validated['presentation']['responsive'][$viewport]['mode'] ?? null;
                 if ($responsiveMode === 'single' && count($validated['items']) !== 1) {
@@ -142,9 +141,6 @@ final class WebsiteElementValidator
                 }
                 if ($responsiveMode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) {
                     throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Carousel presentation requires at least two images.']);
-                }
-                if ($responsiveMode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) {
-                    throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Stacked presentation requires two to five images.']);
                 }
             }
         }
@@ -483,13 +479,30 @@ final class WebsiteElementValidator
             'element.items.*.alt' => ['sometimes', 'string', 'max:500'], 'element.items.*.decorative' => ['sometimes', 'boolean'],
             'element.items.*.focalPoint' => ['sometimes', 'array:x,y'], 'element.items.*.focalPoint.x' => ['required_with:element.items.*.focalPoint', 'numeric', 'between:0,1'], 'element.items.*.focalPoint.y' => ['required_with:element.items.*.focalPoint', 'numeric', 'between:0,1'],
             'element.items.*.zoom' => ['sometimes', 'numeric', 'between:1,3'],
-            'element.items.*.url' => ['required_if:element.items.*.type,video', 'string', 'max:2048', 'url:https'], 'element.items.*.controls' => ['sometimes', 'boolean'],
-            'element.presentation' => ['sometimes', 'array:mode,width,alignment,aspectRatio,fit,carousel,stacked,responsive'], 'element.presentation.mode' => ['sometimes', 'in:single,carousel,stacked'], 'element.presentation.width' => ['sometimes', 'in:small,medium,large,full'], 'element.presentation.alignment' => ['sometimes', 'in:start,center,end'], 'element.presentation.aspectRatio' => ['sometimes', 'in:natural,square,portrait,landscape,wide'], 'element.presentation.fit' => ['sometimes', 'in:cover,contain'],
-            'element.presentation.carousel' => ['sometimes', 'array:style,autoplay,interval,arrows,dots,loop'], 'element.presentation.carousel.style' => ['sometimes', 'in:standard,peek'], 'element.presentation.carousel.autoplay' => ['sometimes', 'boolean'], 'element.presentation.carousel.interval' => ['sometimes', 'integer', 'between:2000,15000'], 'element.presentation.carousel.arrows' => ['sometimes', 'boolean'], 'element.presentation.carousel.dots' => ['sometimes', 'boolean'], 'element.presentation.carousel.loop' => ['sometimes', 'boolean'],
-            'element.presentation.stacked' => ['sometimes', 'array:style'], 'element.presentation.stacked.style' => ['sometimes', 'in:polaroid,soft-overlap,editorial'],
-            'element.presentation.responsive' => ['sometimes', 'array:tablet,mobile'], 'element.presentation.responsive.*' => ['sometimes', 'array:mode,width,aspectRatio'], 'element.presentation.responsive.*.mode' => ['sometimes', 'in:single,carousel,stacked'], 'element.presentation.responsive.*.width' => ['sometimes', 'in:small,medium,large,full'], 'element.presentation.responsive.*.aspectRatio' => ['sometimes', 'in:natural,square,portrait,landscape,wide'],
+            'element.items.*.url' => ['required_if:element.items.*.type,video', 'string', 'max:2048', 'url:https', $this->directVideoUrlRule()], 'element.items.*.controls' => ['sometimes', 'boolean'],
+            'element.presentation' => ['sometimes', 'array:mode,width,alignment,aspectRatio,fit,carousel,responsive'], 'element.presentation.mode' => ['sometimes', 'in:single,carousel'], 'element.presentation.width' => ['sometimes', 'in:small,medium,large,full'], 'element.presentation.alignment' => ['sometimes', 'in:start,center,end'], 'element.presentation.aspectRatio' => ['sometimes', 'in:natural,square,portrait,landscape,wide'], 'element.presentation.fit' => ['sometimes', 'in:cover,contain'],
+            'element.presentation.carousel' => ['sometimes', 'array:autoplay,interval,arrows,dots,loop'], 'element.presentation.carousel.autoplay' => ['sometimes', 'boolean'], 'element.presentation.carousel.interval' => ['sometimes', 'integer', 'between:2000,15000'], 'element.presentation.carousel.arrows' => ['sometimes', 'boolean'], 'element.presentation.carousel.dots' => ['sometimes', 'boolean'], 'element.presentation.carousel.loop' => ['sometimes', 'boolean'],
+            'element.presentation.responsive' => ['sometimes', 'array:tablet,mobile'], 'element.presentation.responsive.*' => ['sometimes', 'array:mode,width,aspectRatio'], 'element.presentation.responsive.*.mode' => ['sometimes', 'in:single,carousel'], 'element.presentation.responsive.*.width' => ['sometimes', 'in:small,medium,large,full'], 'element.presentation.responsive.*.aspectRatio' => ['sometimes', 'in:natural,square,portrait,landscape,wide'],
             'element.appearance' => ['sometimes', 'array:corners,frame,shadow'], 'element.appearance.corners' => ['sometimes', 'in:square,soft,rounded,pill'], 'element.appearance.frame' => ['sometimes', 'in:none,line,mat'], 'element.appearance.shadow' => ['sometimes', 'in:none,soft,medium,strong'],
         ];
+    }
+
+    private function directVideoUrlRule(): Closure
+    {
+        return static function (string $attribute, mixed $value, Closure $fail): void {
+            if (! is_string($value)) {
+                return;
+            }
+
+            $hostname = strtolower(rtrim((string) parse_url($value, PHP_URL_HOST), '.'));
+            foreach (['youtube.com', 'youtu.be', 'vimeo.com'] as $unsupportedHost) {
+                if ($hostname === $unsupportedHost || str_ends_with($hostname, '.'.$unsupportedHost)) {
+                    $fail("Direct video file required. YouTube and Vimeo links aren't supported.");
+
+                    return;
+                }
+            }
+        };
     }
 
     private function assertMediaItemShapes(mixed $items): void
@@ -507,6 +520,43 @@ final class WebsiteElementValidator
             if (array_diff(array_keys($item), $allowed) !== []) {
                 throw ValidationException::withMessages(["element.items.{$index}" => 'The Media item contains unsupported properties.']);
             }
+        }
+    }
+
+    /** @param array<string, mixed> $element */
+    private function assertMediaJsonTypes(array $element): void
+    {
+        foreach ($element['items'] ?? [] as $index => $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            foreach (['decorative', 'controls'] as $field) {
+                if (array_key_exists($field, $item) && ! is_bool($item[$field])) {
+                    throw ValidationException::withMessages(["element.items.{$index}.{$field}" => 'The field must be a JSON boolean.']);
+                }
+            }
+            foreach (['zoom'] as $field) {
+                if (array_key_exists($field, $item) && ! is_int($item[$field]) && ! is_float($item[$field])) {
+                    throw ValidationException::withMessages(["element.items.{$index}.{$field}" => 'The field must be a JSON number.']);
+                }
+            }
+            foreach (['x', 'y'] as $coordinate) {
+                if (isset($item['focalPoint']) && is_array($item['focalPoint']) && array_key_exists($coordinate, $item['focalPoint']) && ! is_int($item['focalPoint'][$coordinate]) && ! is_float($item['focalPoint'][$coordinate])) {
+                    throw ValidationException::withMessages(["element.items.{$index}.focalPoint.{$coordinate}" => 'The field must be a JSON number.']);
+                }
+            }
+        }
+        $carousel = $element['presentation']['carousel'] ?? null;
+        if (! is_array($carousel)) {
+            return;
+        }
+        foreach (['autoplay', 'arrows', 'dots', 'loop'] as $field) {
+            if (array_key_exists($field, $carousel) && ! is_bool($carousel[$field])) {
+                throw ValidationException::withMessages(["element.presentation.carousel.{$field}" => 'The field must be a JSON boolean.']);
+            }
+        }
+        if (array_key_exists('interval', $carousel) && ! is_int($carousel['interval'])) {
+            throw ValidationException::withMessages(['element.presentation.carousel.interval' => 'The field must be a JSON integer.']);
         }
     }
 

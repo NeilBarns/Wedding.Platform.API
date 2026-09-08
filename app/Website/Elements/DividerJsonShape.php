@@ -14,6 +14,27 @@ final class DividerJsonShape
             if (($element['type'] ?? null) === 'divider' && ($element['appearance'] ?? null) === []) {
                 $element['appearance'] = new \stdClass;
             }
+            if (($element['type'] ?? null) === 'media') {
+                foreach (['presentation', 'appearance'] as $field) {
+                    if (($element[$field] ?? null) === []) {
+                        $element[$field] = new \stdClass;
+                    }
+                }
+                if (is_array($element['presentation'] ?? null)) {
+                    foreach (['carousel', 'responsive'] as $field) {
+                        if (($element['presentation'][$field] ?? null) === []) {
+                            $element['presentation'][$field] = new \stdClass;
+                        }
+                    }
+                    if (is_array($element['presentation']['responsive'] ?? null)) {
+                        foreach (['tablet', 'mobile'] as $viewport) {
+                            if (($element['presentation']['responsive'][$viewport] ?? null) === []) {
+                                $element['presentation']['responsive'][$viewport] = new \stdClass;
+                            }
+                        }
+                    }
+                }
+            }
             if (($element['type'] ?? null) === 'compositionGroup') {
                 $element['children'] = self::serializeElements($element['children']);
             }

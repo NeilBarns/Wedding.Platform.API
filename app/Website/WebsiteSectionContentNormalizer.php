@@ -23,7 +23,7 @@ final class WebsiteSectionContentNormalizer
 
         return match ($sectionType) {
             'story' => $this->story->normalize($sectionId, $content),
-            'hero', 'date', 'schedule', 'venue', 'dressCode', 'people', 'gallery', 'faq', 'rsvp' => $content,
+            'hero', 'date', 'schedule', 'venue', 'dressCode', 'people', 'gallery', 'faq', 'rsvp', 'blank' => $content,
             default => throw new DomainException("Website section type [{$sectionType}] has no runtime content adapter."),
         };
     }

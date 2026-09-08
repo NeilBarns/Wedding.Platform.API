@@ -121,14 +121,14 @@ class WebsiteCapabilityRegistryTest extends TestCase
         }
     }
 
-    public function test_element_authoring_is_limited_to_story_date_and_dress_code(): void
+    public function test_element_authoring_is_limited_to_story_and_generic_flow_sections(): void
     {
         $resolver = app(WebsiteCapabilityResolver::class);
 
         foreach (array_keys(app(WebsiteTemplateRegistry::class)->all()) as $templateKey) {
             $template = $resolver->template($templateKey);
             foreach ($template->sections as $section) {
-                if (in_array($section->id, ['date', 'dressCode'], true)) {
+                if (in_array($section->id, ['date', 'dressCode', 'blank'], true)) {
                     $this->assertSame(['text', 'richText', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
                     $this->assertSame(20, $section->maximumElementCount);
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'text'));
@@ -275,6 +275,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             'gallery' => [['heading'], ['headingColor']],
             'faq' => [['heading', 'body'], ['headingColor', 'bodyColor']],
             'rsvp' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'blank' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
         ];
 
         foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {

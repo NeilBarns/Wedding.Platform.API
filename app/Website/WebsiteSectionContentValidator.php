@@ -33,8 +33,8 @@ final class WebsiteSectionContentValidator
             return $this->validateStory($content, $rules);
         }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        if (in_array($sectionType, ['date', 'dressCode'], true) && isset($validated['childFlow'])) {
-            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'divider', 'media', 'compositionGroup']);
+        if (in_array($sectionType, ['date', 'dressCode', 'blank'], true) && isset($validated['childFlow'])) {
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'divider', 'media', 'compositionGroup'], $sectionType !== 'blank');
             $textElements = [];
             $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
                 if (in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
@@ -82,6 +82,10 @@ final class WebsiteSectionContentValidator
         return match ($sectionType) {
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
             'date', 'dressCode' => $this->childFlowRules($this->stringContentRules(['heading' => 255, 'description' => 5000])),
+            'blank' => [
+                'content' => ['required', 'array:childFlow'],
+                'content.childFlow' => ['required', 'array'],
+            ],
             'story' => [
                 'content' => ['required', 'array:eyebrow,eyebrowIsHidden,heading,intro,headingIsHidden,introIsHidden,singletonAppearance,elements,mediaFraming,structureOrder'],
                 'content.eyebrow' => ['sometimes', 'nullable', 'string', 'max:255'],

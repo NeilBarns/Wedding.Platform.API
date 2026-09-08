@@ -14,7 +14,7 @@ final class SectionChildFlowValidator
      * @param  list<string>  $allowedTypes
      * @return array{elements: list<array<string, mixed>>, order: list<array<string, string>>}
      */
-    public function validate(array $flow, array $allowedTypes): array
+    public function validate(array $flow, array $allowedTypes, bool $requiresSpecializedContent = true): array
     {
         $validated = Validator::make(['flow' => $flow], [
             'flow' => ['required', 'array:elements,order'],
@@ -58,8 +58,12 @@ final class SectionChildFlowValidator
         }
 
         $ids = array_column($validated['elements'], 'id');
-        if ($specializedCount !== 1) {
-            throw ValidationException::withMessages(['content.childFlow.order' => 'Child flow must contain exactly one specialized content reference.']);
+        $expectedSpecializedCount = $requiresSpecializedContent ? 1 : 0;
+        if ($specializedCount !== $expectedSpecializedCount) {
+            $message = $requiresSpecializedContent
+                ? 'Child flow must contain exactly one specialized content reference.'
+                : 'Generic-only child flow cannot contain a specialized content reference.';
+            throw ValidationException::withMessages(['content.childFlow.order' => $message]);
         }
         if (count($references) !== count(array_unique($references, SORT_STRING))) {
             throw ValidationException::withMessages(['content.childFlow.order' => 'Child flow element references must be unique.']);

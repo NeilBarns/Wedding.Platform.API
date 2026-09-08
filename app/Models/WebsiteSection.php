@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Website\WebsiteSectionRegistry;
 use Database\Factories\WebsiteSectionFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,6 +20,8 @@ class WebsiteSection extends Model
 
     protected $fillable = [
         'type',
+        'singleton_key',
+        'editor_name',
         'sort_order',
         'is_enabled',
         'content',
@@ -33,6 +36,17 @@ class WebsiteSection extends Model
             'content' => 'array',
             'appearance' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (WebsiteSection $section): void {
+            $definition = app(WebsiteSectionRegistry::class)->get($section->type);
+            $section->singleton_key = $definition?->lifecycle->isSingleton() === true ? $definition->key : null;
+            if ($definition?->lifecycle->isUserOwned() !== true) {
+                $section->editor_name = null;
+            }
+        });
     }
 
     public function website(): BelongsTo

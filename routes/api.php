@@ -36,6 +36,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}/website-templates', [WebsiteDraftController::class, 'creationTemplates']);
     Route::put('/events/{event}/website/design', [WebsiteDraftController::class, 'updateDesign']);
     Route::put('/events/{event}/website/sections/order', [WebsiteDraftController::class, 'reorder']);
+    Route::post('/events/{event}/website/sections', [WebsiteDraftController::class, 'createSection']);
+    Route::delete('/events/{event}/website/sections/{section}', [WebsiteDraftController::class, 'deleteSection']);
+    Route::post('/events/{event}/website/sections/{section}/duplicate', [WebsiteDraftController::class, 'duplicateSection']);
+    Route::put('/events/{event}/website/sections/{section}/editor-name', [WebsiteDraftController::class, 'renameSection']);
     Route::put('/events/{event}/website/sections/{section}/enabled', [WebsiteDraftController::class, 'updateSectionEnabled']);
     Route::put('/events/{event}/website/sections/{section}/appearance', [WebsiteDraftController::class, 'updateSectionAppearance']);
     Route::put('/events/{event}/website/sections/{section}/design-defaults', [WebsiteDraftController::class, 'updateSectionDesignDefaults']);
@@ -47,6 +51,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/events/{event}/websites/{website}/colors', [WebsiteDraftController::class, 'addProjectColor']);
     Route::put('/events/{event}/websites/{website}/design', [WebsiteDraftController::class, 'updateProjectDesign']);
     Route::put('/events/{event}/websites/{website}/sections/order', [WebsiteDraftController::class, 'reorderProjectSections']);
+    Route::post('/events/{event}/websites/{website}/sections', [WebsiteDraftController::class, 'createProjectSection']);
+    Route::delete('/events/{event}/websites/{website}/sections/{section}', [WebsiteDraftController::class, 'deleteProjectSection']);
+    Route::post('/events/{event}/websites/{website}/sections/{section}/duplicate', [WebsiteDraftController::class, 'duplicateProjectSection']);
+    Route::put('/events/{event}/websites/{website}/sections/{section}/editor-name', [WebsiteDraftController::class, 'renameProjectSection']);
     Route::put('/events/{event}/websites/{website}/sections/{section}/enabled', [WebsiteDraftController::class, 'updateProjectSectionEnabled']);
     Route::put('/events/{event}/websites/{website}/sections/{section}/appearance', [WebsiteDraftController::class, 'updateProjectSectionAppearance']);
     Route::put('/events/{event}/websites/{website}/sections/{section}/design-defaults', [WebsiteDraftController::class, 'updateProjectSectionDesignDefaults']);

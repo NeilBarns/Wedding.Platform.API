@@ -29,7 +29,7 @@ class WebsiteSectionInitializationTest extends TestCase
         app(InitializeWebsiteSections::class)->handle($website);
 
         $sections = $website->sections()->get();
-        $definitions = app(WebsiteSectionRegistry::class)->all();
+        $definitions = app(WebsiteSectionRegistry::class)->defaultCompositionFor($website->event->type);
 
         $this->assertSame(array_keys($definitions), $sections->pluck('type')->all());
         $this->assertSame([10, 20, 30, 40, 50, 60, 65, 70, 80, 90], $sections->pluck('sort_order')->all());
@@ -122,11 +122,13 @@ class WebsiteSectionInitializationTest extends TestCase
         $this->assertFalse($sections->contains(fn (WebsiteSection $section): bool => str_contains(json_encode($section->content), $event->name)));
     }
 
-    public function test_database_prevents_duplicate_section_types_but_allows_shared_sort_orders(): void
+    public function test_database_prevents_duplicate_singleton_slots_but_allows_repeatable_types_and_shared_sort_orders(): void
     {
         $website = Website::factory()->create();
         WebsiteSection::factory()->for($website)->forType('hero')->create(['sort_order' => 10]);
         WebsiteSection::factory()->for($website)->forType('story')->create(['sort_order' => 10]);
+        WebsiteSection::factory()->for($website)->forType('blank')->create(['sort_order' => 10, 'editor_name' => 'Section 1']);
+        WebsiteSection::factory()->for($website)->forType('blank')->create(['sort_order' => 10, 'editor_name' => 'Section 2']);
 
         $this->expectException(QueryException::class);
 

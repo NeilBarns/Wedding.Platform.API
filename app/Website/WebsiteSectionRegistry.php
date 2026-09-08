@@ -20,6 +20,7 @@ final class WebsiteSectionRegistry
             'gallery' => $this->definition('gallery', 'Gallery', 70, ['heading' => '', 'items' => []]),
             'faq' => $this->definition('faq', 'FAQ', 80, ['heading' => '', 'items' => []]),
             'rsvp' => $this->definition('rsvp', 'RSVP', 90, ['heading' => '', 'description' => '', 'buttonLabel' => '']),
+            'blank' => $this->definition('blank', 'Section', 100, ['childFlow' => ['elements' => [], 'order' => []]], WebsiteSectionLifecycle::UserOwnedRepeatable),
         ];
     }
 
@@ -45,11 +46,14 @@ final class WebsiteSectionRegistry
     /** @return array<string, WebsiteSectionDefinition> */
     public function defaultCompositionFor(EventType $eventType): array
     {
-        return $this->forEventType($eventType);
+        return array_filter(
+            $this->forEventType($eventType),
+            fn (WebsiteSectionDefinition $definition): bool => $definition->lifecycle->isRequired(),
+        );
     }
 
     /** @param array<string, mixed> $defaultContent */
-    private function definition(string $key, string $displayName, int $defaultOrder, array $defaultContent): WebsiteSectionDefinition
+    private function definition(string $key, string $displayName, int $defaultOrder, array $defaultContent, WebsiteSectionLifecycle $lifecycle = WebsiteSectionLifecycle::RequiredSingleton): WebsiteSectionDefinition
     {
         return new WebsiteSectionDefinition(
             key: $key,
@@ -58,6 +62,7 @@ final class WebsiteSectionRegistry
             defaultEnabled: true,
             defaultOrder: $defaultOrder,
             defaultContent: $defaultContent,
+            lifecycle: $lifecycle,
         );
     }
 }

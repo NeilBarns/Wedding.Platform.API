@@ -40,6 +40,8 @@ final class InitializeWebsiteSections
                     'id' => (string) Str::ulid(),
                     'website_id' => $website->getKey(),
                     'type' => $definition->key,
+                    'singleton_key' => $definition->lifecycle->isSingleton() ? $definition->key : null,
+                    'editor_name' => null,
                     'sort_order' => $definition->defaultOrder,
                     'is_enabled' => $enableMissingSections && $definition->defaultEnabled,
                     'content' => json_encode($content, JSON_THROW_ON_ERROR),

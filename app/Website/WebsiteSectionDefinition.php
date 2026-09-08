@@ -17,6 +17,7 @@ final readonly class WebsiteSectionDefinition
         public bool $defaultEnabled,
         public int $defaultOrder,
         public array $defaultContent,
+        public WebsiteSectionLifecycle $lifecycle,
     ) {}
 
     public function supports(EventType $eventType): bool

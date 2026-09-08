@@ -24,10 +24,13 @@ class WebsiteSectionRegistryTest extends TestCase
             'gallery',
             'faq',
             'rsvp',
+            'blank',
         ], array_keys($definitions));
-        $this->assertSame([10, 20, 30, 40, 50, 60, 65, 70, 80, 90], array_column($definitions, 'defaultOrder'));
+        $this->assertSame([10, 20, 30, 40, 50, 60, 65, 70, 80, 90, 100], array_column($definitions, 'defaultOrder'));
         $this->assertSame(array_keys($definitions), array_keys($registry->forEventType(EventType::Wedding)));
-        $this->assertSame(array_keys($definitions), array_keys($registry->defaultCompositionFor(EventType::Wedding)));
+        $this->assertSame(array_slice(array_keys($definitions), 0, 10), array_keys($registry->defaultCompositionFor(EventType::Wedding)));
+        $this->assertTrue($definitions['hero']->lifecycle->isSingleton());
+        $this->assertTrue($definitions['blank']->lifecycle->isUserOwned());
         $this->assertCount(count($definitions), array_unique(array_map(
             fn ($definition) => $definition->key,
             $definitions,

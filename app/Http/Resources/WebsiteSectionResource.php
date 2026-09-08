@@ -61,6 +61,7 @@ class WebsiteSectionResource extends JsonResource
             'id' => $this->id,
             'type' => $this->type,
             'displayName' => $definition?->displayName ?? $this->type,
+            'editorName' => $definition?->lifecycle->isUserOwned() === true ? $this->editor_name : null,
             'sortOrder' => $this->sort_order,
             'isEnabled' => $this->is_enabled,
             'content' => $this->serializedContent(),

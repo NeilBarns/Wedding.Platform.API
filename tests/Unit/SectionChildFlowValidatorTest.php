@@ -50,6 +50,33 @@ class SectionChildFlowValidatorTest extends TestCase
         app(WebsiteSectionContentValidator::class)->validate('hero', ['headline' => 'Hello', 'subheadline' => '', 'childFlow' => $this->content()['childFlow']]);
     }
 
+    public function test_blank_accepts_empty_and_ordered_generic_only_flows(): void
+    {
+        $validator = app(WebsiteSectionContentValidator::class);
+        $empty = ['childFlow' => ['elements' => [], 'order' => []]];
+        $this->assertSame($empty, $validator->validate('blank', $empty, ['text']));
+
+        $element = ['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello'];
+        $ordered = ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => 'a']]]];
+        $this->assertSame($ordered, $validator->validate('blank', $ordered, ['text']));
+    }
+
+    public function test_blank_rejects_specialized_and_malformed_references(): void
+    {
+        $validator = app(WebsiteSectionContentValidator::class);
+        foreach ([
+            ['elements' => [], 'order' => [['kind' => 'specialized', 'key' => 'content']]],
+            ['elements' => [['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello']], 'order' => [['kind' => 'element', 'id' => 'missing']]],
+        ] as $flow) {
+            try {
+                $validator->validate('blank', ['childFlow' => $flow], ['text']);
+                $this->fail('Invalid Blank flow was accepted.');
+            } catch (ValidationException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     private function content(): array
     {
         return [

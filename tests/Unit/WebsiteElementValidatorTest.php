@@ -236,21 +236,31 @@ class WebsiteElementValidatorTest extends TestCase
         $this->assertInvalid(['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Portrait', 'caption' => 'No embedded captions']]]);
         $video = ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'controls' => true]]];
         $this->assertSame($video, $this->validator->validate($video));
+        foreach (['https://youtube.com/watch?v=abc', 'https://www.youtube.com/shorts/abc', 'https://studio.youtube.com/video/abc', 'https://youtu.be/abc', 'https://vimeo.com/123', 'https://player.vimeo.com/video/123'] as $providerUrl) {
+            $this->assertInvalid([...$video, 'items' => [[...$video['items'][0], 'url' => $providerUrl]]]);
+        }
+        foreach (['https://cdn.example.com/source', 'https://cdn.example.com/source?token=signed&expires=123'] as $directUrl) {
+            $expected = [...$video, 'items' => [[...$video['items'][0], 'url' => $directUrl]]];
+            $this->assertSame($expected, $this->validator->validate($expected));
+        }
         $carousel = ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [
             ['id' => 'one', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'One'],
             ['id' => 'two', 'type' => 'image', 'mediaId' => $secondMediaId, 'alt' => 'Two'],
-        ], 'presentation' => ['mode' => 'carousel', 'alignment' => 'center', 'fit' => 'cover', 'carousel' => ['style' => 'peek', 'autoplay' => true, 'interval' => 5000, 'arrows' => true, 'dots' => true, 'loop' => false], 'responsive' => ['mobile' => ['mode' => 'carousel', 'width' => 'full', 'aspectRatio' => 'square']]], 'appearance' => ['corners' => 'soft', 'frame' => 'line', 'shadow' => 'medium']];
+        ], 'presentation' => ['mode' => 'carousel', 'alignment' => 'center', 'fit' => 'cover', 'carousel' => ['autoplay' => true, 'interval' => 5000, 'arrows' => true, 'dots' => true, 'loop' => false], 'responsive' => ['mobile' => ['mode' => 'carousel', 'width' => 'full', 'aspectRatio' => 'square']]], 'appearance' => ['corners' => 'soft', 'frame' => 'line', 'shadow' => 'medium']];
         $this->assertSame($carousel, $this->validator->validate($carousel));
-        $this->assertInvalid([...$carousel, 'presentation' => [...$carousel['presentation'], 'carousel' => ['style' => 'cinematic']]]);
-        for ($count = 2; $count <= 5; $count++) {
-            $stacked = ['id' => 'stacked', 'type' => 'media', 'editorName' => 'Media 1', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, $count)), 'presentation' => ['mode' => 'stacked', 'stacked' => ['style' => 'polaroid'], 'responsive' => ['mobile' => ['mode' => 'stacked']]]];
-            $this->assertSame($stacked, $this->validator->validate($stacked));
-        }
-        $sixStacked = ['id' => 'stacked', 'type' => 'media', 'editorName' => 'Media 1', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, 6)), 'presentation' => ['mode' => 'stacked']];
-        $this->assertInvalid($sixStacked);
-        $this->assertInvalid(['id' => 'stacked-video', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4']], 'presentation' => ['mode' => 'stacked']]);
-        foreach (['grid', 'masonry', 'stack'] as $legacyMode) {
+        $this->assertInvalid([...$carousel, 'presentation' => [...$carousel['presentation'], 'carousel' => ['style' => 'peek']]]);
+        $this->assertInvalid([...$carousel, 'presentation' => [...$carousel['presentation'], 'stacked' => ['style' => 'polaroid']]]);
+        foreach (['grid', 'masonry', 'stack', 'stacked'] as $legacyMode) {
             $this->assertInvalid([...$carousel, 'presentation' => ['mode' => $legacyMode]]);
+        }
+        foreach ([
+            [...$carousel, 'items' => [[...$carousel['items'][0], 'zoom' => '1.5']]],
+            [...$carousel, 'items' => [[...$carousel['items'][0], 'focalPoint' => ['x' => '0.5', 'y' => 0.5]]]],
+            [...$carousel, 'presentation' => ['mode' => 'carousel', 'carousel' => ['interval' => '5000']]],
+            [...$video, 'items' => [[...$video['items'][0], 'controls' => 1]]],
+            [...$carousel, 'presentation' => ['mode' => 'carousel', 'carousel' => ['autoplay' => 'true']]],
+        ] as $nonCanonical) {
+            $this->assertInvalid($nonCanonical);
         }
         $this->assertInvalid([...$carousel, 'presentation' => ['mode' => 'carousel', 'columns' => 3]]);
         $this->assertInvalid([...$carousel, 'motion' => ['type' => 'fade']]);

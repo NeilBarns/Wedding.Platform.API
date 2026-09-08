@@ -530,6 +530,26 @@ class WebsiteDraftApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('content.items');
     }
 
+    public function test_media_empty_objects_round_trip_as_objects_and_arrays_are_rejected(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $section = $event->website->sections()->where('type', 'date')->sole();
+        $url = "/api/events/{$event->id}/website/sections/{$section->id}";
+        $element = ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [], 'presentation' => (object) [], 'appearance' => (object) []];
+        $content = ['heading' => '', 'description' => '', 'childFlow' => ['elements' => [$element], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => 'media']]]];
+
+        $this->actingAs($owner)->call('PUT', $url, [], [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['content' => $content], JSON_THROW_ON_ERROR))->assertOk();
+        $response = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk();
+        $raw = $response->getContent();
+        $this->assertMatchesRegularExpression('/"presentation":\{\},"appearance":\{\}/', $raw);
+
+        foreach (['presentation', 'appearance'] as $field) {
+            $invalid = $content;
+            $invalid['childFlow']['elements'][0][$field] = [];
+            $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable();
+        }
+    }
+
     public function test_direct_and_nested_media_round_trip_and_reject_foreign_event_assets(): void
     {
         [$event, $owner] = $this->createEvent();
@@ -538,7 +558,7 @@ class WebsiteDraftApiTest extends TestCase
         $asset->variants()->create(['variant_key' => 'web', 'mime_type' => 'image/webp', 'width' => 1200, 'height' => 800, 'size_bytes' => 80, 'storage_disk' => 'local', 'storage_path' => 'test/ours.webp']);
         $foreign = MediaAsset::query()->create(['event_id' => $foreignEvent->id, 'original_filename' => 'foreign.jpg', 'mime_type' => 'image/jpeg', 'extension' => 'jpg', 'width' => 1200, 'height' => 800, 'size_bytes' => 100, 'storage_disk' => 'local', 'original_path' => 'test/foreign.jpg']);
         $section = $event->website->sections()->where('type', 'date')->sole();
-        $media = ['id' => 'direct-media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'image-one', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'], ['id' => 'image-two', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail']], 'presentation' => ['mode' => 'carousel', 'carousel' => ['style' => 'peek', 'loop' => true]]];
+        $media = ['id' => 'direct-media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'image-one', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'], ['id' => 'image-two', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail']], 'presentation' => ['mode' => 'carousel', 'carousel' => ['loop' => true]]];
         $nested = [
             'id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [[
                 'id' => 'nested-media', 'type' => 'media', 'editorName' => 'Media 1',
@@ -547,7 +567,7 @@ class WebsiteDraftApiTest extends TestCase
                     ['id' => 'image-four', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail'],
                     ['id' => 'image-five', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Flowers'],
                 ],
-                'presentation' => ['mode' => 'carousel', 'carousel' => ['style' => 'peek'], 'responsive' => ['mobile' => ['mode' => 'carousel']]],
+                'presentation' => ['mode' => 'carousel', 'responsive' => ['mobile' => ['mode' => 'carousel']]],
             ]],
         ];
         $content = ['heading' => '', 'description' => '', 'childFlow' => ['elements' => [$media, $nested], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => 'direct-media'], ['kind' => 'element', 'id' => 'group']]]];
@@ -557,6 +577,9 @@ class WebsiteDraftApiTest extends TestCase
         $draftSection = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()->json('data.sections'))->firstWhere('id', $section->id);
         $this->assertSame($content, $draftSection['content']);
         $this->assertArrayHasKey($asset->id, $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()->json('data.media'));
+
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $draftSection['content']])->assertOk();
+        $this->assertSame($content, $section->refresh()->content);
 
         $foreignContent = $content;
         $foreignContent['childFlow']['elements'][0]['items'][0]['mediaId'] = $foreign->id;

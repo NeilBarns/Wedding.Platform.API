@@ -27,6 +27,7 @@ class WebsiteSectionFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'type' => $type,
+            'content' => app(WebsiteSectionRegistry::class)->get($type)?->defaultContent ?? [],
         ]);
     }
 

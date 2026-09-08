@@ -4,7 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Actions\Websites\AddWebsiteProjectColor;
 use App\Actions\Websites\CreateWebsiteProject;
+use App\Actions\Websites\CreateWebsiteSection;
+use App\Actions\Websites\DeleteWebsiteSection;
+use App\Actions\Websites\DuplicateWebsiteSection;
 use App\Actions\Websites\InitializeEventWebsite;
+use App\Actions\Websites\RenameWebsiteSection;
 use App\Actions\Websites\ReorderWebsiteSections;
 use App\Actions\Websites\SetWebsiteSectionEnabled;
 use App\Actions\Websites\UpdateWebsiteDesignSettings;
@@ -16,7 +20,9 @@ use App\Exceptions\UnknownWebsiteTemplate;
 use App\Exceptions\WebsiteAlreadyInitialized;
 use App\Http\Requests\AddWebsiteProjectColorRequest;
 use App\Http\Requests\CreateWebsiteProjectRequest;
+use App\Http\Requests\CreateWebsiteSectionRequest;
 use App\Http\Requests\InitializeWebsiteRequest;
+use App\Http\Requests\RenameWebsiteSectionRequest;
 use App\Http\Requests\ReorderWebsiteSectionsRequest;
 use App\Http\Requests\UpdateWebsiteDesignSettingsRequest;
 use App\Http\Requests\UpdateWebsiteSectionAppearanceRequest;
@@ -326,6 +332,74 @@ class WebsiteDraftController extends Controller
         Website $website,
     ): WebsiteDraftResource {
         $reorderSections->handle($website, $request->validated('sectionIds'));
+
+        return $this->draft($website);
+    }
+
+    public function createSection(CreateWebsiteSectionRequest $request, CreateWebsiteSection $create, string $event): JsonResponse
+    {
+        return $this->applyCreateSection($create, $this->legacyWebsite($this->authorizedEvent($event)), $request->validated('type'));
+    }
+
+    public function createProjectSection(CreateWebsiteSectionRequest $request, CreateWebsiteSection $create, string $event, string $website): JsonResponse
+    {
+        return $this->applyCreateSection($create, $this->website($this->authorizedEvent($event), $website), $request->validated('type'));
+    }
+
+    private function applyCreateSection(CreateWebsiteSection $create, Website $website, string $type): JsonResponse
+    {
+        $create->handle($website, $type);
+
+        return $this->draft($website)->response()->setStatusCode(201);
+    }
+
+    public function deleteSection(DeleteWebsiteSection $delete, string $event, string $section): WebsiteDraftResource
+    {
+        return $this->applyDeleteSection($delete, $this->legacyWebsite($this->authorizedEvent($event)), $section);
+    }
+
+    public function deleteProjectSection(DeleteWebsiteSection $delete, string $event, string $website, string $section): WebsiteDraftResource
+    {
+        return $this->applyDeleteSection($delete, $this->website($this->authorizedEvent($event), $website), $section);
+    }
+
+    private function applyDeleteSection(DeleteWebsiteSection $delete, Website $website, string $section): WebsiteDraftResource
+    {
+        $delete->handle($this->section($website, $section));
+
+        return $this->draft($website);
+    }
+
+    public function duplicateSection(DuplicateWebsiteSection $duplicate, string $event, string $section): JsonResponse
+    {
+        return $this->applyDuplicateSection($duplicate, $this->legacyWebsite($this->authorizedEvent($event)), $section);
+    }
+
+    public function duplicateProjectSection(DuplicateWebsiteSection $duplicate, string $event, string $website, string $section): JsonResponse
+    {
+        return $this->applyDuplicateSection($duplicate, $this->website($this->authorizedEvent($event), $website), $section);
+    }
+
+    private function applyDuplicateSection(DuplicateWebsiteSection $duplicate, Website $website, string $section): JsonResponse
+    {
+        $duplicate->handle($this->section($website, $section));
+
+        return $this->draft($website)->response()->setStatusCode(201);
+    }
+
+    public function renameSection(RenameWebsiteSectionRequest $request, RenameWebsiteSection $rename, string $event, string $section): WebsiteDraftResource
+    {
+        return $this->applyRenameSection($rename, $this->legacyWebsite($this->authorizedEvent($event)), $section, $request->validated('editorName'));
+    }
+
+    public function renameProjectSection(RenameWebsiteSectionRequest $request, RenameWebsiteSection $rename, string $event, string $website, string $section): WebsiteDraftResource
+    {
+        return $this->applyRenameSection($rename, $this->website($this->authorizedEvent($event), $website), $section, $request->validated('editorName'));
+    }
+
+    private function applyRenameSection(RenameWebsiteSection $rename, Website $website, string $section, string $editorName): WebsiteDraftResource
+    {
+        $rename->handle($this->section($website, $section), $editorName);
 
         return $this->draft($website);
     }
