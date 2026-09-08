@@ -9,12 +9,17 @@ use Tests\TestCase;
 
 class SectionChildFlowValidatorTest extends TestCase
 {
-    public function test_date_and_dress_code_accept_valid_optional_text_child_flow(): void
+    public function test_date_accepts_valid_optional_text_child_flow(): void
     {
         $validator = app(WebsiteSectionContentValidator::class);
         $this->assertSame($this->content(), $validator->validate('date', $this->content(), ['text']));
-        $this->assertSame($this->content(), $validator->validate('dressCode', $this->content(), ['text']));
         $this->assertSame(['heading' => 'When', 'description' => 'Noon'], $validator->validate('date', ['heading' => 'When', 'description' => 'Noon']));
+    }
+
+    public function test_removed_dress_code_section_is_not_editable(): void
+    {
+        $this->expectException(ValidationException::class);
+        app(WebsiteSectionContentValidator::class)->validate('dressCode', ['heading' => 'Attire', 'description' => 'Formal']);
     }
 
     #[DataProvider('invalidFlowProvider')]
@@ -59,6 +64,23 @@ class SectionChildFlowValidatorTest extends TestCase
         $element = ['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello'];
         $ordered = ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => 'a']]]];
         $this->assertSame($ordered, $validator->validate('blank', $ordered, ['text']));
+    }
+
+    public function test_date_block_is_valid_at_blank_root_and_nested_group_without_persisted_event_data(): void
+    {
+        $date = ['id' => 'date-1', 'type' => 'date', 'editorName' => 'Ceremony date', 'isHidden' => true];
+        $nestedDate = ['id' => 'date-2', 'type' => 'date', 'editorName' => 'Nested date'];
+        $group = ['id' => 'group-1', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [$nestedDate]];
+        $content = ['childFlow' => ['elements' => [$date, $group], 'order' => [
+            ['kind' => 'element', 'id' => 'date-1'],
+            ['kind' => 'element', 'id' => 'group-1'],
+        ]]];
+
+        $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate(
+            'blank',
+            $content,
+            ['date', 'compositionGroup'],
+        ));
     }
 
     public function test_blank_rejects_specialized_and_malformed_references(): void

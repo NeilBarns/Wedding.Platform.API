@@ -80,7 +80,6 @@ class WebsiteSectionDesignDefaultsTest extends TestCase
             ['gallery', ['bodyFontId' => 'classic-serif']],
             ['gallery', ['bodyColorId' => 'terracotta-text']],
             ['gallery', ['accentColorId' => 'terracotta-accent']],
-            ['dressCode', ['accentColorId' => 'terracotta-accent']],
             ['faq', ['accentColorId' => 'terracotta-accent']],
             ['story', ['headingFontId' => 'fashion-serif']],
             ['story', ['bodyFontId' => 'editorial-serif']],

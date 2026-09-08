@@ -29,7 +29,7 @@ final class WebsiteElementValidator
     private function validateAtDepth(array $element, int $depth): array
     {
         $type = $this->elementType($element);
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
             && is_string($element['editorName'] ?? null)) {
             $element['editorName'] = $this->normalizeEditorName($element['editorName']);
         }
@@ -82,6 +82,7 @@ final class WebsiteElementValidator
             WebsiteElementType::Heading => $this->textRules('heading', 255),
             WebsiteElementType::Text => $this->textElementRules(),
             WebsiteElementType::RichText => $this->richTextElementRules(),
+            WebsiteElementType::Date => $this->dateElementRules(),
             WebsiteElementType::Image => $this->imageRules(),
             WebsiteElementType::Media => $this->mediaRules(),
             WebsiteElementType::Divider => $this->dividerRules(),
@@ -95,7 +96,7 @@ final class WebsiteElementValidator
             WebsiteElementType::CompositionGroup => throw new \LogicException('Composition Groups are validated separately.'),
         };
 
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
             $rules['element.isHidden'] = ['sometimes', 'boolean'];
             $rules['element.editorName'] = ['required', 'string', 'max:80', 'not_regex:/^\s*$/u'];
         }
@@ -178,6 +179,22 @@ final class WebsiteElementValidator
             'element' => ['required', 'array:id,type'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', "in:{$type}"],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
+    private function dateElementRules(): array
+    {
+        return [
+            'element' => ['required', 'array:id,type,editorName,isHidden,appearance'],
+            'element.id' => $this->idRules(),
+            'element.type' => ['required', 'in:date'],
+            'element.appearance' => ['sometimes', 'array:format,showWeekday,alignment,textStyle,colorId'],
+            'element.appearance.format' => ['sometimes', 'in:long,medium,short,numeric'],
+            'element.appearance.showWeekday' => ['sometimes', 'boolean'],
+            'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
+            'element.appearance.textStyle' => ['sometimes', 'in:display,heading,body'],
+            'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
         ];
     }
 

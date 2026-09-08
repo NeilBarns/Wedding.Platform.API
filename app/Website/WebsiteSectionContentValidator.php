@@ -33,11 +33,11 @@ final class WebsiteSectionContentValidator
             return $this->validateStory($content, $rules);
         }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        if (in_array($sectionType, ['date', 'dressCode', 'blank'], true) && isset($validated['childFlow'])) {
-            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'divider', 'media', 'compositionGroup'], $sectionType !== 'blank');
+        if (in_array($sectionType, ['date', 'blank'], true) && isset($validated['childFlow'])) {
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'date', 'divider', 'media', 'compositionGroup'], $sectionType !== 'blank');
             $textElements = [];
             $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
-                if (in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
+                if (in_array(($element['type'] ?? null), ['text', 'richText', 'date', 'divider'], true)) {
                     $textElements[] = [$element, $path];
                 }
                 if (($element['type'] ?? null) === 'compositionGroup') {
@@ -50,7 +50,7 @@ final class WebsiteSectionContentValidator
                 $collectText($element, "{$index}");
             }
             foreach ($textElements as [$element, $path]) {
-                if (! in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
+                if (! in_array(($element['type'] ?? null), ['text', 'richText', 'date', 'divider'], true)) {
                     continue;
                 }
                 if ($element['type'] === 'divider' && isset($element['appearance']['assetId']) && $templateKey !== null
@@ -81,7 +81,7 @@ final class WebsiteSectionContentValidator
     {
         return match ($sectionType) {
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
-            'date', 'dressCode' => $this->childFlowRules($this->stringContentRules(['heading' => 255, 'description' => 5000])),
+            'date' => $this->childFlowRules($this->stringContentRules(['heading' => 255, 'description' => 5000])),
             'blank' => [
                 'content' => ['required', 'array:childFlow'],
                 'content.childFlow' => ['required', 'array'],

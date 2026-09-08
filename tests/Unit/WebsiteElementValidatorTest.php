@@ -31,6 +31,7 @@ class WebsiteElementValidatorTest extends TestCase
         $elements = [
             ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Copy', 'isHidden' => true],
             ['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
+            ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1', 'isHidden' => true],
             ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [], 'isHidden' => true],
             ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1', 'isHidden' => true],
         ];
@@ -40,11 +41,25 @@ class WebsiteElementValidatorTest extends TestCase
         }
     }
 
+    public function test_date_block_accepts_sparse_bounded_appearance(): void
+    {
+        $element = [
+            'id' => 'date', 'type' => 'date', 'editorName' => 'Date 1',
+            'appearance' => ['format' => 'short', 'showWeekday' => false, 'alignment' => 'end', 'textStyle' => 'body', 'colorId' => 'accent'],
+        ];
+
+        $this->assertSame($element, $this->validator->validate($element));
+        foreach (['format' => 'custom', 'alignment' => 'justify', 'textStyle' => 'custom'] as $key => $value) {
+            $this->assertInvalid([...$element, 'appearance' => [$key => $value]]);
+        }
+    }
+
     public function test_generic_editor_names_are_required_normalized_and_unicode_bounded(): void
     {
         $elements = [
             ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Copy'],
             ['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]],
+            ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1'],
             ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => []],
             ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1'],
             ['id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => []],
@@ -70,6 +85,7 @@ class WebsiteElementValidatorTest extends TestCase
         return [
             'heading' => [['id' => 'heading-1', 'type' => 'heading', 'text' => 'Welcome']],
             'text' => [['id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Body', 'appearance' => []]],
+            'date' => [['id' => 'date-block-1', 'type' => 'date', 'editorName' => 'Date 1']],
             'image' => [['id' => 'image-1', 'type' => 'image', 'mediaId' => $mediaId]],
             'media' => [['id' => 'media-1', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'item-1', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Wedding portrait']]]],
             'divider' => [['id' => 'divider-1', 'type' => 'divider', 'editorName' => 'Divider 1']],
@@ -86,7 +102,7 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_active_vocabulary_is_bounded_and_does_not_accept_deferred_types(): void
     {
         $this->assertSame([
-            'heading', 'text', 'richText', 'image', 'media', 'divider', 'quote', 'cta', 'mediaCollection',
+            'heading', 'text', 'richText', 'date', 'image', 'media', 'divider', 'quote', 'cta', 'mediaCollection',
             'narrativeBlock', 'compositionGroup', 'eventDate', 'eventTime', 'countdown',
         ], array_column(WebsiteElementType::cases(), 'value'));
 

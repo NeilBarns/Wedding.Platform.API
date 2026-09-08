@@ -71,7 +71,7 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.sections.0.content.elements', [])
             ->assertJsonPath('data.sections.0.content.mediaFraming', [])
             ->assertJsonPath('data.sections.0.mediaCapability.mode', 'multiple')
-            ->assertJsonCount(10, 'data.sections');
+            ->assertJsonCount(9, 'data.sections');
         $this->assertSame('Hero', $heroPayload['displayName']);
         $this->assertFalse($heroPayload['isEnabled']);
         $this->assertSame('A heading', $heroPayload['content']['headline']);
@@ -111,8 +111,8 @@ class WebsiteDraftApiTest extends TestCase
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.headingColor.allowedColorIds.0', 'terracotta-text')
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.bodyColor.allowedColorIds.0', 'terracotta-text')
             ->assertJsonPath('data.template.capabilities.projectDefaults.colors.accentColor.allowedColorIds.0', 'terracotta-accent')
-            ->assertJsonPath('data.template.capabilities.elements', ['text', 'richText', 'divider', 'media', 'compositionGroup', 'narrativeBlock'])
-            ->assertJsonPath('data.template.capabilities.sections.1.elements.allowedTypes', ['text', 'richText', 'divider', 'media', 'compositionGroup'])
+            ->assertJsonPath('data.template.capabilities.elements', ['text', 'richText', 'date', 'divider', 'media', 'compositionGroup', 'narrativeBlock'])
+            ->assertJsonPath('data.template.capabilities.sections.1.elements.allowedTypes', ['text', 'richText', 'date', 'divider', 'media', 'compositionGroup'])
             ->assertJsonPath('data.template.capabilities.sections.2.id', 'story')
             ->assertJsonPath('data.template.capabilities.sections.2.elements.allowedTypes', ['narrativeBlock'])
             ->assertJsonPath('data.template.capabilities.sections.2.elements.maxCount', 20)
@@ -140,7 +140,6 @@ class WebsiteDraftApiTest extends TestCase
                 'time' => '3:00 PM', 'title' => 'Ceremony', 'description' => '',
             ]]],
             'venue' => ['heading' => '', 'name' => 'Venue', 'address' => '', 'description' => ''],
-            'dressCode' => ['heading' => '', 'description' => 'Formal'],
             'people' => ['heading' => 'Wedding Party', 'groups' => []],
             'gallery' => ['heading' => 'Gallery', 'items' => []],
             'faq' => ['heading' => '', 'items' => [['question' => 'When?', 'answer' => 'Soon']]],
@@ -199,14 +198,14 @@ class WebsiteDraftApiTest extends TestCase
         $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => [['id' => 'broken', 'type' => 'narrativeBlock', 'body' => []]]]])->assertUnprocessable();
     }
 
-    public function test_date_and_dress_code_text_and_rich_text_child_flows_round_trip_without_a_schema_bump(): void
+    public function test_date_text_and_rich_text_child_flows_round_trip_without_a_schema_bump(): void
     {
         [$event, $owner] = $this->createEvent();
         $schemaVersion = $event->website->schema_version;
-        foreach (['date', 'dressCode'] as $type) {
+        foreach (['date'] as $type) {
             $section = $event->website->sections()->where('type', $type)->sole();
             $content = [
-                'heading' => $type === 'date' ? 'When' : 'Attire',
+                'heading' => 'When',
                 'description' => 'Details',
                 'childFlow' => [
                     'elements' => [
@@ -656,7 +655,7 @@ class WebsiteDraftApiTest extends TestCase
 
         $this->actingAs($owner)->putJson($url, ['sectionIds' => $reversed])
             ->assertOk()->assertJsonPath('data.sections.0.id', $reversed[0]);
-        $this->assertSame(range(10, 100, 10), $event->website->sections()->pluck('sort_order')->all());
+        $this->assertSame(range(10, 90, 10), $event->website->sections()->pluck('sort_order')->all());
 
         $this->actingAs($owner)->putJson($url, ['sectionIds' => array_slice($reversed, 1)])
             ->assertUnprocessable()->assertJsonValidationErrors('sectionIds');

@@ -21,6 +21,7 @@ class CompositionGroupValidatorTest extends TestCase
     {
         $group = ['id' => 'outer', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [
             ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello'],
+            ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1'],
             ['id' => 'inner', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]]], 'layout' => ['direction' => 'vertical']],
         ], 'layout' => ['width' => 'narrow', 'direction' => 'horizontal', 'gap' => 'l', 'padding' => ['top' => 's', 'right' => 'm', 'bottom' => 's', 'left' => 'm'], 'alignment' => 'center', 'columns' => 'equal-2', 'responsive' => ['tablet' => ['width' => 'medium'], 'mobile' => ['width' => 'full', 'direction' => 'vertical', 'gap' => 's']]]];
         $this->assertSame($group, $this->validator->validate($group));

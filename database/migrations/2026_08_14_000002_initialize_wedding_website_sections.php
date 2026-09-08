@@ -16,7 +16,6 @@ return new class extends Migration
             'story' => [30, ['heading' => '', 'intro' => null, 'blocks' => []]],
             'schedule' => [40, ['heading' => '', 'items' => []]],
             'venue' => [50, ['heading' => '', 'name' => '', 'address' => '', 'description' => '']],
-            'dressCode' => [60, ['heading' => '', 'description' => '']],
             'gallery' => [70, ['heading' => '', 'items' => []]],
             'faq' => [80, ['heading' => '', 'items' => []]],
             'rsvp' => [90, ['heading' => '', 'description' => '', 'buttonLabel' => '']],

@@ -63,7 +63,7 @@ class WebsiteInitializationTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.templateKey', $template->key)
             ->assertJsonPath('data.designSettings', app(WebsiteCapabilityResolver::class)->canonicalDesignDefaults($template))
-            ->assertJsonCount(10, 'data.sections');
+            ->assertJsonCount(9, 'data.sections');
 
         $website = $event->website()->sole();
         $this->assertSame($template->key, $website->template_key);
@@ -136,7 +136,7 @@ class WebsiteInitializationTest extends TestCase
             ->assertJsonPath('message', 'This Event already has a Website.');
 
         $this->assertDatabaseCount('websites', 1);
-        $this->assertDatabaseCount('website_sections', 10);
+        $this->assertDatabaseCount('website_sections', 9);
         $this->assertSame(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, $website->refresh()->template_key);
         $this->assertSame($before, $website->sections()->get()->map->only(['id', 'type', 'sort_order', 'is_enabled', 'content', 'appearance'])->all());
     }
