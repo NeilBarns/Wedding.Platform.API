@@ -7,6 +7,7 @@ use App\Models\WebsiteSection;
 use App\Website\Capabilities\ElementColorRole;
 use App\Website\Capabilities\TypographyRole;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\Elements\DividerJsonShape;
 use App\Website\ProjectColorLibrary;
 use App\Website\WebsiteSectionContentValidator;
 use App\Website\WebsiteSectionMediaReferences;
@@ -43,6 +44,7 @@ final class UpdateWebsiteSectionContent
             $sectionCapability?->allowedElementTypes,
             $allowedFontIds,
             $allowedColorIds === null ? null : [...$allowedColorIds, ...$projectColorIds],
+            $website->template_key,
         );
         $currentMedia = $section->content['media'] ?? null;
         $nextMedia = $validated['media'] ?? null;
@@ -62,6 +64,9 @@ final class UpdateWebsiteSectionContent
         if ($assetIds->isNotEmpty() && MediaAsset::query()->where('event_id', $website->event_id)->whereKey($assetIds)
             ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/webp'])->count() !== $assetIds->count()) {
             throw ValidationException::withMessages(['content.groups' => 'Select valid images from this Event Media Library.']);
+        }
+        if (isset($validated['childFlow']['elements'])) {
+            $validated['childFlow']['elements'] = DividerJsonShape::serializeElements($validated['childFlow']['elements']);
         }
         $section->content = $validated;
         $section->save();

@@ -29,15 +29,38 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_generic_primitives_accept_and_preserve_hidden_state(): void
     {
         $elements = [
-            ['id' => 'text', 'type' => 'text', 'text' => 'Copy', 'isHidden' => true],
-            ['id' => 'rich', 'type' => 'richText', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
-            ['id' => 'media', 'type' => 'media', 'items' => [], 'isHidden' => true],
-            ['id' => 'divider', 'type' => 'divider', 'isHidden' => true],
+            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Copy', 'isHidden' => true],
+            ['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
+            ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [], 'isHidden' => true],
+            ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1', 'isHidden' => true],
         ];
 
         foreach ($elements as $element) {
             $this->assertSame($element, $this->validator->validate($element));
         }
+    }
+
+    public function test_generic_editor_names_are_required_normalized_and_unicode_bounded(): void
+    {
+        $elements = [
+            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Copy'],
+            ['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]],
+            ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => []],
+            ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1'],
+            ['id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => []],
+        ];
+        foreach ($elements as $element) {
+            $unnamed = $element;
+            unset($unnamed['editorName']);
+            $this->assertInvalid($unnamed);
+        }
+
+        $normalized = $this->validator->validate(['id' => 'text', 'type' => 'text', 'editorName' => "  Welcome\n  message  ", 'text' => 'Copy']);
+        $this->assertSame('Welcome message', $normalized['editorName']);
+        $this->assertSame(str_repeat('😀', 80), $this->validator->validate(['id' => 'text', 'type' => 'text', 'editorName' => str_repeat('😀', 80), 'text' => ''])['editorName']);
+        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => str_repeat('😀', 81), 'text' => '']);
+        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => " \n ", 'text' => '']);
+        $this->assertInvalid(['id' => 'heading', 'type' => 'heading', 'editorName' => 'Heading 1', 'text' => 'Heading']);
     }
 
     public static function validPrimitiveProvider(): array
@@ -46,10 +69,10 @@ class WebsiteElementValidatorTest extends TestCase
 
         return [
             'heading' => [['id' => 'heading-1', 'type' => 'heading', 'text' => 'Welcome']],
-            'text' => [['id' => 'text-1', 'type' => 'text', 'text' => 'Body', 'appearance' => []]],
+            'text' => [['id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Body', 'appearance' => []]],
             'image' => [['id' => 'image-1', 'type' => 'image', 'mediaId' => $mediaId]],
-            'media' => [['id' => 'media-1', 'type' => 'media', 'items' => [['id' => 'item-1', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Wedding portrait']]]],
-            'divider' => [['id' => 'divider-1', 'type' => 'divider']],
+            'media' => [['id' => 'media-1', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'item-1', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Wedding portrait']]]],
+            'divider' => [['id' => 'divider-1', 'type' => 'divider', 'editorName' => 'Divider 1']],
             'quote' => [['id' => 'quote-1', 'type' => 'quote', 'text' => 'Always', 'attribution' => 'Us']],
             'cta' => [['id' => 'cta-1', 'type' => 'cta', 'label' => 'Respond', 'action' => ['type' => 'rsvp']]],
             'media collection' => [['id' => 'collection-1', 'type' => 'mediaCollection', 'items' => [['id' => 'item-1', 'mediaId' => $mediaId]]]],
@@ -101,39 +124,27 @@ class WebsiteElementValidatorTest extends TestCase
 
     public function test_ids_are_trimmed_without_imposing_ulid_or_prefix_semantics(): void
     {
-        $validated = $this->validator->validate(['id' => '  arbitrary-client-id  ', 'type' => 'divider']);
+        $validated = $this->validator->validate(['id' => '  arbitrary-client-id  ', 'type' => 'divider', 'editorName' => 'Divider 1']);
 
         $this->assertSame('arbitrary-client-id', $validated['id']);
     }
 
-    public function test_legacy_divider_appearance_is_migrated_to_the_locked_contract(): void
+    public function test_divider_accepts_only_semantic_widths(): void
     {
-        $validated = $this->validator->validate([
-            'id' => 'divider',
-            'type' => 'divider',
-            'appearance' => ['styleId' => 'botanical-vine', 'width' => 'full', 'opacity' => 75],
-        ]);
-
-        $this->assertSame([
-            'width' => 100,
-            'opacity' => 75,
-            'assetId' => 'botanical-vine',
-        ], $validated['appearance']);
-    }
-
-    public function test_divider_accepts_only_a_normalized_integer_width_scale(): void
-    {
-        $base = ['id' => 'divider', 'type' => 'divider'];
-        $validated = $this->validator->validate([...$base, 'appearance' => ['width' => 37]]);
-        $this->assertSame(37, $validated['appearance']['width']);
-        $this->assertInvalid([...$base, 'appearance' => ['width' => -1]]);
-        $this->assertInvalid([...$base, 'appearance' => ['width' => 101]]);
-        $this->assertInvalid([...$base, 'appearance' => ['width' => 37.5]]);
+        $base = ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1'];
+        foreach (['small', 'medium', 'large', 'full'] as $width) {
+            $candidate = [...$base, 'appearance' => ['width' => $width]];
+            $this->assertSame($candidate, $this->validator->validate($candidate));
+        }
+        foreach ([0, 37, 100, '37', 37.5] as $width) {
+            $this->assertInvalid([...$base, 'appearance' => ['width' => $width]]);
+        }
+        $this->assertInvalid([...$base, 'appearance' => ['styleId' => 'botanical-vine']]);
     }
 
     public function test_divider_accepts_continuous_integer_opacity(): void
     {
-        $base = ['id' => 'divider', 'type' => 'divider'];
+        $base = ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1'];
         $validated = $this->validator->validate([...$base, 'appearance' => ['opacity' => 63]]);
         $this->assertSame(63, $validated['appearance']['opacity']);
         $this->assertInvalid([...$base, 'appearance' => ['opacity' => 24]]);
@@ -145,7 +156,7 @@ class WebsiteElementValidatorTest extends TestCase
     {
         $this->assertInvalid(['id' => 'heading', 'type' => 'heading']);
         $this->assertInvalid(['id' => 'heading', 'type' => 'heading', 'text' => str_repeat('x', 256)]);
-        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'text' => str_repeat('x', 5001)]);
+        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => str_repeat('x', 5001)]);
         $this->assertInvalid(['id' => 'quote', 'type' => 'quote', 'text' => str_repeat('x', 5001)]);
         $this->assertInvalid(['id' => 'quote', 'type' => 'quote', 'text' => 'Quote', 'attribution' => str_repeat('x', 256)]);
     }
@@ -215,30 +226,32 @@ class WebsiteElementValidatorTest extends TestCase
     {
         $mediaId = (string) Str::ulid();
         $secondMediaId = (string) Str::ulid();
-        $this->assertSame(['id' => 'empty', 'type' => 'media', 'items' => []], $this->validator->validate(['id' => 'empty', 'type' => 'media', 'items' => []]));
-        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId]]]);
-        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'autoplay' => true]]]);
-        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [
+        $this->assertSame(['id' => 'empty', 'type' => 'media', 'editorName' => 'Media 1', 'items' => []], $this->validator->validate(['id' => 'empty', 'type' => 'media', 'editorName' => 'Media 1', 'items' => []]));
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId]]]);
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'autoplay' => true]]]);
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [
             ['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Portrait'],
             ['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4'],
         ]]);
-        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Portrait', 'caption' => 'No embedded captions']]]);
-        $video = ['id' => 'media', 'type' => 'media', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'controls' => true]]];
+        $this->assertInvalid(['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'image', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Portrait', 'caption' => 'No embedded captions']]]);
+        $video = ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4', 'controls' => true]]];
         $this->assertSame($video, $this->validator->validate($video));
-        $carousel = ['id' => 'media', 'type' => 'media', 'items' => [
+        $carousel = ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [
             ['id' => 'one', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'One'],
             ['id' => 'two', 'type' => 'image', 'mediaId' => $secondMediaId, 'alt' => 'Two'],
         ], 'presentation' => ['mode' => 'carousel', 'alignment' => 'center', 'fit' => 'cover', 'carousel' => ['style' => 'peek', 'autoplay' => true, 'interval' => 5000, 'arrows' => true, 'dots' => true, 'loop' => false], 'responsive' => ['mobile' => ['mode' => 'carousel', 'width' => 'full', 'aspectRatio' => 'square']]], 'appearance' => ['corners' => 'soft', 'frame' => 'line', 'shadow' => 'medium']];
         $this->assertSame($carousel, $this->validator->validate($carousel));
         $this->assertInvalid([...$carousel, 'presentation' => [...$carousel['presentation'], 'carousel' => ['style' => 'cinematic']]]);
         for ($count = 2; $count <= 5; $count++) {
-            $stacked = ['id' => 'stacked', 'type' => 'media', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, $count)), 'presentation' => ['mode' => 'stacked', 'stacked' => ['style' => 'polaroid'], 'responsive' => ['mobile' => ['mode' => 'stacked']]]];
+            $stacked = ['id' => 'stacked', 'type' => 'media', 'editorName' => 'Media 1', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, $count)), 'presentation' => ['mode' => 'stacked', 'stacked' => ['style' => 'polaroid'], 'responsive' => ['mobile' => ['mode' => 'stacked']]]];
             $this->assertSame($stacked, $this->validator->validate($stacked));
         }
-        $sixStacked = ['id' => 'stacked', 'type' => 'media', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, 6)), 'presentation' => ['mode' => 'stacked']];
+        $sixStacked = ['id' => 'stacked', 'type' => 'media', 'editorName' => 'Media 1', 'items' => array_map(fn (int $index): array => ['id' => "item-{$index}", 'type' => 'image', 'mediaId' => $mediaId, 'alt' => "Photo {$index}"], range(1, 6)), 'presentation' => ['mode' => 'stacked']];
         $this->assertInvalid($sixStacked);
-        $this->assertInvalid(['id' => 'stacked-video', 'type' => 'media', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4']], 'presentation' => ['mode' => 'stacked']]);
-        foreach (['grid', 'masonry', 'stack'] as $legacyMode) $this->assertInvalid([...$carousel, 'presentation' => ['mode' => $legacyMode]]);
+        $this->assertInvalid(['id' => 'stacked-video', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'video', 'type' => 'video', 'url' => 'https://example.com/video.mp4']], 'presentation' => ['mode' => 'stacked']]);
+        foreach (['grid', 'masonry', 'stack'] as $legacyMode) {
+            $this->assertInvalid([...$carousel, 'presentation' => ['mode' => $legacyMode]]);
+        }
         $this->assertInvalid([...$carousel, 'presentation' => ['mode' => 'carousel', 'columns' => 3]]);
         $this->assertInvalid([...$carousel, 'motion' => ['type' => 'fade']]);
         $this->assertInvalid([...$carousel, 'appearance' => ['frameSize' => 'large']]);

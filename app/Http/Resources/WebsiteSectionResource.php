@@ -6,6 +6,7 @@ use App\Website\Capabilities\ContextDefaultsIntent;
 use App\Website\Capabilities\DesignContextResolver;
 use App\Website\Capabilities\ResolvedDesignContext;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
+use App\Website\Elements\DividerJsonShape;
 use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Http\Request;
@@ -97,6 +98,10 @@ class WebsiteSectionResource extends JsonResource
         $content = $this->normalizedContent;
         if ($this->type === 'story' && ($content['mediaFraming'] ?? null) === []) {
             $content['mediaFraming'] = new \stdClass;
+        }
+
+        if (isset($content['childFlow']['elements'])) {
+            $content['childFlow']['elements'] = DividerJsonShape::serializeElements($content['childFlow']['elements']);
         }
 
         return $content;

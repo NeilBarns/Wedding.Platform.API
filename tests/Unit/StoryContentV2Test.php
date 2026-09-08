@@ -151,7 +151,7 @@ class StoryContentV2Test extends TestCase
             'blocks' => [[...$base, 'blocks' => []]],
             'pre-block body' => [[...$base, 'body' => 'legacy']],
             'unknown element' => [[...$base, 'elements' => [['id' => 'one', 'type' => 'unknown', 'body' => '']]]],
-            'Story-disallowed valid element' => [[...$base, 'elements' => [['id' => 'one', 'type' => 'text', 'text' => 'Text']]]],
+            'Story-disallowed valid element' => [[...$base, 'elements' => [['id' => 'one', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Text']]]],
             'duplicate IDs' => [[...$base, 'elements' => [
                 ['id' => 'one', 'type' => 'narrativeBlock', 'body' => ''],
                 ['id' => 'one', 'type' => 'narrativeBlock', 'body' => ''],

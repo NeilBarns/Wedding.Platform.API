@@ -2,6 +2,7 @@
 
 namespace App\Website;
 
+use App\Website\Elements\DividerCatalog;
 use App\Website\Elements\SectionChildFlowValidator;
 use App\Website\Elements\WebsiteElementValidator;
 use Illuminate\Support\Facades\Validator;
@@ -18,7 +19,7 @@ final class WebsiteSectionContentValidator
      * @param  array<string, mixed>  $content
      * @return array<string, mixed>
      */
-    public function validate(string $sectionType, array $content, ?array $allowedElementTypes = null, ?array $allowedFontIds = null, ?array $allowedColorIds = null): array
+    public function validate(string $sectionType, array $content, ?array $allowedElementTypes = null, ?array $allowedFontIds = null, ?array $allowedColorIds = null, ?string $templateKey = null): array
     {
         $rules = $this->rulesFor($sectionType);
 
@@ -51,6 +52,10 @@ final class WebsiteSectionContentValidator
             foreach ($textElements as [$element, $path]) {
                 if (! in_array(($element['type'] ?? null), ['text', 'richText', 'divider'], true)) {
                     continue;
+                }
+                if ($element['type'] === 'divider' && isset($element['appearance']['assetId']) && $templateKey !== null
+                    && ! in_array($element['appearance']['assetId'], DividerCatalog::assetIdsForTemplate($templateKey), true)) {
+                    throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.assetId" => 'The selected Divider asset is not supported by this Template.']);
                 }
                 $fontId = in_array($element['type'], ['text', 'richText'], true) ? ($element['appearance']['fontFamilyId'] ?? null) : null;
                 if (is_string($fontId) && $allowedFontIds !== null && ! in_array($fontId, $allowedFontIds, true)) {

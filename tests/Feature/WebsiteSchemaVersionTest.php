@@ -294,7 +294,7 @@ class WebsiteSchemaVersionTest extends TestCase
         $story->update(['content' => $stored]);
 
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}", [
-            'content' => ['heading' => 'Bad', 'intro' => null, 'elements' => [['id' => 'bad', 'type' => 'text', 'text' => 'No']], 'mediaFraming' => []],
+            'content' => ['heading' => 'Bad', 'intro' => null, 'elements' => [['id' => 'bad', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'No']], 'mediaFraming' => []],
         ])->assertUnprocessable();
 
         $this->assertSame(1, $website->fresh()->schema_version);

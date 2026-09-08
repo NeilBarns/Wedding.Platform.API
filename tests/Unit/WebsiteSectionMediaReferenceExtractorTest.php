@@ -70,10 +70,10 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
     public function test_extracts_direct_and_nested_media_elements_but_not_direct_video_urls(): void
     {
         $content = ['childFlow' => ['elements' => [
-            ['id' => 'direct', 'type' => 'media', 'items' => [['id' => 'one', 'type' => 'image', 'mediaId' => 'media-one', 'alt' => 'One']]],
-            ['id' => 'group', 'type' => 'compositionGroup', 'children' => [
-                ['id' => 'nested', 'type' => 'media', 'items' => [['id' => 'two', 'type' => 'image', 'mediaId' => 'media-two', 'alt' => 'Two']]],
-                ['id' => 'video', 'type' => 'media', 'items' => [['id' => 'clip', 'type' => 'video', 'url' => 'https://example.com/video.mp4']]],
+            ['id' => 'direct', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'one', 'type' => 'image', 'mediaId' => 'media-one', 'alt' => 'One']]],
+            ['id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [
+                ['id' => 'nested', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'two', 'type' => 'image', 'mediaId' => 'media-two', 'alt' => 'Two']]],
+                ['id' => 'video', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'clip', 'type' => 'video', 'url' => 'https://example.com/video.mp4']]],
             ]],
         ]]];
 
@@ -96,7 +96,7 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
             ['venue', ['media' => null]],
             ['story', ['media' => ['assetId' => 123]]],
             ['story', ['blocks' => [['id' => 123, 'media' => ['assetId' => 'media']]]]],
-            ['story', ['elements' => [['id' => 'one', 'type' => 'text', 'media' => ['type' => 'image', 'mediaId' => 'media']]]]],
+            ['story', ['elements' => [['id' => 'one', 'type' => 'text', 'editorName' => 'Text 1', 'media' => ['type' => 'image', 'mediaId' => 'media']]]]],
             ['people', ['groups' => [['people' => [['id' => 123, 'media' => ['assetId' => 'media']]]]]]],
             ['gallery', ['items' => [['mediaId' => 'unwired']]]],
         ];

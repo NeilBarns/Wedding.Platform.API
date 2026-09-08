@@ -28,6 +28,10 @@ final class WebsiteElementValidator
     private function validateAtDepth(array $element, int $depth): array
     {
         $type = $this->elementType($element);
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
+            && is_string($element['editorName'] ?? null)) {
+            $element['editorName'] = $this->normalizeEditorName($element['editorName']);
+        }
 
         if ($type === WebsiteElementType::CompositionGroup) {
             if ($depth >= 2) {
@@ -65,20 +69,12 @@ final class WebsiteElementValidator
             ]);
         }
 
-        if ($type === WebsiteElementType::Divider && is_array($element['appearance'] ?? null)) {
-            if (! isset($element['appearance']['assetId']) && is_string($element['appearance']['styleId'] ?? null)) {
-                $element['appearance']['assetId'] = $element['appearance']['styleId'];
-            }
-            unset($element['appearance']['styleId']);
-            if (is_string($element['appearance']['width'] ?? null)) {
-                $legacyWidths = ['small' => 0, 'medium' => 50, 'large' => 100, 'full' => 100];
-                $element['appearance']['width'] = $legacyWidths[$element['appearance']['width']] ?? $element['appearance']['width'];
-            }
-            if (is_string($element['appearance']['opacity'] ?? null) && ctype_digit($element['appearance']['opacity'])) {
-                $element['appearance']['opacity'] = (int) $element['appearance']['opacity'];
-            }
+        if ($type === WebsiteElementType::Divider) {
+            $this->assertDividerJsonTypes($element);
         }
-        if ($type === WebsiteElementType::Media) $this->assertMediaItemShapes($element['items'] ?? []);
+        if ($type === WebsiteElementType::Media) {
+            $this->assertMediaItemShapes($element['items'] ?? []);
+        }
 
         $rules = match ($type) {
             WebsiteElementType::Heading => $this->textRules('heading', 255),
@@ -99,6 +95,7 @@ final class WebsiteElementValidator
 
         if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
             $rules['element.isHidden'] = ['sometimes', 'boolean'];
+            $rules['element.editorName'] = ['required', 'string', 'max:80', 'not_regex:/^\s*$/u'];
         }
 
         $validated = Validator::make(['element' => $element], $rules)->validate()['element'];
@@ -122,17 +119,33 @@ final class WebsiteElementValidator
                     throw ValidationException::withMessages(["element.items.{$index}.alt" => 'Alt text is required unless the image is decorative.']);
                 }
             }
-            if (count($kinds) > 1) throw ValidationException::withMessages(['element.items' => 'Mixed image and video collections are not supported yet.']);
-            if (count(array_filter($validated['items'], fn (array $item): bool => $item['type'] === 'video')) > 1) throw ValidationException::withMessages(['element.items' => 'Media supports only one video.']);
+            if (count($kinds) > 1) {
+                throw ValidationException::withMessages(['element.items' => 'Mixed image and video collections are not supported yet.']);
+            }
+            if (count(array_filter($validated['items'], fn (array $item): bool => $item['type'] === 'video')) > 1) {
+                throw ValidationException::withMessages(['element.items' => 'Media supports only one video.']);
+            }
             $mode = $validated['presentation']['mode'] ?? null;
-            if ($mode === 'single' && count($validated['items']) !== 1) throw ValidationException::withMessages(['element.presentation.mode' => 'Single presentation requires exactly one item.']);
-            if ($mode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(['element.presentation.mode' => 'Carousel presentation requires at least two images.']);
-            if ($mode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(['element.presentation.mode' => 'Stacked presentation requires two to five images.']);
+            if ($mode === 'single' && count($validated['items']) !== 1) {
+                throw ValidationException::withMessages(['element.presentation.mode' => 'Single presentation requires exactly one item.']);
+            }
+            if ($mode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) {
+                throw ValidationException::withMessages(['element.presentation.mode' => 'Carousel presentation requires at least two images.']);
+            }
+            if ($mode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) {
+                throw ValidationException::withMessages(['element.presentation.mode' => 'Stacked presentation requires two to five images.']);
+            }
             foreach (['tablet', 'mobile'] as $viewport) {
                 $responsiveMode = $validated['presentation']['responsive'][$viewport]['mode'] ?? null;
-                if ($responsiveMode === 'single' && count($validated['items']) !== 1) throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Single presentation requires exactly one item.']);
-                if ($responsiveMode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Carousel presentation requires at least two images.']);
-                if ($responsiveMode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Stacked presentation requires two to five images.']);
+                if ($responsiveMode === 'single' && count($validated['items']) !== 1) {
+                    throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Single presentation requires exactly one item.']);
+                }
+                if ($responsiveMode === 'carousel' && (count($validated['items']) < 2 || count($kinds) !== 1 || ! isset($kinds['image']))) {
+                    throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Carousel presentation requires at least two images.']);
+                }
+                if ($responsiveMode === 'stacked' && (count($validated['items']) < 2 || count($validated['items']) > 5 || count($kinds) !== 1 || ! isset($kinds['image']))) {
+                    throw ValidationException::withMessages(["element.presentation.responsive.{$viewport}.mode" => 'Stacked presentation requires two to five images.']);
+                }
             }
         }
         if ($type === WebsiteElementType::Text) {
@@ -140,8 +153,8 @@ final class WebsiteElementValidator
             $this->assertTextFontTuple($validated);
         }
         if ($type === WebsiteElementType::RichText) {
-            $validated['document'] = $this->normalizeRichTextDocument($validated['document']);
             $this->assertRichTextDocument($validated['document']);
+            $this->assertRichTextFontWeight($validated);
         }
 
         return $validated;
@@ -187,7 +200,7 @@ final class WebsiteElementValidator
     private function textElementRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,text,appearance,isHidden'],
+            'element' => ['required', 'array:id,type,editorName,text,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:text'],
             'element.text' => ['present', 'string', 'max:5000'],
@@ -218,25 +231,30 @@ final class WebsiteElementValidator
         return preg_replace('/(?:\r\n|[\r\n\x{2028}\x{2029}])+/u', ' ', $text) ?? $text;
     }
 
+    private function normalizeEditorName(string $name): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', $name) ?? $name);
+    }
+
     /** @return array<string, list<string>> */
     private function richTextElementRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,document,appearance,isHidden'],
+            'element' => ['required', 'array:id,type,editorName,document,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:richText'],
             'element.document' => ['required', 'array:type,children'],
             'element.document.type' => ['required', 'in:doc'],
             'element.document.children' => ['required', 'array', 'list', 'min:1', 'max:100'],
             'element.document.children.*' => ['required', 'array'],
-            'element.appearance' => ['sometimes', 'array:fontFamilyId,fontSize,lineHeight,letterSpacing,alignment,colorId,textTransform,responsive'],
+            'element.appearance' => ['sometimes', 'array:fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,alignment,colorId,responsive'],
             'element.appearance.fontFamilyId' => ['sometimes', 'string', 'min:1'],
             'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.fontWeight' => ['sometimes', 'integer', 'in:400,600,700'],
             'element.appearance.lineHeight' => ['sometimes', 'in:tight,normal,relaxed'],
             'element.appearance.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
             'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
-            'element.appearance.textTransform' => ['sometimes', 'in:none,uppercase,lowercase,capitalize'],
             'element.appearance.responsive' => ['sometimes', 'array:tablet,mobile'],
             'element.appearance.responsive.tablet' => ['sometimes', 'array:fontSize,alignment'],
             'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
@@ -247,16 +265,42 @@ final class WebsiteElementValidator
         ];
     }
 
+    /** @param array<string, mixed> $element */
+    private function assertDividerJsonTypes(array $element): void
+    {
+        if (array_key_exists('isHidden', $element) && ! is_bool($element['isHidden'])) {
+            throw ValidationException::withMessages(['element.isHidden' => 'Divider visibility must be a JSON boolean.']);
+        }
+        if (! array_key_exists('appearance', $element)) {
+            return;
+        }
+        $appearance = $element['appearance'];
+        if (! is_array($appearance)) {
+            throw ValidationException::withMessages(['element.appearance' => 'Divider appearance must be a JSON object.']);
+        }
+        foreach (['assetId', 'width', 'alignment', 'colorId'] as $field) {
+            if (array_key_exists($field, $appearance) && (! is_string($appearance[$field]) || $appearance[$field] === '')) {
+                throw ValidationException::withMessages(["element.appearance.{$field}" => 'A nonempty JSON string is required.']);
+            }
+        }
+        if (array_key_exists('opacity', $appearance)) {
+            $opacity = $appearance['opacity'];
+            if ((! is_int($opacity) && ! is_float($opacity)) || ! is_finite((float) $opacity) || floor($opacity) != $opacity) {
+                throw ValidationException::withMessages(['element.appearance.opacity' => 'Divider opacity must be a JSON integer.']);
+            }
+        }
+    }
+
     /** @return array<string, list<string>> */
     private function dividerRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,appearance,isHidden'],
+            'element' => ['required', 'array:id,type,editorName,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:divider'],
             'element.appearance' => ['sometimes', 'array:assetId,width,alignment,colorId,opacity'],
             'element.appearance.assetId' => ['sometimes', 'string', 'min:1', 'max:100'],
-            'element.appearance.width' => ['sometimes', 'integer', 'between:0,100'],
+            'element.appearance.width' => ['sometimes', 'string', 'in:small,medium,large,full'],
             'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
             'element.appearance.opacity' => ['sometimes', 'integer', 'between:25,100'],
@@ -269,14 +313,14 @@ final class WebsiteElementValidator
         $length = 0;
         foreach ($document['children'] as $blockIndex => $block) {
             $type = is_array($block) ? ($block['type'] ?? null) : null;
-            if (! in_array($type, ['paragraph', 'bulletList', 'orderedList'], true)) {
+            if ($type !== 'paragraph') {
                 throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text block.']);
             }
-            $expected = $type === 'paragraph' ? ['type', 'children'] : ['type', 'items'];
+            $expected = ['type', 'children'];
             if (array_diff(array_keys($block), $expected) !== [] || array_diff($expected, array_keys($block)) !== []) {
                 throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text block structure.']);
             }
-            $collections = $type === 'paragraph' ? [$block['children']] : $block['items'];
+            $collections = [$block['children']];
             if (! is_array($collections) || $collections === []) {
                 throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Rich Text content is required.']);
             }
@@ -289,7 +333,7 @@ final class WebsiteElementValidator
                         throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text run.']);
                     }
                     $length += mb_strlen($run['text']);
-                    if (isset($run['marks'])) {
+                    if (array_key_exists('marks', $run)) {
                         $this->assertRichTextMarks($run['marks'], $blockIndex);
                     }
                 }
@@ -300,53 +344,15 @@ final class WebsiteElementValidator
         }
     }
 
-    /** @param array<string, mixed> $document @return array<string, mixed> */
-    private function normalizeRichTextDocument(array $document): array
-    {
-        $normalizeRun = static function (mixed $run): array {
-            if (is_string($run)) {
-                return ['text' => $run];
-            }
-            if (! is_array($run)) {
-                return ['text' => ''];
-            }
-            $normalized = ['text' => is_string($run['text'] ?? null) ? $run['text'] : ''];
-            if (isset($run['marks']) && is_array($run['marks'])) {
-                $normalized['marks'] = array_intersect_key($run['marks'], array_flip(['bold', 'italic', 'underline', 'strikethrough', 'link']));
-            }
-
-            return $normalized;
-        };
-
-        $document['children'] = array_map(static function (mixed $block) use ($normalizeRun): mixed {
-            if (! is_array($block)) {
-                return $block;
-            }
-            if (($block['type'] ?? null) === 'paragraph' && is_array($block['children'] ?? null)) {
-                $block['children'] = array_map($normalizeRun, $block['children']);
-            }
-            if (in_array(($block['type'] ?? null), ['bulletList', 'orderedList'], true) && is_array($block['items'] ?? null)) {
-                $block['items'] = array_map(static fn (mixed $item): mixed => is_array($item) ? array_map($normalizeRun, $item) : $item, $block['items']);
-            }
-
-            return $block;
-        }, $document['children'] ?? []);
-
-        return $document;
-    }
-
     private function assertRichTextMarks(mixed $marks, int $blockIndex): void
     {
-        if (! is_array($marks) || array_diff(array_keys($marks), ['bold', 'italic', 'underline', 'strikethrough', 'link']) !== []) {
+        if (! is_array($marks) || array_diff(array_keys($marks), ['bold', 'italic', 'underline', 'strikethrough']) !== []) {
             throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text marks.']);
         }
         foreach (['bold', 'italic', 'underline', 'strikethrough'] as $mark) {
-            if (isset($marks[$mark]) && ! is_bool($marks[$mark])) {
+            if (array_key_exists($mark, $marks) && ! is_bool($marks[$mark])) {
                 throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Rich Text marks must be boolean.']);
             }
-        }
-        if (isset($marks['link']) && (! is_string($marks['link']) || strlen($marks['link']) > 2048 || filter_var($marks['link'], FILTER_VALIDATE_URL) === false || ! in_array(parse_url($marks['link'], PHP_URL_SCHEME), ['http', 'https', 'mailto'], true))) {
-            throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text link.']);
         }
     }
 
@@ -368,6 +374,24 @@ final class WebsiteElementValidator
         }
         if (($appearance['italic'] ?? false) === true && ! in_array('italic', $font->styles, true)) {
             throw ValidationException::withMessages(['element.appearance.italic' => 'Italic is not supported by the selected family.']);
+        }
+    }
+
+    /** @param array<string, mixed> $element */
+    private function assertRichTextFontWeight(array $element): void
+    {
+        $appearance = $element['appearance'] ?? [];
+        $fontId = $appearance['fontFamilyId'] ?? null;
+        if (! is_string($fontId)) {
+            return;
+        }
+        $fonts = [...$this->fonts->platformFonts(), ...$this->fonts->classicLegacyFonts(), ...$this->fonts->modernLegacyFonts()];
+        $font = collect($fonts)->first(fn ($candidate): bool => $candidate->id === $fontId);
+        if ($font === null) {
+            throw ValidationException::withMessages(['element.appearance.fontFamilyId' => 'The Rich Text font family is not supported.']);
+        }
+        if (isset($appearance['fontWeight']) && ! in_array($appearance['fontWeight'], $font->weights, true)) {
+            throw ValidationException::withMessages(['element.appearance.fontWeight' => 'The Rich Text font weight is not supported by the selected family.']);
         }
     }
 
@@ -451,7 +475,7 @@ final class WebsiteElementValidator
     private function mediaRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,items,presentation,appearance,isHidden'],
+            'element' => ['required', 'array:id,type,editorName,items,presentation,appearance,isHidden'],
             'element.id' => $this->idRules(), 'element.type' => ['required', 'in:media'],
             'element.items' => ['present', 'array', 'list', 'max:8'], 'element.items.*' => ['required', 'array'],
             'element.items.*.id' => $this->idRules(), 'element.items.*.type' => ['required', 'in:image,video'],
@@ -470,9 +494,13 @@ final class WebsiteElementValidator
 
     private function assertMediaItemShapes(mixed $items): void
     {
-        if (! is_array($items)) return;
+        if (! is_array($items)) {
+            return;
+        }
         foreach ($items as $index => $item) {
-            if (! is_array($item)) continue;
+            if (! is_array($item)) {
+                continue;
+            }
             $allowed = ($item['type'] ?? null) === 'video'
                 ? ['id', 'type', 'url', 'controls']
                 : ['id', 'type', 'mediaId', 'alt', 'decorative', 'focalPoint', 'zoom'];

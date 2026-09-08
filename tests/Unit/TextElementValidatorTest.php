@@ -21,8 +21,8 @@ class TextElementValidatorTest extends TestCase
     public function test_minimal_canonical_text_normalizes_line_breaks_without_writing_defaults(): void
     {
         $this->assertSame([
-            'id' => 'text-1', 'type' => 'text', 'text' => 'one two three',
-        ], $this->validator->validate(['id' => 'text-1', 'type' => 'text', 'text' => "one\r\n\ntwo\u{2029}three"]));
+            'id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'one two three',
+        ], $this->validator->validate(['id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'text' => "one\r\n\ntwo\u{2029}three"]));
     }
 
     public function test_complete_text_contract_is_accepted(): void
@@ -36,6 +36,18 @@ class TextElementValidatorTest extends TestCase
             'responsive' => ['tablet' => ['fontSize' => 'm'], 'mobile' => ['alignment' => 'end']],
         ];
         $this->assertSame($element, $this->validator->validate($element));
+    }
+
+    public function test_text_limit_counts_unicode_characters_instead_of_utf8_bytes(): void
+    {
+        $accepted = $this->base();
+        $accepted['text'] = str_repeat('😀', 5000);
+        $this->assertSame($accepted, $this->validator->validate($accepted));
+
+        $rejected = $this->base();
+        $rejected['text'] = str_repeat('😀', 5001);
+        $this->expectException(ValidationException::class);
+        $this->validator->validate($rejected);
     }
 
     #[DataProvider('invalidTextProvider')]
@@ -62,6 +74,6 @@ class TextElementValidatorTest extends TestCase
 
     private function base(): array
     {
-        return ['id' => 'text-1', 'type' => 'text', 'text' => 'Hello', 'appearance' => []];
+        return ['id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello', 'appearance' => []];
     }
 }

@@ -210,12 +210,17 @@ class WebsiteDraftApiTest extends TestCase
                 'description' => 'Details',
                 'childFlow' => [
                     'elements' => [
-                        ['id' => "{$type}-before", 'type' => 'text', 'text' => 'Before', 'isHidden' => true],
-                        ['id' => "{$type}-rich", 'type' => 'richText', 'document' => ['type' => 'doc', 'children' => [
-                            ['type' => 'paragraph', 'children' => [['text' => 'A longer note', 'marks' => ['bold' => true]]]],
-                            ['type' => 'orderedList', 'items' => [[['text' => 'First']], [['text' => 'Second', 'marks' => ['link' => 'https://example.com']]]]],
+                        ['id' => "{$type}-before", 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Before', 'isHidden' => true],
+                        ['id' => "{$type}-rich", 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [
+                            ['type' => 'paragraph', 'children' => [
+                                ['text' => 'Lorem ipsum '],
+                                ['text' => 'blah', 'marks' => ['bold' => true]],
+                                ['text' => ' blah'],
+                            ]],
+                            ['type' => 'paragraph', 'children' => [['text' => 'First']]],
+                            ['type' => 'paragraph', 'children' => [['text' => 'Second', 'marks' => ['italic' => true]]]],
                         ]]],
-                        ['id' => "{$type}-after", 'type' => 'text', 'text' => 'After'],
+                        ['id' => "{$type}-after", 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'After'],
                     ],
                     'order' => [
                         ['kind' => 'element', 'id' => "{$type}-before"],
@@ -232,6 +237,46 @@ class WebsiteDraftApiTest extends TestCase
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")->assertOk()
             ->assertJsonPath('data.schemaVersion', $schemaVersion);
         $this->assertSame($schemaVersion, $event->website->refresh()->schema_version);
+    }
+
+    public function test_complete_direct_and_nested_text_state_round_trips_canonically(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $section = $event->website->sections()->where('type', 'date')->sole();
+        $appearance = [
+            'fontFamilyId' => 'inter', 'fontSize' => 'xl', 'fontWeight' => 600,
+            'lineHeight' => 'relaxed', 'letterSpacing' => 'wide', 'alignment' => 'center',
+            'colorId' => 'terracotta-text', 'italic' => true, 'underline' => true,
+            'strikethrough' => true, 'textTransform' => 'uppercase',
+            'responsive' => [
+                'tablet' => ['fontSize' => 'l', 'alignment' => 'start'],
+                'mobile' => ['fontSize' => 's', 'alignment' => 'end'],
+            ],
+        ];
+        $direct = ['id' => 'direct-text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Direct Text', 'isHidden' => true, 'appearance' => $appearance];
+        $nested = ['id' => 'nested-text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Nested Text', 'appearance' => $appearance];
+        $content = [
+            'heading' => 'When', 'description' => 'Details',
+            'childFlow' => [
+                'elements' => [
+                    $direct,
+                    ['id' => 'outer-group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [
+                        ['id' => 'inner-group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [$nested]],
+                    ]],
+                ],
+                'order' => [
+                    ['kind' => 'specialized', 'key' => 'content'],
+                    ['kind' => 'element', 'id' => 'direct-text'],
+                    ['kind' => 'element', 'id' => 'outer-group'],
+                ],
+            ],
+        ];
+
+        $url = "/api/events/{$event->id}/website/sections/{$section->id}";
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+        $this->assertSame($content, $section->refresh()->content);
+        $draftSection = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")->assertOk()->json('data.sections'))->firstWhere('id', $section->id);
+        $this->assertSame($content, $draftSection['content']);
     }
 
     public function test_narrative_font_overrides_use_platform_role_validation(): void
@@ -493,10 +538,10 @@ class WebsiteDraftApiTest extends TestCase
         $asset->variants()->create(['variant_key' => 'web', 'mime_type' => 'image/webp', 'width' => 1200, 'height' => 800, 'size_bytes' => 80, 'storage_disk' => 'local', 'storage_path' => 'test/ours.webp']);
         $foreign = MediaAsset::query()->create(['event_id' => $foreignEvent->id, 'original_filename' => 'foreign.jpg', 'mime_type' => 'image/jpeg', 'extension' => 'jpg', 'width' => 1200, 'height' => 800, 'size_bytes' => 100, 'storage_disk' => 'local', 'original_path' => 'test/foreign.jpg']);
         $section = $event->website->sections()->where('type', 'date')->sole();
-        $media = ['id' => 'direct-media', 'type' => 'media', 'items' => [['id' => 'image-one', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'], ['id' => 'image-two', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail']], 'presentation' => ['mode' => 'carousel', 'carousel' => ['style' => 'peek', 'loop' => true]]];
+        $media = ['id' => 'direct-media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'image-one', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'], ['id' => 'image-two', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail']], 'presentation' => ['mode' => 'carousel', 'carousel' => ['style' => 'peek', 'loop' => true]]];
         $nested = [
-            'id' => 'group', 'type' => 'compositionGroup', 'children' => [[
-                'id' => 'nested-media', 'type' => 'media',
+            'id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [[
+                'id' => 'nested-media', 'type' => 'media', 'editorName' => 'Media 1',
                 'items' => [
                     ['id' => 'image-three', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Portrait'],
                     ['id' => 'image-four', 'type' => 'image', 'mediaId' => $asset->id, 'alt' => 'Detail'],

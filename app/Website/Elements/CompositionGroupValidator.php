@@ -18,7 +18,7 @@ final class CompositionGroupValidator
             }
         }
         $validated = Validator::make(['element' => $group], [
-            'element' => ['required', 'array:id,type,children,layout,appearance,isHidden'], 'element.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'], 'element.type' => ['required', 'in:compositionGroup'], 'element.isHidden' => ['sometimes', 'boolean'],
+            'element' => ['required', 'array:id,type,editorName,children,layout,appearance,isHidden'], 'element.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'], 'element.type' => ['required', 'in:compositionGroup'], 'element.editorName' => ['required', 'string', 'max:80', 'not_regex:/^\s*$/u'], 'element.isHidden' => ['sometimes', 'boolean'],
             'element.children' => ['present', 'array', 'list', 'max:20'], 'element.children.*' => ['required', 'array'],
             'element.layout' => ['sometimes', 'array:width,direction,gap,padding,alignment,columns,responsive'], 'element.layout.width' => ['sometimes', 'in:full,wide,medium,narrow'], 'element.layout.direction' => ['sometimes', 'in:vertical,horizontal'], 'element.layout.gap' => ['sometimes', 'in:none,xs,s,m,l,xl'], 'element.layout.alignment' => ['sometimes', 'in:start,center,end,stretch'], 'element.layout.columns' => ['sometimes', 'in:equal-2,content-wide,content-narrow,equal-3'],
             'element.layout.padding' => ['sometimes', 'array:top,right,bottom,left'], 'element.layout.padding.*' => ['sometimes', 'in:none,xs,s,m,l,xl'],

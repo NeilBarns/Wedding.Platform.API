@@ -27,7 +27,7 @@ class SectionChildFlowValidatorTest extends TestCase
     public static function invalidFlowProvider(): array
     {
         $specialized = ['kind' => 'specialized', 'key' => 'content'];
-        $element = ['id' => 'a', 'type' => 'text', 'text' => 'Hello', 'appearance' => []];
+        $element = ['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello', 'appearance' => []];
 
         return [
             'missing specialized' => [['elements' => [$element], 'order' => [['kind' => 'element', 'id' => 'a']]]],
@@ -37,7 +37,7 @@ class SectionChildFlowValidatorTest extends TestCase
             'unknown reference' => [['elements' => [$element], 'order' => [$specialized, ['kind' => 'element', 'id' => 'missing']]]],
             'duplicate IDs' => [['elements' => [$element, $element], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a'], ['kind' => 'element', 'id' => 'a']]]],
             'invalid Text' => [['elements' => [[...$element, 'appearance' => ['fontWeight' => 500]]], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a']]]],
-            'disallowed element' => [['elements' => [['id' => 'a', 'type' => 'divider']], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a']]]],
+            'disallowed element' => [['elements' => [['id' => 'a', 'type' => 'divider', 'editorName' => 'Divider 1']], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a']]]],
             'unknown discriminator' => [['elements' => [['id' => 'a', 'type' => 'unknown']], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a']]]],
             'unknown flow key' => [['elements' => [$element], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a']], 'extra' => true]],
             'unknown reference key' => [['elements' => [$element], 'order' => [$specialized, ['kind' => 'element', 'id' => 'a', 'extra' => true]]]],
@@ -56,7 +56,7 @@ class SectionChildFlowValidatorTest extends TestCase
             'heading' => 'When',
             'description' => 'Noon',
             'childFlow' => [
-                'elements' => [['id' => 'a', 'type' => 'text', 'text' => 'Before', 'appearance' => []]],
+                'elements' => [['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Before', 'appearance' => []]],
                 'order' => [['kind' => 'element', 'id' => 'a'], ['kind' => 'specialized', 'key' => 'content']],
             ],
         ];
