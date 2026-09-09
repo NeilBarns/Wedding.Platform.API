@@ -33,8 +33,8 @@ final class WebsiteSectionContentValidator
             return $this->validateStory($content, $rules);
         }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        if (in_array($sectionType, ['date', 'blank'], true) && isset($validated['childFlow'])) {
-            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'date', 'divider', 'media', 'compositionGroup'], $sectionType !== 'blank');
+        if ($sectionType === 'blank' && isset($validated['childFlow'])) {
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup'], false);
             $textElements = [];
             $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
                 if (in_array(($element['type'] ?? null), ['text', 'richText', 'date', 'divider'], true)) {
@@ -57,7 +57,7 @@ final class WebsiteSectionContentValidator
                     && ! in_array($element['appearance']['assetId'], DividerCatalog::assetIdsForTemplate($templateKey), true)) {
                     throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.assetId" => 'The selected Divider asset is not supported by this Template.']);
                 }
-                $fontId = in_array($element['type'], ['text', 'richText'], true) ? ($element['appearance']['fontFamilyId'] ?? null) : null;
+                $fontId = in_array($element['type'], ['text', 'richText', 'date'], true) ? ($element['appearance']['fontFamilyId'] ?? null) : null;
                 if (is_string($fontId) && $allowedFontIds !== null && ! in_array($fontId, $allowedFontIds, true)) {
                     throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.fontFamilyId" => 'The selected Text font is not supported by this Template.']);
                 }
@@ -81,7 +81,6 @@ final class WebsiteSectionContentValidator
     {
         return match ($sectionType) {
             'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
-            'date' => $this->childFlowRules($this->stringContentRules(['heading' => 255, 'description' => 5000])),
             'blank' => [
                 'content' => ['required', 'array:childFlow'],
                 'content.childFlow' => ['required', 'array'],
@@ -159,14 +158,6 @@ final class WebsiteSectionContentValidator
                 'content.groups.*.people.*.media.focalPoint.x' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
                 'content.groups.*.people.*.media.focalPoint.y' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
                 'content.groups.*.people.*.media.zoom' => ['sometimes', 'numeric', 'between:1,3'],
-            ],
-            'faq' => [
-                'content' => ['required', 'array:heading,items'],
-                'content.heading' => ['present', 'nullable', 'string', 'max:255'],
-                'content.items' => ['present', 'array', 'max:100'],
-                'content.items.*' => ['required', 'array:question,answer'],
-                'content.items.*.question' => ['present', 'nullable', 'string', 'max:1000'],
-                'content.items.*.answer' => ['present', 'nullable', 'string', 'max:5000'],
             ],
             default => null,
         };

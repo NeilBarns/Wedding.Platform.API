@@ -204,7 +204,7 @@ class WebsiteSchemaVersionTest extends TestCase
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$website->id}")
             ->assertOk()
-            ->assertJsonPath('data.sections.2.content.elements.0.slots.media.content.mediaId', $asset->id)
+            ->assertJsonPath('data.sections.1.content.elements.0.slots.media.content.mediaId', $asset->id)
             ->assertJsonPath("data.media.{$asset->id}.id", $asset->id);
         $this->assertSame($legacy, $story->fresh()->content);
     }

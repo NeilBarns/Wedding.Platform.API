@@ -56,7 +56,7 @@ class WebsitePeopleSectionTest extends TestCase
         $this->assertFalse($people->is_enabled);
         $this->assertSame(['heading' => 'Wedding Party', 'groups' => []], $people->content);
         $this->assertSame(WebsiteSectionAppearance::DEFAULT, $people->appearance);
-        $this->assertSame(10, $website->sections()->count());
+        $this->assertSame(7, $website->sections()->count());
     }
 
     public function test_people_content_persists_order_optional_roles_and_empty_groups(): void

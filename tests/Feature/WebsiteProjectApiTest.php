@@ -59,7 +59,7 @@ class WebsiteProjectApiTest extends TestCase
             ->assertJsonPath('data.name', 'Main')
             ->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
             ->assertJsonPath('data.designSettings', $project->design_settings)
-            ->assertJsonCount(9, 'data.sections');
+            ->assertJsonCount(7, 'data.sections');
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$foreign->id}")->assertNotFound();
     }
@@ -92,7 +92,7 @@ class WebsiteProjectApiTest extends TestCase
         $reversed = $project->sections()->pluck('id')->reverse()->values()->all();
         $this->actingAs($owner)->putJson("{$base}/sections/order", ['sectionIds' => $reversed])
             ->assertOk()->assertJsonPath('data.sections.0.id', $reversed[0]);
-        $this->assertSame(range(10, 90, 10), $project->sections()->pluck('sort_order')->all());
+        $this->assertSame(range(10, 70, 10), $project->sections()->pluck('sort_order')->all());
     }
 
     public function test_project_and_event_section_isolation_returns_not_found_without_mutation(): void

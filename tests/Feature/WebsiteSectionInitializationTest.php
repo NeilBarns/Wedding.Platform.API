@@ -32,7 +32,9 @@ class WebsiteSectionInitializationTest extends TestCase
         $definitions = app(WebsiteSectionRegistry::class)->defaultCompositionFor($website->event->type);
 
         $this->assertSame(array_keys($definitions), $sections->pluck('type')->all());
-        $this->assertSame([10, 20, 30, 40, 50, 65, 70, 80, 90], $sections->pluck('sort_order')->all());
+        $this->assertSame([10, 30, 40, 50, 65, 70, 90], $sections->pluck('sort_order')->all());
+        $this->assertSame(0, $sections->where('type', 'faq')->count());
+        $this->assertSame(0, $sections->where('type', 'date')->count());
         $this->assertSame(0, $sections->where('type', 'dressCode')->count());
         $this->assertNotContains(false, $sections->pluck('is_enabled')->all(), true);
 
@@ -59,7 +61,8 @@ class WebsiteSectionInitializationTest extends TestCase
 
         $initializer->handle($website);
 
-        $this->assertDatabaseCount('website_sections', 10);
+        $this->assertDatabaseCount('website_sections', 8);
+        $this->assertSame(0, $website->sections()->where('type', 'faq')->count());
         $this->assertSame(['headline' => 'Our day', 'subheadline' => 'Join us'], $hero->refresh()->content);
         $this->assertFalse($hero->is_enabled);
         $this->assertSame(7, $hero->sort_order);
@@ -75,7 +78,7 @@ class WebsiteSectionInitializationTest extends TestCase
 
         $initializer->handle($website);
 
-        $this->assertSame(9, $website->sections()->count());
+        $this->assertSame(7, $website->sections()->count());
         $venue = $website->sections()->where('type', 'venue')->sole();
         $this->assertSame(50, $venue->sort_order);
         $this->assertSame(app(WebsiteSectionRegistry::class)->get('venue')->defaultContent, $venue->content);
@@ -90,7 +93,7 @@ class WebsiteSectionInitializationTest extends TestCase
 
         $this->assertSame(PlatformRole::User, $creator->platform_role);
         $this->assertSame(EventMembershipRole::Owner, $event->memberships()->sole()->role);
-        $this->assertSame(9, $event->website->sections()->count());
+        $this->assertSame(7, $event->website->sections()->count());
     }
 
     public function test_w2_rollout_backfills_a_pre_existing_empty_wedding_website(): void
@@ -113,12 +116,12 @@ class WebsiteSectionInitializationTest extends TestCase
         (require database_path('migrations/2026_08_14_000002_initialize_wedding_website_sections.php'))->up();
 
         $sections = $website->sections()->get();
-        $this->assertCount(8, $sections);
+        $this->assertCount(6, $sections);
         $this->assertSame([
-            'hero', 'date', 'story', 'schedule', 'venue', 'gallery', 'faq', 'rsvp',
+            'hero', 'story', 'schedule', 'venue', 'gallery', 'rsvp',
         ], $sections->pluck('type')->all());
-        $this->assertCount(8, $sections->pluck('type')->unique());
-        $this->assertSame([10, 20, 30, 40, 50, 70, 80, 90], $sections->pluck('sort_order')->all());
+        $this->assertCount(6, $sections->pluck('type')->unique());
+        $this->assertSame([10, 30, 40, 50, 70, 90], $sections->pluck('sort_order')->all());
         $this->assertTrue($sections->every(fn (WebsiteSection $section): bool => Str::isUlid($section->id)));
         $this->assertFalse($sections->contains(fn (WebsiteSection $section): bool => str_contains(json_encode($section->content), $event->name)));
     }

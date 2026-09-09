@@ -80,7 +80,6 @@ class WebsiteSectionDesignDefaultsTest extends TestCase
             ['gallery', ['bodyFontId' => 'classic-serif']],
             ['gallery', ['bodyColorId' => 'terracotta-text']],
             ['gallery', ['accentColorId' => 'terracotta-accent']],
-            ['faq', ['accentColorId' => 'terracotta-accent']],
             ['story', ['headingFontId' => 'fashion-serif']],
             ['story', ['bodyFontId' => 'editorial-serif']],
             ['story', ['headingColorId' => 'plum-text']],
@@ -111,11 +110,11 @@ class WebsiteSectionDesignDefaultsTest extends TestCase
         ]])->assertOk();
         $this->actingAs($owner)->putJson($url, ['designDefaults' => [
             'bodyFontId' => 'classic-serif',
-        ]])->assertOk()->assertJsonMissingPath('data.sections.2.designDefaults.headingFontId');
+        ]])->assertOk()->assertJsonMissingPath('data.sections.1.designDefaults.headingFontId');
         $this->assertSame(['bodyFontId' => 'classic-serif'], $story->refresh()->appearance['designDefaults']);
 
         $this->actingAs($owner)->putJson($url, ['designDefaults' => (object) []])
-            ->assertOk()->assertJsonPath('data.sections.2.designDefaults', []);
+            ->assertOk()->assertJsonPath('data.sections.1.designDefaults', []);
         $this->assertSame([], $story->refresh()->appearance['designDefaults']);
         $this->assertStringContainsString('"designDefaults":{}', DB::table('website_sections')->where('id', $story->id)->value('appearance'));
     }
@@ -125,7 +124,7 @@ class WebsiteSectionDesignDefaultsTest extends TestCase
         [$event, $owner, $project] = $this->project();
         $story = $project->sections()->where('type', 'story')->sole();
         $base = $this->base($event, $project);
-        $index = 2;
+        $index = 1;
 
         $this->actingAs($owner)->getJson($base)->assertJsonPath("data.sections.{$index}.resolvedDesignContext.bodyFontId", 'modern-sans');
         $settings = [...$project->design_settings, 'fontSet' => 'romantic'];
@@ -195,7 +194,7 @@ class WebsiteSectionDesignDefaultsTest extends TestCase
         $this->actingAs($owner)->putJson(
             "/api/events/{$event->id}/website/sections/{$story->id}/design-defaults",
             $payload,
-        )->assertOk()->assertJsonPath('data.sections.2.designDefaults.headingFontId', 'romantic-serif');
+        )->assertOk()->assertJsonPath('data.sections.1.designDefaults.headingFontId', 'romantic-serif');
     }
 
     /** @return array{Event, User, Website} */

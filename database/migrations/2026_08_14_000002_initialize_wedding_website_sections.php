@@ -12,12 +12,10 @@ return new class extends Migration
     {
         $definitions = [
             'hero' => [10, ['headline' => '', 'subheadline' => '']],
-            'date' => [20, ['heading' => '', 'description' => '']],
             'story' => [30, ['heading' => '', 'intro' => null, 'blocks' => []]],
             'schedule' => [40, ['heading' => '', 'items' => []]],
             'venue' => [50, ['heading' => '', 'name' => '', 'address' => '', 'description' => '']],
             'gallery' => [70, ['heading' => '', 'items' => []]],
-            'faq' => [80, ['heading' => '', 'items' => []]],
             'rsvp' => [90, ['heading' => '', 'description' => '', 'buttonLabel' => '']],
         ];
 

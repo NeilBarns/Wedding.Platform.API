@@ -381,7 +381,6 @@ final class WebsiteCapabilityResolver
     ): ContextDefaultsCapability {
         $roles = match ($sectionId) {
             'gallery' => ['headingFont', 'headingColor'],
-            'faq' => ['headingFont', 'bodyFont', 'headingColor', 'bodyColor'],
             default => ['headingFont', 'bodyFont', 'headingColor', 'bodyColor', 'accentColor'],
         };
         if (! $includeColors) {
@@ -490,7 +489,7 @@ final class WebsiteCapabilityResolver
 
         $allowedElements = match ($sectionId) {
             'story' => [WebsiteElementType::NarrativeBlock->value],
-            'date', 'blank' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Date->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
+            'blank' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Date->value, WebsiteElementType::Accordion->value, WebsiteElementType::Schedule->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
             default => null,
         };
 

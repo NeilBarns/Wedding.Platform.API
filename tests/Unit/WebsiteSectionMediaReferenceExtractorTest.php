@@ -80,7 +80,7 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
         $this->assertSame([
             ['mediaId' => 'media-one', 'reference' => ['type' => 'sectionMedia']],
             ['mediaId' => 'media-two', 'reference' => ['type' => 'sectionMedia']],
-        ], $this->extractor->extract('date', 'date', $content));
+        ], $this->extractor->extract('blank-section', 'blank', $content));
     }
 
     #[DataProvider('emptyAndMalformedCases')]

@@ -33,7 +33,7 @@ final class WebsiteTemplateRegistry
         }
 
         $sectionTypes = [
-            'hero', 'date', 'story', 'schedule', 'venue', 'people', 'gallery', 'faq', 'rsvp', 'blank',
+            'hero', 'story', 'schedule', 'venue', 'people', 'gallery', 'rsvp', 'blank',
         ];
         $classicDesignLibrary = $this->classicDesignLibrary();
         $classic = new WebsiteTemplateDefinition(

@@ -86,7 +86,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $capabilities = $resolver->template($template);
             $this->assertNotNull($capabilities);
             $this->assertSame($template->supportedSectionTypes, array_map(fn ($section): string => $section->id, $capabilities->sections));
-            $this->assertEqualsCanonicalizing(['text', 'richText', 'date', 'divider', 'media', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
+            $this->assertEqualsCanonicalizing(['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
 
             foreach ($capabilities->sections as $section) {
                 $this->assertContains($section->id, $knownSections);
@@ -128,8 +128,8 @@ class WebsiteCapabilityRegistryTest extends TestCase
         foreach (array_keys(app(WebsiteTemplateRegistry::class)->all()) as $templateKey) {
             $template = $resolver->template($templateKey);
             foreach ($template->sections as $section) {
-                if (in_array($section->id, ['date', 'blank'], true)) {
-                    $this->assertSame(['text', 'richText', 'date', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
+                if ($section->id === 'blank') {
+                    $this->assertSame(['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
                     $this->assertSame(20, $section->maximumElementCount);
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'text'));
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'compositionGroup'));
@@ -266,13 +266,11 @@ class WebsiteCapabilityRegistryTest extends TestCase
         $resolver = app(WebsiteCapabilityResolver::class);
         $expected = [
             'hero' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'date' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'story' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'schedule' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'venue' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'people' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'gallery' => [['heading'], ['headingColor']],
-            'faq' => [['heading', 'body'], ['headingColor', 'bodyColor']],
             'rsvp' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'blank' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
         ];

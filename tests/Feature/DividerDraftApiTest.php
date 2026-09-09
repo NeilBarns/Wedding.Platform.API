@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Actions\Events\CreateEvent;
 use App\Actions\Websites\AddWebsiteProjectColor;
 use App\Models\User;
+use App\Models\Website;
+use App\Models\WebsiteSection;
 use App\Website\WebsiteTemplateRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -13,6 +15,15 @@ use Tests\TestCase;
 class DividerDraftApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function blankSection(Website $website): WebsiteSection
+    {
+        return WebsiteSection::factory()->for($website)->forType('blank')->create([
+            'sort_order' => 100,
+            'editor_name' => 'Section 1',
+            'content' => ['childFlow' => ['elements' => [], 'order' => []]],
+        ]);
+    }
 
     public static function depths(): array
     {
@@ -27,7 +38,7 @@ class DividerDraftApiTest extends TestCase
         $website = $this->initializeWebsite($event);
         $website = app(AddWebsiteProjectColor::class)->handle($website, '#123ABC');
         $customId = $website->design_settings['customColors'][0]['id'];
-        $section = $website->sections()->where('type', 'date')->sole();
+        $section = $this->blankSection($website);
         $url = "/api/events/{$event->id}/websites/{$website->id}";
         $fixtures = json_decode(file_get_contents(__DIR__.'/../Fixtures/divider-contract.json'), true, flags: JSON_THROW_ON_ERROR);
         $exports = [];
@@ -39,7 +50,7 @@ class DividerDraftApiTest extends TestCase
             for ($index = 0; $index < $depth; $index++) {
                 $element = ['id' => 'group-'.$index, 'type' => 'compositionGroup', 'editorName' => 'Group '.($index + 1), 'children' => [$element]];
             }
-            $content = ['heading' => 'When', 'description' => 'Details', 'childFlow' => ['elements' => [$element], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => $element['id']]]]];
+            $content = ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => $element['id']]]]];
             $firstResponse = $this->actingAs($owner)->putJson($url.'/sections/'.$section->id, ['content' => $content])->assertOk();
             $first = $firstResponse->json('data');
             $returned = collect($first['sections'])->firstWhere('id', $section->id)['content'];
@@ -65,7 +76,7 @@ class DividerDraftApiTest extends TestCase
         $owner = User::factory()->create();
         $event = app(CreateEvent::class)->handle($owner, ['name' => 'Divider contract']);
         $website = $this->initializeWebsite($event);
-        $section = $website->sections()->where('type', 'date')->sole();
+        $section = $this->blankSection($website);
         $fixtures = json_decode(file_get_contents(__DIR__.'/../Fixtures/divider-contract.json'), true, flags: JSON_THROW_ON_ERROR);
         $divider = collect($fixtures['schemaCases'])->firstWhere('name', 'complete')['element'];
         $contentFor = function (array $element) use ($depth): array {
@@ -73,7 +84,7 @@ class DividerDraftApiTest extends TestCase
                 $element = ['id' => 'group-'.$index, 'type' => 'compositionGroup', 'editorName' => 'Group '.($index + 1), 'children' => [$element]];
             }
 
-            return ['heading' => 'When', 'description' => 'Details', 'childFlow' => ['elements' => [$element], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => $element['id']]]]];
+            return ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => $element['id']]]]];
         };
         $content = $contentFor($divider);
         $url = "/api/events/{$event->id}/websites/{$website->id}";
@@ -124,9 +135,9 @@ class DividerDraftApiTest extends TestCase
         $owner = User::factory()->create();
         $event = app(CreateEvent::class)->handle($owner, ['name' => 'Modern Divider contract']);
         $website = $this->initializeWebsite($event, WebsiteTemplateRegistry::MODERN_EDITORIAL_V1);
-        $section = $website->sections()->where('type', 'date')->sole();
+        $section = $this->blankSection($website);
         $before = $section->content;
-        $content = ['heading' => 'When', 'description' => 'Details', 'childFlow' => ['elements' => [['id' => 'divider-1', 'type' => 'divider', 'editorName' => 'Divider 1', 'appearance' => ['assetId' => 'classic-divider-botanical-vine']]], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => 'divider-1']]]];
+        $content = ['childFlow' => ['elements' => [['id' => 'divider-1', 'type' => 'divider', 'editorName' => 'Divider 1', 'appearance' => ['assetId' => 'classic-divider-botanical-vine']]], 'order' => [['kind' => 'element', 'id' => 'divider-1']]]];
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/websites/{$website->id}/sections/{$section->id}", ['content' => $content])->assertUnprocessable();
         $this->assertSame($before, $section->refresh()->content);
     }

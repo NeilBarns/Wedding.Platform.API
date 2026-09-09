@@ -29,7 +29,7 @@ final class WebsiteElementValidator
     private function validateAtDepth(array $element, int $depth): array
     {
         $type = $this->elementType($element);
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
             && is_string($element['editorName'] ?? null)) {
             $element['editorName'] = $this->normalizeEditorName($element['editorName']);
         }
@@ -83,6 +83,8 @@ final class WebsiteElementValidator
             WebsiteElementType::Text => $this->textElementRules(),
             WebsiteElementType::RichText => $this->richTextElementRules(),
             WebsiteElementType::Date => $this->dateElementRules(),
+            WebsiteElementType::Accordion => $this->accordionElementRules(),
+            WebsiteElementType::Schedule => $this->scheduleElementRules(),
             WebsiteElementType::Image => $this->imageRules(),
             WebsiteElementType::Media => $this->mediaRules(),
             WebsiteElementType::Divider => $this->dividerRules(),
@@ -96,7 +98,7 @@ final class WebsiteElementValidator
             WebsiteElementType::CompositionGroup => throw new \LogicException('Composition Groups are validated separately.'),
         };
 
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
             $rules['element.isHidden'] = ['sometimes', 'boolean'];
             $rules['element.editorName'] = ['required', 'string', 'max:80', 'not_regex:/^\s*$/u'];
         }
@@ -145,13 +147,39 @@ final class WebsiteElementValidator
                 }
             }
         }
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::Date], true)) {
+            $this->assertTextFontTuple($validated);
+        }
         if ($type === WebsiteElementType::Text) {
             $validated['text'] = $this->normalizeText($validated['text']);
-            $this->assertTextFontTuple($validated);
         }
         if ($type === WebsiteElementType::RichText) {
             $this->assertRichTextDocument($validated['document']);
             $this->assertRichTextFontWeight($validated);
+        }
+        if ($type === WebsiteElementType::Accordion) {
+            $ids = array_column($validated['items'], 'id');
+            if (count($ids) !== count(array_unique($ids))) {
+                throw ValidationException::withMessages(['element.items' => 'Accordion item IDs must be unique.']);
+            }
+            $validated['items'] = array_map(function (array $item): array {
+                $item['id'] = trim($item['id']);
+                $item['content'] = $this->normalizeText($item['content']);
+
+                return $item;
+            }, $validated['items']);
+        }
+        if ($type === WebsiteElementType::Schedule) {
+            $ids = array_column($validated['items'], 'id');
+            if (count($ids) !== count(array_unique($ids))) {
+                throw ValidationException::withMessages(['element.items' => 'Schedule item IDs must be unique.']);
+            }
+            $validated['items'] = array_map(function (array $item): array {
+                $item['id'] = trim($item['id']);
+                $item['details'] = $this->normalizeText($item['details']);
+
+                return $item;
+            }, $validated['items']);
         }
 
         return $validated;
@@ -189,12 +217,56 @@ final class WebsiteElementValidator
             'element' => ['required', 'array:id,type,editorName,isHidden,appearance'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:date'],
-            'element.appearance' => ['sometimes', 'array:format,showWeekday,alignment,textStyle,colorId'],
+            'element.appearance' => ['sometimes', 'array:format,showWeekday,alignment,textStyle,fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,textTransform,colorId,responsive'],
             'element.appearance.format' => ['sometimes', 'in:long,medium,short,numeric'],
             'element.appearance.showWeekday' => ['sometimes', 'boolean'],
             'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
-            'element.appearance.textStyle' => ['sometimes', 'in:display,heading,body'],
+            'element.appearance.textStyle' => ['sometimes', 'in:display,heading,subheading,eyebrow,body,caption'],
+            'element.appearance.fontFamilyId' => ['sometimes', 'string', 'min:1'],
+            'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.fontWeight' => ['sometimes', 'integer', 'in:400,600,700'],
+            'element.appearance.lineHeight' => ['sometimes', 'in:tight,normal,relaxed'],
+            'element.appearance.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
+            'element.appearance.textTransform' => ['sometimes', 'in:none,uppercase,lowercase,capitalize'],
             'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
+            'element.appearance.responsive' => ['sometimes', 'array:tablet,mobile'],
+            'element.appearance.responsive.tablet' => ['sometimes', 'array:fontSize,alignment'],
+            'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.responsive.tablet.alignment' => ['sometimes', 'in:start,center,end'],
+            'element.appearance.responsive.mobile' => ['sometimes', 'array:fontSize,alignment'],
+            'element.appearance.responsive.mobile.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.responsive.mobile.alignment' => ['sometimes', 'in:start,center,end'],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
+    private function accordionElementRules(): array
+    {
+        return [
+            'element' => ['required', 'array:id,type,editorName,isHidden,items'],
+            'element.id' => $this->idRules(),
+            'element.type' => ['required', 'in:accordion'],
+            'element.items' => ['present', 'array', 'max:50'],
+            'element.items.*' => ['required', 'array:id,title,content'],
+            'element.items.*.id' => $this->idRules(),
+            'element.items.*.title' => ['present', 'string', 'max:255'],
+            'element.items.*.content' => ['present', 'string', 'max:5000'],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
+    private function scheduleElementRules(): array
+    {
+        return [
+            'element' => ['required', 'array:id,type,editorName,isHidden,items'],
+            'element.id' => $this->idRules(),
+            'element.type' => ['required', 'in:schedule'],
+            'element.items' => ['present', 'array', 'max:100'],
+            'element.items.*' => ['required', 'array:id,time,title,details'],
+            'element.items.*.id' => $this->idRules(),
+            'element.items.*.time' => ['present', 'string', 'regex:/^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/'],
+            'element.items.*.title' => ['present', 'string', 'max:255'],
+            'element.items.*.details' => ['present', 'string', 'max:5000'],
         ];
     }
 

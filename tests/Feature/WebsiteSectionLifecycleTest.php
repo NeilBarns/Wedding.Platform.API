@@ -40,7 +40,7 @@ class WebsiteSectionLifecycleTest extends TestCase
         $secondId = $blanks[1]['id'];
 
         $this->actingAs($owner)->putJson("{$base}/{$first['id']}/editor-name", ['editorName' => '  Travel   notes  '])
-            ->assertOk()->assertJsonPath('data.sections.9.editorName', 'Travel notes');
+            ->assertOk()->assertJsonPath('data.sections.7.editorName', 'Travel notes');
         $this->actingAs($owner)->putJson("{$base}/{$secondId}/editor-name", ['editorName' => 'Travel notes'])->assertOk();
         $this->assertSame($first['id'], $event->website->sections()->findOrFail($first['id'])->id);
 
@@ -56,7 +56,7 @@ class WebsiteSectionLifecycleTest extends TestCase
 
         $this->actingAs($owner)->deleteJson("{$base}/{$secondId}")->assertOk();
         $this->assertDatabaseMissing('website_sections', ['id' => $secondId]);
-        $this->assertSame(range(10, 100, 10), $event->website->sections()->pluck('sort_order')->all());
+        $this->assertSame(range(10, 80, 10), $event->website->sections()->pluck('sort_order')->all());
     }
 
     public function test_duplicate_regenerates_every_owned_identity_and_preserves_media_references_and_authored_state(): void

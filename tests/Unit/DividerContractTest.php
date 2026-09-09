@@ -45,10 +45,10 @@ class DividerContractTest extends TestCase
         for ($index = 0; $index < $depth; $index++) {
             $element = ['id' => 'group-'.$index, 'type' => 'compositionGroup', 'editorName' => 'Group '.($index + 1), 'children' => [$element]];
         }
-        $content = ['heading' => 'When', 'description' => 'Details', 'childFlow' => ['elements' => [$element], 'order' => [['kind' => 'specialized', 'key' => 'content'], ['kind' => 'element', 'id' => $element['id']]]]];
+        $content = ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => $element['id']]]]];
         if (! $valid) {
             $this->expectException(ValidationException::class);
         }
-        $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate('date', $content, templateKey: $templateKey));
+        $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate('blank', $content, templateKey: $templateKey));
     }
 }
