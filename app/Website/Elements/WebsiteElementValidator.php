@@ -29,7 +29,7 @@ final class WebsiteElementValidator
     private function validateAtDepth(array $element, int $depth): array
     {
         $type = $this->elementType($element);
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
             && is_string($element['editorName'] ?? null)) {
             $element['editorName'] = $this->normalizeEditorName($element['editorName']);
         }
@@ -85,6 +85,7 @@ final class WebsiteElementValidator
             WebsiteElementType::Date => $this->dateElementRules(),
             WebsiteElementType::Accordion => $this->accordionElementRules(),
             WebsiteElementType::Schedule => $this->scheduleElementRules(),
+            WebsiteElementType::People => $this->peopleElementRules(),
             WebsiteElementType::Image => $this->imageRules(),
             WebsiteElementType::Media => $this->mediaRules(),
             WebsiteElementType::Divider => $this->dividerRules(),
@@ -98,7 +99,7 @@ final class WebsiteElementValidator
             WebsiteElementType::CompositionGroup => throw new \LogicException('Composition Groups are validated separately.'),
         };
 
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
             $rules['element.isHidden'] = ['sometimes', 'boolean'];
             $rules['element.editorName'] = ['required', 'string', 'max:80', 'not_regex:/^\s*$/u'];
         }
@@ -180,6 +181,16 @@ final class WebsiteElementValidator
 
                 return $item;
             }, $validated['items']);
+        }
+        if ($type === WebsiteElementType::People) {
+            $groupIds = array_column($validated['groups'], 'id');
+            $personIds = collect($validated['groups'])->flatMap(fn (array $group): array => array_column($group['people'], 'id'))->all();
+            if (count($groupIds) !== count(array_unique($groupIds))) {
+                throw ValidationException::withMessages(['element.groups' => 'People group IDs must be unique.']);
+            }
+            if (count($personIds) !== count(array_unique($personIds))) {
+                throw ValidationException::withMessages(['element.groups' => 'Person IDs must be unique.']);
+            }
         }
 
         return $validated;
@@ -267,6 +278,22 @@ final class WebsiteElementValidator
             'element.items.*.time' => ['present', 'string', 'regex:/^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/'],
             'element.items.*.title' => ['present', 'string', 'max:255'],
             'element.items.*.details' => ['present', 'string', 'max:5000'],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
+    private function peopleElementRules(): array
+    {
+        return [
+            'element' => ['required', 'array:id,type,editorName,isHidden,groups,appearance'],
+            'element.id' => $this->idRules(), 'element.type' => ['required', 'in:people'],
+            'element.groups' => ['present', 'array', 'list', 'max:30'],
+            'element.groups.*' => ['required', 'array:id,name,people'], 'element.groups.*.id' => $this->idRules(), 'element.groups.*.name' => ['required', 'string', 'max:255'],
+            'element.groups.*.people' => ['present', 'array', 'list', 'max:100'],
+            'element.groups.*.people.*' => ['required', 'array:id,name,role,media'], 'element.groups.*.people.*.id' => $this->idRules(), 'element.groups.*.people.*.name' => ['required', 'string', 'max:255'], 'element.groups.*.people.*.role' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'element.groups.*.people.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint,zoom'], 'element.groups.*.people.*.media.assetId' => ['required_with:element.groups.*.people.*.media', 'string', 'ulid'],
+            'element.groups.*.people.*.media.focalPoint' => ['sometimes', 'array:x,y'], 'element.groups.*.people.*.media.focalPoint.x' => ['required_with:element.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'], 'element.groups.*.people.*.media.focalPoint.y' => ['required_with:element.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'], 'element.groups.*.people.*.media.zoom' => ['sometimes', 'numeric', 'between:1,3'],
+            'element.appearance' => ['sometimes', 'array:presentation'], 'element.appearance.presentation' => ['sometimes', 'in:portraits,cards,minimal,namesOnly'],
         ];
     }
 

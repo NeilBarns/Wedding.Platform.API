@@ -33,7 +33,7 @@ class WebsiteSectionAppearanceTest extends TestCase
         $event = app(CreateEvent::class)->handle(User::factory()->create(), ['name' => 'A Wedding']);
         $this->initializeWebsite($event);
 
-        $this->assertCount(7, $event->website->sections);
+        $this->assertCount(5, $event->website->sections);
         $event->website->sections->each(fn ($section) => $this->assertSame(WebsiteSectionAppearance::DEFAULT, $section->appearance));
     }
 
@@ -73,7 +73,7 @@ class WebsiteSectionAppearanceTest extends TestCase
     public function test_valid_update_returns_authoritative_draft_and_preserves_section_data(): void
     {
         [$event, $owner] = $this->eventWithOwner();
-        $section = $event->website->sections()->where('type', 'venue')->firstOrFail();
+        $section = $event->website->sections()->where('type', 'people')->firstOrFail();
         $before = $section->only(['content', 'sort_order', 'is_enabled']);
         $appearance = [
             'headingAlignment' => 'right',
@@ -85,7 +85,7 @@ class WebsiteSectionAppearanceTest extends TestCase
         $this->actingAs($owner)
             ->putJson("/api/events/{$event->id}/website/sections/{$section->id}/appearance", compact('appearance'))
             ->assertOk()
-            ->assertJsonPath('data.sections.3.appearance', $appearance);
+            ->assertJsonPath('data.sections.2.appearance', $appearance);
 
         $this->assertSame($appearance, $section->refresh()->appearance);
         $this->assertSame($before, $section->only(['content', 'sort_order', 'is_enabled']));
@@ -95,7 +95,7 @@ class WebsiteSectionAppearanceTest extends TestCase
     {
         [$event, $owner] = $this->eventWithOwner();
         $hero = $event->website->sections()->where('type', 'hero')->sole();
-        $schedule = $event->website->sections()->where('type', 'schedule')->sole();
+        $gallery = $event->website->sections()->where('type', 'gallery')->sole();
         $base = WebsiteSectionAppearance::DEFAULT;
 
         $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}/appearance", [
@@ -110,7 +110,7 @@ class WebsiteSectionAppearanceTest extends TestCase
             'appearance' => [...$base, 'presentation' => 'editorial'],
         ])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
 
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$schedule->id}/appearance", [
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$gallery->id}/appearance", [
             'appearance' => [...$base, 'presentation' => 'anything'],
         ])->assertUnprocessable()->assertJsonValidationErrors('appearance.presentation');
     }
@@ -410,34 +410,6 @@ class WebsiteSectionAppearanceTest extends TestCase
         $this->actingAs($owner)->putJson($url, ['appearance' => [...$base, 'emphasis' => 'featured']])->assertUnprocessable();
     }
 
-    public function test_classic_venue_accepts_all_tablet_placements_and_draft_exposes_the_capability(): void
-    {
-        [$event, $owner] = $this->eventWithOwner();
-        $venue = $event->website->sections()->where('type', 'venue')->sole();
-        $url = "/api/events/{$event->id}/website/sections/{$venue->id}/appearance";
-        $base = [...WebsiteSectionAppearance::DEFAULT, 'presentation' => 'detailsFirst', 'mediaPlacement' => 'right'];
-
-        $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
-            ->assertJsonPath('data.sections.3.presentationCapability.options.0.mediaControls.responsive.tablet.mediaPlacement.default', 'top')
-            ->assertJsonPath('data.sections.3.presentationCapability.options.0.mediaControls.responsive.tablet.mediaPlacement.options.0.key', 'top')
-            ->assertJsonPath('data.sections.3.presentationCapability.options.0.mediaControls.responsive.tablet.mediaPlacement.options.1.key', 'bottom')
-            ->assertJsonPath('data.sections.3.presentationCapability.options.0.mediaControls.responsive.tablet.mediaPlacement.options.2.key', 'left')
-            ->assertJsonPath('data.sections.3.presentationCapability.options.0.mediaControls.responsive.tablet.mediaPlacement.options.3.key', 'right');
-
-        foreach (['top', 'bottom', 'left', 'right'] as $placement) {
-            $appearance = [...$base, 'responsive' => ['tablet' => ['mediaPlacement' => $placement]]];
-            $response = $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
-            $placement === 'top'
-                ? $response->assertJsonMissingPath('data.sections.3.appearance.responsive')
-                : $response->assertJsonPath('data.sections.3.appearance.responsive.tablet.mediaPlacement', $placement);
-        }
-
-        foreach (['left', 'right'] as $placement) {
-            $appearance = [...$base, 'responsive' => ['mobile' => ['mediaPlacement' => $placement]]];
-            $this->actingAs($owner)->putJson($url, compact('appearance'))->assertUnprocessable();
-        }
-    }
-
     public function test_historical_framed_appearance_is_resolved_without_mutation_and_new_framed_updates_are_rejected(): void
     {
         [$event, $owner] = $this->eventWithOwner();
@@ -542,6 +514,47 @@ class WebsiteSectionAppearanceTest extends TestCase
             $this->actingAs($owner)->putJson($url, ['appearance' => $invalid])->assertUnprocessable();
             $this->assertSame($appearance, $story->refresh()->appearance);
         }
+    }
+
+    public function test_blank_decorative_appearance_saves_and_reloads_sparse_shared_intent(): void
+    {
+        [$event, $owner] = $this->eventWithOwner();
+        $base = "/api/events/{$event->id}/websites/{$event->website->id}/sections";
+        $sections = $this->actingAs($owner)->postJson($base, ['type' => 'blank'])->assertCreated()->json('data.sections');
+        $blank = collect($sections)->firstWhere('type', 'blank');
+        $appearance = [
+            ...WebsiteSectionAppearance::DEFAULT,
+            'backgroundTreatment' => 'custom',
+            'decorativeAppearance' => [
+                'background' => ['colorId' => 'terracotta-canvas', 'texture' => 'paper', 'textureStrength' => 55, 'pattern' => 'botanical', 'patternStrength' => 50, 'overlay' => 'warm'],
+                'frame' => ['style' => 'fine'],
+            ],
+        ];
+        $url = "/api/events/{$event->id}/website/sections/{$blank['id']}/appearance";
+        $this->actingAs($owner)->putJson($url, compact('appearance'))->assertOk();
+        $stored = $event->website->sections()->findOrFail($blank['id'])->appearance;
+        $this->assertSame($appearance, $stored);
+        $reloaded = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()->json('data.sections'))->firstWhere('id', $blank['id']);
+        $this->assertSame($appearance, $reloaded['appearance']);
+
+        $sparse = [...WebsiteSectionAppearance::DEFAULT, 'decorativeAppearance' => ['frame' => ['style' => 'fine']]];
+        $this->actingAs($owner)->putJson($url, ['appearance' => $sparse])->assertOk();
+        $this->assertSame($sparse, $event->website->sections()->findOrFail($blank['id'])->appearance);
+
+        foreach (['headingAlignment' => 'center', 'bodyAlignment' => 'right', 'emphasis' => 'featured'] as $field => $value) {
+            $invalid = [...$sparse, $field => $value];
+            $this->actingAs($owner)->putJson($url, ['appearance' => $invalid])->assertUnprocessable()->assertJsonValidationErrors("appearance.{$field}");
+        }
+        $this->actingAs($owner)->putJson("{$base}/{$blank['id']}/design-defaults", ['designDefaults' => ['headingFontId' => 'classic-serif']])
+            ->assertUnprocessable()->assertJsonValidationErrors('designDefaults');
+
+        $model = $event->website->sections()->findOrFail($blank['id']);
+        $model->appearance = [...$sparse, 'headingAlignment' => 'right', 'emphasis' => 'featured', 'designDefaults' => ['headingFontId' => 'legacy']];
+        $model->save();
+        $normalized = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()->json('data.sections'))->firstWhere('id', $blank['id']);
+        $this->assertSame('inherit', $normalized['appearance']['headingAlignment']);
+        $this->assertSame('inherit', $normalized['appearance']['emphasis']);
+        $this->assertSame([], $normalized['designDefaults']);
     }
 
     public function test_story_background_color_references_are_capability_and_project_scoped(): void

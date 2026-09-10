@@ -10,6 +10,7 @@ enum WebsiteElementType: string
     case Date = 'date';
     case Accordion = 'accordion';
     case Schedule = 'schedule';
+    case People = 'people';
     case Image = 'image';
     case Media = 'media';
     case Divider = 'divider';

@@ -33,7 +33,7 @@ final class WebsiteTemplateRegistry
         }
 
         $sectionTypes = [
-            'hero', 'story', 'schedule', 'venue', 'people', 'gallery', 'rsvp', 'blank',
+            'hero', 'story', 'people', 'gallery', 'rsvp', 'blank',
         ];
         $classicDesignLibrary = $this->classicDesignLibrary();
         $classic = new WebsiteTemplateDefinition(
@@ -65,7 +65,6 @@ final class WebsiteTemplateRegistry
             sectionMediaCapabilities: [
                 'hero' => ['mode' => 'single'],
                 'story' => ['mode' => 'multiple'],
-                'venue' => ['mode' => 'single'],
             ],
             sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
             sectionPresentationCapabilities: [
@@ -77,10 +76,6 @@ final class WebsiteTemplateRegistry
                     'textFirst' => ['Text First', 'Story-led composition with supporting photography.', 'text'],
                     'portraitStory' => ['Portrait Story', 'Portrait and narrative share the composition.', 'split'],
                 ], $this->mediaControls('classic', 'story')),
-                'venue' => $this->presentation('detailsFirst', [
-                    'detailsFirst' => ['Details First', 'Venue information leads with supporting imagery.', 'text'],
-                    'scenic' => ['Scenic', 'The venue photograph becomes the visual focus.', 'overlay'],
-                ], $this->mediaControls('classic', 'venue')),
                 'people' => $this->presentation('medallions', [
                     'medallions' => ['Medallions', 'Formal circular portraits with ceremonial character.', 'circles'],
                     'portraitCards' => ['Portrait Cards', 'Elegant vertical portraits with names beneath.', 'cards'],
@@ -90,7 +85,6 @@ final class WebsiteTemplateRegistry
             sectionPresentationFallbacks: [
                 'hero' => ['framed' => ['presentation' => 'classic', 'frameStyle' => 'fineLine']],
                 'story' => ['framed' => ['presentation' => 'textFirst', 'frameStyle' => 'fineLine']],
-                'venue' => ['framed' => ['presentation' => 'detailsFirst', 'frameStyle' => 'fineLine']],
                 'people' => ['framed' => ['presentation' => 'portraitCards']],
             ],
         );
@@ -125,7 +119,6 @@ final class WebsiteTemplateRegistry
             sectionMediaCapabilities: [
                 'hero' => ['mode' => 'single'],
                 'story' => ['mode' => 'multiple'],
-                'venue' => ['mode' => 'single'],
             ],
             sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
             sectionPresentationCapabilities: [
@@ -137,10 +130,6 @@ final class WebsiteTemplateRegistry
                     'textFirst' => ['Text First', 'Narrative typography leads the composition.', 'text'],
                     'editorial' => ['Editorial', 'Image and story form an asymmetric spread.', 'split'],
                 ], $this->mediaControls('modern', 'story')),
-                'venue' => $this->presentation('detailsFirst', [
-                    'detailsFirst' => ['Details First', 'Location details lead in an editorial layout.', 'text'],
-                    'scenic' => ['Scenic', 'A broad venue image anchors the Section.', 'overlay'],
-                ], $this->mediaControls('modern', 'venue')),
                 'people' => $this->presentation('editorialPortraits', [
                     'editorialPortraits' => ['Editorial Portraits', 'Vertical portraits with bold editorial rhythm.', 'cards'],
                     'squareGrid' => ['Square Grid', 'Structured square portraits in a clean grid.', 'grid'],
@@ -151,7 +140,6 @@ final class WebsiteTemplateRegistry
             sectionPresentationFallbacks: [
                 'hero' => ['framed' => ['presentation' => 'editorial', 'frameStyle' => 'hairline']],
                 'story' => ['framed' => ['presentation' => 'textFirst', 'frameStyle' => 'hairline']],
-                'venue' => ['framed' => ['presentation' => 'detailsFirst', 'frameStyle' => 'hairline']],
             ],
         );
 
@@ -575,10 +563,8 @@ final class WebsiteTemplateRegistry
         return match ([$section, $template]) {
             ['hero', 'classic'] => ['classic' => $styles('top', 'none', ['top' => 'Top', 'right' => 'Right', 'bottom' => 'Bottom', 'left' => 'Left'], 'top'), 'immersive' => $immersive],
             ['story', 'classic'] => ['textFirst' => $styles('bottom', 'none', null, 'bottom'), 'portraitStory' => $styles('left', 'none', null, 'top', ['top' => 'Top', 'bottom' => 'Bottom', 'left' => 'Left', 'right' => 'Right'])],
-            ['venue', 'classic'] => ['detailsFirst' => $styles('right', 'none', null, 'top', ['top' => 'Top', 'bottom' => 'Bottom', 'left' => 'Left', 'right' => 'Right']), 'scenic' => $immersive],
             ['hero', 'modern'] => ['editorial' => $styles('left', 'none', null, 'top'), 'immersive' => $immersive],
             ['story', 'modern'] => ['textFirst' => $styles('bottom', 'none', null, 'bottom'), 'editorial' => $styles('left', 'none', null, 'top')],
-            ['venue', 'modern'] => ['detailsFirst' => $styles('right', 'none', null, 'top'), 'scenic' => $immersive],
             default => [],
         };
     }

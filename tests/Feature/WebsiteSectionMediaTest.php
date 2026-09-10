@@ -142,14 +142,6 @@ class WebsiteSectionMediaTest extends TestCase
         $website = $this->initializeWebsite($event);
         $asset = $this->assetFor($event);
 
-        foreach (['hero', 'venue'] as $type) {
-            $section = $website->sections()->where('type', $type)->sole();
-            $content = $section->content;
-            $content['media'] = ['assetId' => $asset->id, 'zoom' => 1.4];
-            $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $content])->assertOk();
-            $this->assertSame(1.4, $section->refresh()->content['media']['zoom']);
-        }
-
         $hero = $website->sections()->where('type', 'hero')->sole();
         $base = [...$hero->content, 'media' => ['assetId' => $asset->id]];
         foreach ([1, 1.5, 3] as $zoom) {
@@ -172,10 +164,10 @@ class WebsiteSectionMediaTest extends TestCase
     public function test_referenced_asset_cannot_be_deleted_until_reference_is_removed(): void
     {
         [$owner, $event] = $this->eventFor(EventMembershipRole::Owner);
-        $venue = $this->initializeWebsite($event)->sections()->where('type', 'venue')->firstOrFail();
+        $hero = $this->initializeWebsite($event)->sections()->where('type', 'hero')->firstOrFail();
         $asset = $this->assetFor($event);
-        $content = ['heading' => '', 'name' => '', 'address' => '', 'description' => '', 'media' => ['assetId' => $asset->id]];
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$venue->id}", ['content' => $content])->assertOk();
+        $content = [...$hero->content, 'media' => ['assetId' => $asset->id]];
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => $content])->assertOk();
 
         $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")
             ->assertConflict()
@@ -184,7 +176,7 @@ class WebsiteSectionMediaTest extends TestCase
             ->assertJsonPath('usage.references.0.reference.type', 'sectionMedia');
         $this->assertDatabaseHas('media_assets', ['id' => $asset->id]);
 
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$venue->id}", ['content' => [...$content, 'media' => null]])->assertOk();
+        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", ['content' => [...$content, 'media' => null]])->assertOk();
         $this->actingAs($owner)->deleteJson("/api/events/{$event->id}/media/{$asset->id}")->assertNoContent();
     }
 

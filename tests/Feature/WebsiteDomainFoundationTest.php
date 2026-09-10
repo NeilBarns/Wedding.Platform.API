@@ -145,7 +145,7 @@ class WebsiteDomainFoundationTest extends TestCase
         $website = Website::factory()->create();
         $later = WebsiteSection::factory()->for($website)->forType('hero')->create(['sort_order' => 20]);
         $sameOrderFirst = WebsiteSection::factory()->for($website)->forType('story')->create(['sort_order' => 10]);
-        $sameOrderSecond = WebsiteSection::factory()->for($website)->forType('venue')->create(['sort_order' => 10]);
+        $sameOrderSecond = WebsiteSection::factory()->for($website)->forType('people')->create(['sort_order' => 10]);
 
         $expectedSameOrder = collect([$sameOrderFirst->id, $sameOrderSecond->id])->sort()->values()->all();
 

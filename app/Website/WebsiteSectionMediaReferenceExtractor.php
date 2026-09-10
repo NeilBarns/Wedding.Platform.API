@@ -8,7 +8,7 @@ final class WebsiteSectionMediaReferenceExtractor
     public function extract(string $sectionId, string $sectionType, array $content): array
     {
         $references = match ($sectionType) {
-            'hero', 'venue' => $this->sectionMedia($content),
+            'hero' => $this->sectionMedia($content),
             'story' => $this->story($sectionId, $content),
             'people' => $this->people($content),
             default => [],
@@ -21,16 +21,29 @@ final class WebsiteSectionMediaReferenceExtractor
     /** @param array<int, mixed> $elements */
     private function appendElementMedia(array &$references, mixed $elements): void
     {
-        if (! is_array($elements)) return;
+        if (! is_array($elements)) {
+            return;
+        }
         foreach ($elements as $element) {
-            if (! is_array($element)) continue;
+            if (! is_array($element)) {
+                continue;
+            }
             if (($element['type'] ?? null) === 'media') {
                 foreach (is_array($element['items'] ?? null) ? $element['items'] : [] as $item) {
-                    if (! is_array($item)) continue;
-                    if (is_string($item['mediaId'] ?? null)) $references[] = ['mediaId' => $item['mediaId'], 'reference' => ['type' => 'sectionMedia']];
+                    if (! is_array($item)) {
+                        continue;
+                    }
+                    if (is_string($item['mediaId'] ?? null)) {
+                        $references[] = ['mediaId' => $item['mediaId'], 'reference' => ['type' => 'sectionMedia']];
+                    }
                 }
             }
-            if (($element['type'] ?? null) === 'compositionGroup') $this->appendElementMedia($references, $element['children'] ?? []);
+            if (($element['type'] ?? null) === 'people') {
+                array_push($references, ...$this->people($element));
+            }
+            if (($element['type'] ?? null) === 'compositionGroup') {
+                $this->appendElementMedia($references, $element['children'] ?? []);
+            }
         }
     }
 

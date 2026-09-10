@@ -36,6 +36,20 @@ class WebsiteSectionResource extends JsonResource
         if ($this->type === 'story') {
             $appearance = $this->storyAuthoringAppearance($appearance);
         }
+        if ($this->type === 'blank') {
+            $appearance = array_intersect_key($appearance, array_flip(['backgroundTreatment', 'decorativeAppearance']));
+            $decorativeAppearance = $appearance['decorativeAppearance'] ?? null;
+            $appearance = [
+                'headingAlignment' => 'inherit',
+                'bodyAlignment' => 'inherit',
+                'backgroundTreatment' => in_array($appearance['backgroundTreatment'] ?? null, ['inherit', 'custom'], true) ? $appearance['backgroundTreatment'] : 'inherit',
+                'emphasis' => 'inherit',
+            ];
+            if (is_array($decorativeAppearance)) {
+                $appearance['decorativeAppearance'] = $decorativeAppearance;
+            }
+            $designDefaults = [];
+        }
 
         $resolvedContext = null;
         if ($template !== null && $this->relationLoaded('website')) {

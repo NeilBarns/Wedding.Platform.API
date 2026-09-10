@@ -28,6 +28,9 @@ final class UpdateWebsiteSectionDesignDefaults
     /** @param array<string, mixed> $designDefaults */
     public function handle(WebsiteSection $section, array $designDefaults): WebsiteSection
     {
+        if ($section->type === 'blank') {
+            throw ValidationException::withMessages(['designDefaults' => 'Blank Section Design Defaults are not supported.']);
+        }
         $section->loadMissing('website');
         $website = $section->website;
         $sectionCapability = $this->capabilities->section($website->template_key, $section->type);

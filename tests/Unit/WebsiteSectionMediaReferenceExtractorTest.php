@@ -25,7 +25,7 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
 
     public static function sectionMediaCases(): array
     {
-        return [['hero'], ['venue']];
+        return [['hero']];
     }
 
     public function test_extracts_pre_block_story_with_stable_synthetic_element_id(): void
@@ -83,6 +83,21 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
         ], $this->extractor->extract('blank-section', 'blank', $content));
     }
 
+    public function test_extracts_people_block_media_from_blank_and_group(): void
+    {
+        $people = [
+            'id' => 'people', 'type' => 'people', 'editorName' => 'People 1',
+            'groups' => [[
+                'id' => 'friends', 'name' => 'Friends',
+                'people' => [['id' => 'alex', 'name' => 'Alex', 'media' => ['assetId' => 'media-one']]],
+            ]],
+        ];
+        $content = ['childFlow' => ['elements' => [['id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [$people]]]]];
+        $this->assertSame([
+            ['mediaId' => 'media-one', 'reference' => ['type' => 'person', 'personId' => 'alex', 'label' => 'Alex', 'groupId' => 'friends', 'groupLabel' => 'Friends']],
+        ], $this->extractor->extract('blank', 'blank', $content));
+    }
+
     #[DataProvider('emptyAndMalformedCases')]
     public function test_skips_null_absent_and_malformed_references(string $type, array $content): void
     {
@@ -93,7 +108,6 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
     {
         return [
             ['hero', []],
-            ['venue', ['media' => null]],
             ['story', ['media' => ['assetId' => 123]]],
             ['story', ['blocks' => [['id' => 123, 'media' => ['assetId' => 'media']]]]],
             ['story', ['elements' => [['id' => 'one', 'type' => 'text', 'editorName' => 'Text 1', 'media' => ['type' => 'image', 'mediaId' => 'media']]]]],

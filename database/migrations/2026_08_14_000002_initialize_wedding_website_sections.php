@@ -13,8 +13,6 @@ return new class extends Migration
         $definitions = [
             'hero' => [10, ['headline' => '', 'subheadline' => '']],
             'story' => [30, ['heading' => '', 'intro' => null, 'blocks' => []]],
-            'schedule' => [40, ['heading' => '', 'items' => []]],
-            'venue' => [50, ['heading' => '', 'name' => '', 'address' => '', 'description' => '']],
             'gallery' => [70, ['heading' => '', 'items' => []]],
             'rsvp' => [90, ['heading' => '', 'description' => '', 'buttonLabel' => '']],
         ];

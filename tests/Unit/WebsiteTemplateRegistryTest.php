@@ -155,11 +155,9 @@ class WebsiteTemplateRegistryTest extends TestCase
             [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'hero', 'classic', 'top'],
             [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'story', 'textFirst', 'bottom'],
             [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'story', 'portraitStory', 'top'],
-            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'venue', 'detailsFirst', 'top'],
             [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'hero', 'editorial', 'top'],
             [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'story', 'textFirst', 'bottom'],
             [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'story', 'editorial', 'top'],
-            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'venue', 'detailsFirst', 'top'],
         ];
 
         foreach ($cases as [$templateKey, $sectionType, $presentation, $default]) {
@@ -167,7 +165,7 @@ class WebsiteTemplateRegistryTest extends TestCase
                 $control = $registry->get($templateKey)->responsiveControlFor($sectionType, $presentation, $viewport, 'mediaPlacement');
                 $this->assertSame($default, $control['default']);
                 $classicTabletHorizontal = $templateKey === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
-                    && (($sectionType === 'story' && $presentation === 'portraitStory') || ($sectionType === 'venue' && $presentation === 'detailsFirst'));
+                    && $sectionType === 'story' && $presentation === 'portraitStory';
                 $expectedOptions = $viewport === 'tablet' && $classicTabletHorizontal
                     ? ['top', 'bottom', 'left', 'right']
                     : ['top', 'bottom'];
@@ -233,33 +231,6 @@ class WebsiteTemplateRegistryTest extends TestCase
         }
 
         $mobile = $template->responsiveControlFor('story', 'portraitStory', 'mobile', 'mediaPlacement');
-        $this->assertSame('top', $mobile['default']);
-        $this->assertSame(['top', 'bottom'], array_column($mobile['options'], 'key'));
-        $this->assertSame(['top', 'bottom'], array_column($template->responsiveControlFor('hero', 'classic', 'tablet', 'mediaPlacement')['options'], 'key'));
-    }
-
-    public function test_classic_venue_details_first_tablet_supports_all_semantic_placements(): void
-    {
-        $template = (new WebsiteTemplateRegistry)->get(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-        $control = $template->responsiveControlFor('venue', 'detailsFirst', 'tablet', 'mediaPlacement');
-
-        $this->assertSame('top', $control['default']);
-        $this->assertSame(['top', 'bottom', 'left', 'right'], array_column($control['options'], 'key'));
-
-        foreach (['top', 'bottom', 'left', 'right'] as $placement) {
-            $normalized = $template->normalizeSectionAppearance('venue', [
-                ...WebsiteSectionAppearance::DEFAULT,
-                'presentation' => 'detailsFirst',
-                'mediaPlacement' => 'right',
-                'responsive' => ['tablet' => ['mediaPlacement' => $placement]],
-            ]);
-
-            $this->assertSame($placement, $normalized['responsive']['tablet']['mediaPlacement']);
-            $this->assertSame($placement, $template->resolveSectionAppearanceForViewport('venue', $normalized, 'tablet')['mediaPlacement']);
-            $this->assertSame('right', $template->resolveSectionAppearanceForViewport('venue', $normalized, 'desktop')['mediaPlacement']);
-        }
-
-        $mobile = $template->responsiveControlFor('venue', 'detailsFirst', 'mobile', 'mediaPlacement');
         $this->assertSame('top', $mobile['default']);
         $this->assertSame(['top', 'bottom'], array_column($mobile['options'], 'key'));
         $this->assertSame(['top', 'bottom'], array_column($template->responsiveControlFor('hero', 'classic', 'tablet', 'mediaPlacement')['options'], 'key'));
@@ -391,13 +362,11 @@ class WebsiteTemplateRegistryTest extends TestCase
             WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 => [
                 'hero' => ['classic', 'immersive'],
                 'story' => ['textFirst', 'portraitStory'],
-                'venue' => ['detailsFirst', 'scenic'],
                 'people' => ['medallions', 'portraitCards', 'namesOnly'],
             ],
             WebsiteTemplateRegistry::MODERN_EDITORIAL_V1 => [
                 'hero' => ['editorial', 'immersive'],
                 'story' => ['textFirst', 'editorial'],
-                'venue' => ['detailsFirst', 'scenic'],
                 'people' => ['editorialPortraits', 'squareGrid', 'minimal', 'namesOnly'],
             ],
         ];
@@ -421,10 +390,8 @@ class WebsiteTemplateRegistryTest extends TestCase
         $cases = [
             [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'hero', 'classic', 'fineLine'],
             [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'story', 'textFirst', 'fineLine'],
-            [WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'venue', 'detailsFirst', 'fineLine'],
             [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'hero', 'editorial', 'hairline'],
             [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'story', 'textFirst', 'hairline'],
-            [WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'venue', 'detailsFirst', 'hairline'],
         ];
 
         foreach ($cases as [$templateKey, $sectionType, $presentation, $frameStyle]) {

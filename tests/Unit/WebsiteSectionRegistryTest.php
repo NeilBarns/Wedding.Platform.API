@@ -16,19 +16,19 @@ class WebsiteSectionRegistryTest extends TestCase
         $this->assertSame([
             'hero',
             'story',
-            'schedule',
-            'venue',
             'people',
             'gallery',
             'rsvp',
             'blank',
         ], array_keys($definitions));
-        $this->assertSame([10, 30, 40, 50, 65, 70, 90, 100], array_column($definitions, 'defaultOrder'));
+        $this->assertSame([10, 30, 65, 70, 90, 100], array_column($definitions, 'defaultOrder'));
         $this->assertSame(array_keys($definitions), array_keys($registry->forEventType(EventType::Wedding)));
-        $this->assertSame(array_slice(array_keys($definitions), 0, 7), array_keys($registry->defaultCompositionFor(EventType::Wedding)));
+        $this->assertSame(['hero', 'story', 'people', 'gallery', 'rsvp'], array_keys($registry->defaultCompositionFor(EventType::Wedding)));
         $this->assertNull($registry->get('faq'));
         $this->assertNull($registry->get('date'));
         $this->assertNull($registry->get('dressCode'));
+        $this->assertNull($registry->get('schedule'));
+        $this->assertNull($registry->get('venue'));
         $this->assertTrue($definitions['hero']->lifecycle->isSingleton());
         $this->assertTrue($definitions['blank']->lifecycle->isUserOwned());
         $this->assertCount(count($definitions), array_unique(array_map(

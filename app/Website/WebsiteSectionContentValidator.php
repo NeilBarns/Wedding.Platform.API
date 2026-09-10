@@ -34,7 +34,7 @@ final class WebsiteSectionContentValidator
         }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
         if ($sectionType === 'blank' && isset($validated['childFlow'])) {
-            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup'], false);
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'], false);
             $textElements = [];
             $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
                 if (in_array(($element['type'] ?? null), ['text', 'richText', 'date', 'divider'], true)) {
@@ -115,26 +115,11 @@ final class WebsiteSectionContentValidator
                 'content.structureOrder' => ['sometimes', 'array', 'list', 'max:23'],
                 'content.structureOrder.*' => ['required', 'string'],
             ],
-            'venue' => $this->singleMediaRules($this->stringContentRules([
-                'heading' => 255,
-                'name' => 255,
-                'address' => 1000,
-                'description' => 5000,
-            ])),
             'rsvp' => $this->stringContentRules([
                 'heading' => 255,
                 'description' => 5000,
                 'buttonLabel' => 100,
             ]),
-            'schedule' => [
-                'content' => ['required', 'array:heading,items'],
-                'content.heading' => ['present', 'nullable', 'string', 'max:255'],
-                'content.items' => ['present', 'array', 'max:100'],
-                'content.items.*' => ['required', 'array:time,title,description'],
-                'content.items.*.time' => ['present', 'nullable', 'string', 'max:100'],
-                'content.items.*.title' => ['present', 'nullable', 'string', 'max:255'],
-                'content.items.*.description' => ['present', 'nullable', 'string', 'max:5000'],
-            ],
             'gallery' => [
                 'content' => ['required', 'array:heading,items'],
                 'content.heading' => ['present', 'nullable', 'string', 'max:255'],

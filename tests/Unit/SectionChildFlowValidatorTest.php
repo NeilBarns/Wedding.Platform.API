@@ -20,6 +20,23 @@ class SectionChildFlowValidatorTest extends TestCase
         app(WebsiteSectionContentValidator::class)->validate('faq', ['heading' => 'Questions', 'items' => []]);
     }
 
+    public function test_schedule_section_is_not_editable(): void
+    {
+        $this->expectException(ValidationException::class);
+        app(WebsiteSectionContentValidator::class)->validate('schedule', ['heading' => 'Schedule', 'items' => []]);
+    }
+
+    public function test_venue_section_is_not_editable(): void
+    {
+        $this->expectException(ValidationException::class);
+        app(WebsiteSectionContentValidator::class)->validate('venue', [
+            'heading' => 'Venue',
+            'name' => 'Garden Pavilion',
+            'address' => 'Main Street',
+            'description' => '',
+        ]);
+    }
+
     public function test_closed_sections_reject_child_flow(): void
     {
         $this->expectException(ValidationException::class);

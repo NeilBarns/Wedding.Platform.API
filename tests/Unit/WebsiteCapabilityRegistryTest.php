@@ -86,7 +86,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $capabilities = $resolver->template($template);
             $this->assertNotNull($capabilities);
             $this->assertSame($template->supportedSectionTypes, array_map(fn ($section): string => $section->id, $capabilities->sections));
-            $this->assertEqualsCanonicalizing(['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
+            $this->assertEqualsCanonicalizing(['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
 
             foreach ($capabilities->sections as $section) {
                 $this->assertContains($section->id, $knownSections);
@@ -129,7 +129,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
             $template = $resolver->template($templateKey);
             foreach ($template->sections as $section) {
                 if ($section->id === 'blank') {
-                    $this->assertSame(['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
+                    $this->assertSame(['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
                     $this->assertSame(20, $section->maximumElementCount);
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'text'));
                     $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'compositionGroup'));
@@ -232,7 +232,9 @@ class WebsiteCapabilityRegistryTest extends TestCase
 
         foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
             $story = $resolver->section($template, 'story');
+            $blank = $resolver->section($template, 'blank');
             $this->assertNotNull($story?->decorativeAppearance);
+            $this->assertEquals($story->decorativeAppearance, $blank?->decorativeAppearance);
             $this->assertContains('paper', $story->decorativeAppearance->textures);
             $this->assertContains('none', $story->decorativeAppearance->patterns);
             $this->assertContains('none', $story->decorativeAppearance->overlays);
@@ -254,7 +256,9 @@ class WebsiteCapabilityRegistryTest extends TestCase
             }
             $this->assertNotContains($template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 ? 'classic-wine-text' : 'modern-plum-text', $story->decorativeAppearance->backgroundColorIds);
             $serialized = collect((new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request())['sections'])->firstWhere('id', 'story');
+            $serializedBlank = collect((new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request())['sections'])->firstWhere('id', 'blank');
             $this->assertSame($story->decorativeAppearance->textures, $serialized['decorativeAppearance']['textures']);
+            $this->assertSame($serialized['decorativeAppearance'], $serializedBlank['decorativeAppearance']);
             $this->assertSame($story->decorativeAppearance->backgroundColorIds, $serialized['decorativeAppearance']['backgroundColorIds']);
             $this->assertStringNotContainsString('/template-assets/', json_encode($serialized['decorativeAppearance'], JSON_THROW_ON_ERROR));
             $this->assertStringNotContainsString('http', json_encode($serialized['decorativeAppearance'], JSON_THROW_ON_ERROR));
@@ -267,12 +271,10 @@ class WebsiteCapabilityRegistryTest extends TestCase
         $expected = [
             'hero' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'story' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'schedule' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'venue' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'people' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
             'gallery' => [['heading'], ['headingColor']],
             'rsvp' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'blank' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
+            'blank' => [[], []],
         ];
 
         foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {

@@ -435,12 +435,15 @@ final class WebsiteCapabilityResolver
             'backgroundTreatment' => 'backgroundTreatments',
             'emphasis' => 'emphasisOptions',
         ] as $id => $group) {
+            if ($sectionId === 'blank') {
+                continue;
+            }
             if ($sectionId === 'story' && $id === 'emphasis') {
                 continue;
             }
             if (isset($appearanceOptions[$group], $appearanceDefaults[$id])) {
                 $options = $appearanceOptions[$group];
-                if ($sectionId === 'story' && $id === 'backgroundTreatment') {
+                if (in_array($sectionId, ['story', 'blank'], true) && $id === 'backgroundTreatment') {
                     $options = [
                         ['key' => 'inherit', 'displayName' => 'Use Template'],
                         ['key' => 'custom', 'displayName' => 'Custom'],
@@ -489,7 +492,7 @@ final class WebsiteCapabilityResolver
 
         $allowedElements = match ($sectionId) {
             'story' => [WebsiteElementType::NarrativeBlock->value],
-            'blank' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Date->value, WebsiteElementType::Accordion->value, WebsiteElementType::Schedule->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
+            'blank' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Date->value, WebsiteElementType::Accordion->value, WebsiteElementType::Schedule->value, WebsiteElementType::People->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
             default => null,
         };
 
@@ -498,14 +501,14 @@ final class WebsiteCapabilityResolver
             appearanceControls: $controls,
             defaultPresentation: $presentationDefinition['default'] ?? null,
             presentations: $presentations,
-            contextDefaults: $this->contextDefaultsForSection($template, $sectionId),
+            contextDefaults: $sectionId === 'blank' ? new ContextDefaultsCapability([], []) : $this->contextDefaultsForSection($template, $sectionId),
             allowedElementTypes: $allowedElements,
             maximumElementCount: $allowedElements === null ? null : 20,
-            decorativeAppearance: $sectionId === 'story' ? $this->storyDecorativeAppearance($template) : null,
+            decorativeAppearance: in_array($sectionId, ['story', 'blank'], true) ? $this->sectionDecorativeAppearance($template) : null,
         );
     }
 
-    private function storyDecorativeAppearance(WebsiteTemplateDefinition $template): StoryDecorativeAppearanceCapability
+    private function sectionDecorativeAppearance(WebsiteTemplateDefinition $template): StoryDecorativeAppearanceCapability
     {
         $backgroundColorIds = collect($template->designLibrary->colors)
             ->filter(fn ($color): bool => in_array(ContainerColorRole::BackgroundColor, $color->allowedContainerRoles, true))

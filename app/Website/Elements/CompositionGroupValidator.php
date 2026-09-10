@@ -30,7 +30,7 @@ final class CompositionGroupValidator
         ])->validate()['element'];
         $validated['id'] = trim($validated['id']);
         $validated['children'] = array_map(function (array $child) use ($validateChild): array {
-            if (! in_array(($child['type'] ?? null), ['text', 'richText', 'date', 'accordion', 'schedule', 'divider', 'media', 'compositionGroup'], true)) {
+            if (! in_array(($child['type'] ?? null), ['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'], true)) {
                 throw ValidationException::withMessages(['element.children' => 'Groups support Text, Rich Text, Date, Divider, Media, and one nested Group level.']);
             }
 
@@ -54,6 +54,14 @@ final class CompositionGroupValidator
             if (in_array(($element['type'] ?? null), ['mediaCollection', 'media'], true)) {
                 foreach ($element['items'] as $item) {
                     $visit($item);
+                }
+            }
+            if (($element['type'] ?? null) === 'people') {
+                foreach ($element['groups'] as $group) {
+                    $visit(['id' => $group['id'], 'type' => 'peopleGroup']);
+                    foreach ($group['people'] as $person) {
+                        $visit(['id' => $person['id'], 'type' => 'person']);
+                    }
                 }
             }
             if (($element['type'] ?? null) === 'compositionGroup') {

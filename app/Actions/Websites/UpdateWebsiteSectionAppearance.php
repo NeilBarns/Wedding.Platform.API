@@ -71,7 +71,7 @@ final class UpdateWebsiteSectionAppearance
             if (isset($appearance['decorativeAppearance']['background']['customColor']) && is_string($appearance['decorativeAppearance']['background']['customColor'])) {
                 $appearance['decorativeAppearance']['background']['customColor'] = strtoupper($appearance['decorativeAppearance']['background']['customColor']);
             }
-            $this->validateStoryDecorativeAppearance($sectionCapability, $section->type, $appearance['decorativeAppearance'], $section->website->design_settings);
+            $this->validateSectionDecorativeAppearance($sectionCapability, $section->type, $appearance['decorativeAppearance'], $section->website->design_settings);
             $expectedKeys[] = 'decorativeAppearance';
         }
 
@@ -82,6 +82,14 @@ final class UpdateWebsiteSectionAppearance
         }
 
         foreach (['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'emphasis'] as $setting) {
+            if ($section->type === 'blank') {
+                $allowed = $setting === 'backgroundTreatment' ? ['inherit', 'custom'] : ['inherit'];
+                if (! in_array($appearance[$setting] ?? null, $allowed, true)) {
+                    throw ValidationException::withMessages(["appearance.{$setting}" => "Blank does not support authored {$setting} overrides."]);
+                }
+
+                continue;
+            }
             if ($section->type === 'story' && $setting === 'emphasis') {
                 if (($appearance[$setting] ?? null) !== 'inherit') {
                     throw ValidationException::withMessages(['appearance.emphasis' => 'Story emphasis is no longer an authored appearance control.']);
@@ -151,9 +159,9 @@ final class UpdateWebsiteSectionAppearance
     }
 
     /** @param array<string, mixed> $designSettings */
-    private function validateStoryDecorativeAppearance(SectionCapability $capability, string $sectionType, mixed $value, array $designSettings): void
+    private function validateSectionDecorativeAppearance(SectionCapability $capability, string $sectionType, mixed $value, array $designSettings): void
     {
-        if ($sectionType !== 'story' || $capability->decorativeAppearance === null || ! is_array($value)) {
+        if (! in_array($sectionType, ['story', 'blank'], true) || $capability->decorativeAppearance === null || ! is_array($value)) {
             throw ValidationException::withMessages(['appearance.decorativeAppearance' => 'Decorative appearance is not supported by this Section.']);
         }
         $rootKeys = array_keys($value);

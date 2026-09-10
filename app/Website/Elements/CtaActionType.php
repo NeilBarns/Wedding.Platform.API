@@ -6,7 +6,6 @@ enum CtaActionType: string
 {
     case Rsvp = 'rsvp';
     case ScrollToSection = 'scrollToSection';
-    case ViewVenue = 'viewVenue';
     case ViewSchedule = 'viewSchedule';
     case ViewGallery = 'viewGallery';
     case BackToTop = 'backToTop';

@@ -12,8 +12,6 @@ final class WebsiteSectionRegistry
         return [
             'hero' => $this->definition('hero', 'Hero', 10, ['headline' => '', 'subheadline' => '']),
             'story' => $this->definition('story', 'Story', 30, ['heading' => '', 'intro' => null, 'elements' => [], 'mediaFraming' => []]),
-            'schedule' => $this->definition('schedule', 'Schedule', 40, ['heading' => '', 'items' => []]),
-            'venue' => $this->definition('venue', 'Venue', 50, ['heading' => '', 'name' => '', 'address' => '', 'description' => '']),
             'people' => $this->definition('people', 'Wedding Party', 65, ['heading' => 'Wedding Party', 'groups' => []]),
             'gallery' => $this->definition('gallery', 'Gallery', 70, ['heading' => '', 'items' => []]),
             'rsvp' => $this->definition('rsvp', 'RSVP', 90, ['heading' => '', 'description' => '', 'buttonLabel' => '']),

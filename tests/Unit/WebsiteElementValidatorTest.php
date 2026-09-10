@@ -34,6 +34,7 @@ class WebsiteElementValidatorTest extends TestCase
             ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1', 'isHidden' => true],
             ['id' => 'accordion', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => [], 'isHidden' => true],
             ['id' => 'schedule', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => [], 'isHidden' => true],
+            ['id' => 'people', 'type' => 'people', 'editorName' => 'People 1', 'groups' => [], 'isHidden' => true],
             ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [], 'isHidden' => true],
             ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1', 'isHidden' => true],
         ];
@@ -98,6 +99,7 @@ class WebsiteElementValidatorTest extends TestCase
             ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1'],
             ['id' => 'accordion', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => []],
             ['id' => 'schedule', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => []],
+            ['id' => 'people', 'type' => 'people', 'editorName' => 'People 1', 'groups' => []],
             ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => []],
             ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1'],
             ['id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => []],
@@ -126,6 +128,7 @@ class WebsiteElementValidatorTest extends TestCase
             'date' => [['id' => 'date-block-1', 'type' => 'date', 'editorName' => 'Date 1']],
             'accordion' => [['id' => 'accordion-1', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => [['id' => 'item-1', 'title' => 'Travel', 'content' => 'Allow extra time.']]]],
             'schedule' => [['id' => 'schedule-1', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => [['id' => 'item-1', 'time' => '15:30', 'title' => 'Ceremony', 'details' => 'Garden level']]]],
+            'people' => [['id' => 'people-1', 'type' => 'people', 'editorName' => 'People 1', 'groups' => [['id' => 'friends', 'name' => 'Friends', 'people' => [['id' => 'alex', 'name' => 'Alex']]]]]],
             'image' => [['id' => 'image-1', 'type' => 'image', 'mediaId' => $mediaId]],
             'media' => [['id' => 'media-1', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [['id' => 'item-1', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Wedding portrait']]]],
             'divider' => [['id' => 'divider-1', 'type' => 'divider', 'editorName' => 'Divider 1']],
@@ -142,7 +145,7 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_active_vocabulary_is_bounded_and_does_not_accept_deferred_types(): void
     {
         $this->assertSame([
-            'heading', 'text', 'richText', 'date', 'accordion', 'schedule', 'image', 'media', 'divider', 'quote', 'cta', 'mediaCollection',
+            'heading', 'text', 'richText', 'date', 'accordion', 'schedule', 'people', 'image', 'media', 'divider', 'quote', 'cta', 'mediaCollection',
             'narrativeBlock', 'compositionGroup', 'eventDate', 'eventTime', 'countdown',
         ], array_column(WebsiteElementType::cases(), 'value'));
 
@@ -235,7 +238,6 @@ class WebsiteElementValidatorTest extends TestCase
         return [
             'rsvp' => [['type' => 'rsvp']],
             'scroll' => [['type' => 'scrollToSection', 'sectionId' => 'section-1']],
-            'venue' => [['type' => 'viewVenue']],
             'schedule' => [['type' => 'viewSchedule']],
             'gallery' => [['type' => 'viewGallery']],
             'top' => [['type' => 'backToTop']],
@@ -254,6 +256,7 @@ class WebsiteElementValidatorTest extends TestCase
         $this->assertInvalid([...$base, 'action' => ['type' => 'rsvp', 'url' => 'https://example.com']]);
         $this->assertInvalid([...$base, 'action' => ['type' => 'rsvp', 'href' => '/rsvp']]);
         $this->assertInvalid([...$base, 'action' => ['type' => 'unknown']]);
+        $this->assertInvalid([...$base, 'action' => ['type' => 'viewVenue']]);
     }
 
     public function test_media_collection_preserves_order_and_strictly_validates_items(): void
@@ -349,6 +352,21 @@ class WebsiteElementValidatorTest extends TestCase
                 $this->assertInvalid(['id' => $type, 'type' => $type, $field => 'copied']);
             }
         }
+    }
+
+    public function test_people_block_preserves_order_and_validates_unique_stable_ids(): void
+    {
+        $mediaId = (string) Str::ulid();
+        $element = ['id' => 'people', 'type' => 'people', 'editorName' => 'People 1', 'groups' => [[
+            'id' => 'friends', 'name' => 'Friends', 'people' => [
+                ['id' => 'two', 'name' => 'Alex', 'role' => null, 'media' => ['assetId' => $mediaId, 'focalPoint' => ['x' => .4, 'y' => .6], 'zoom' => 2]],
+                ['id' => 'one', 'name' => 'Jane'],
+            ],
+        ]], 'appearance' => ['presentation' => 'cards']];
+        $this->assertSame($element, $this->validator->validate($element));
+        $duplicate = $element;
+        $duplicate['groups'][0]['people'][1]['id'] = 'two';
+        $this->assertInvalid($duplicate);
     }
 
     private function assertInvalid(array $element): void
