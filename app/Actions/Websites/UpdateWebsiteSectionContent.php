@@ -20,17 +20,12 @@ final class UpdateWebsiteSectionContent
         private readonly WebsiteSectionContentValidator $validator,
         private readonly WebsiteTemplateRegistry $templates,
         private readonly WebsiteSectionMediaReferences $mediaReferences,
-        private readonly UpgradeWebsiteProjectSchema $upgradeSchema,
         private readonly WebsiteCapabilityResolver $capabilities,
     ) {}
 
     /** @param array<string, mixed> $content */
     public function handle(WebsiteSection $section, array $content): WebsiteSection
     {
-        if ($section->type === 'story') {
-            return $this->upgradeSchema->handle($section, $content);
-        }
-
         $website = $section->website()->firstOrFail();
         $sectionCapability = $this->capabilities->section($website->template_key, $section->type);
         $textCapability = collect($this->capabilities->template($website->template_key)?->elementCapabilities)
@@ -48,7 +43,7 @@ final class UpdateWebsiteSectionContent
         );
         $currentMedia = $section->content['media'] ?? null;
         $nextMedia = $validated['media'] ?? null;
-        if ($section->type !== 'story' && $currentMedia !== $nextMedia && $this->templates->get($website->template_key)?->mediaCapabilityFor($section->type) === null) {
+        if ($currentMedia !== $nextMedia && $this->templates->get($website->template_key)?->mediaCapabilityFor($section->type) === null) {
             throw ValidationException::withMessages(['content.media' => 'This Template does not support Media for this Section.']);
         }
         if (is_array($nextMedia) && ! MediaAsset::query()->whereKey($nextMedia['assetId'])->where('event_id', $website->event_id)
@@ -57,9 +52,6 @@ final class UpdateWebsiteSectionContent
         }
         $nextItemReferences = $this->mediaReferences->extract($section->type, $validated);
         $currentReferences = $this->mediaReferences->extract($section->type, $section->content);
-        if ($section->type === 'people' && $this->personMedia($section->content) !== $this->personMedia($validated) && $this->templates->get($website->template_key)?->itemMediaCapabilityFor($section->type) === null) {
-            throw ValidationException::withMessages(['content.groups' => 'This Template does not support images for people in this Section.']);
-        }
         $assetIds = collect($nextItemReferences)->pluck('assetId')->unique()->values();
         if ($assetIds->isNotEmpty() && MediaAsset::query()->where('event_id', $website->event_id)->whereKey($assetIds)
             ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/webp'])->count() !== $assetIds->count()) {
@@ -72,13 +64,5 @@ final class UpdateWebsiteSectionContent
         $section->save();
 
         return $section;
-    }
-
-    /** @param array<string, mixed> $content */
-    private function personMedia(array $content): array
-    {
-        return collect($content['groups'] ?? [])->flatMap(fn (array $group): array => $group['people'] ?? [])
-            ->mapWithKeys(fn (array $person): array => [(string) ($person['id'] ?? '') => $person['media'] ?? null])
-            ->all();
     }
 }

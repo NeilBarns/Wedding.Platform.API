@@ -29,7 +29,7 @@ final class WebsiteElementValidator
     private function validateAtDepth(array $element, int $depth): array
     {
         $type = $this->elementType($element);
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider, WebsiteElementType::CompositionGroup], true)
             && is_string($element['editorName'] ?? null)) {
             $element['editorName'] = $this->normalizeEditorName($element['editorName']);
         }
@@ -78,10 +78,13 @@ final class WebsiteElementValidator
             $this->assertMediaJsonTypes($element);
         }
 
+        $spacing = in_array($type, [WebsiteElementType::Text, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider], true)
+            ? FourSidedSpacing::extractOuter($element)
+            : [];
+
         $rules = match ($type) {
             WebsiteElementType::Heading => $this->textRules('heading', 255),
             WebsiteElementType::Text => $this->textElementRules(),
-            WebsiteElementType::RichText => $this->richTextElementRules(),
             WebsiteElementType::Date => $this->dateElementRules(),
             WebsiteElementType::Accordion => $this->accordionElementRules(),
             WebsiteElementType::Schedule => $this->scheduleElementRules(),
@@ -92,20 +95,22 @@ final class WebsiteElementValidator
             WebsiteElementType::Quote => $this->quoteRules(),
             WebsiteElementType::Cta => $this->ctaRules($element),
             WebsiteElementType::MediaCollection => $this->mediaCollectionRules(),
-            WebsiteElementType::NarrativeBlock => $this->narrativeBlockRules(),
             WebsiteElementType::EventDate => $this->baseRules('eventDate'),
             WebsiteElementType::EventTime => $this->baseRules('eventTime'),
             WebsiteElementType::Countdown => $this->baseRules('countdown'),
             WebsiteElementType::CompositionGroup => throw new \LogicException('Composition Groups are validated separately.'),
         };
 
-        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::Date, WebsiteElementType::Accordion, WebsiteElementType::Schedule, WebsiteElementType::People, WebsiteElementType::Media, WebsiteElementType::Divider], true)) {
             $rules['element.isHidden'] = ['sometimes', 'boolean'];
             $rules['element.editorName'] = ['required', 'string', 'max:80', 'not_regex:/^\s*$/u'];
         }
 
         $validated = Validator::make(['element' => $element], $rules)->validate()['element'];
         $validated['id'] = trim($validated['id']);
+        if ($spacing !== []) {
+            $validated['appearance'] = FourSidedSpacing::restoreOuter($validated['appearance'] ?? [], $spacing);
+        }
 
         if ($type === WebsiteElementType::Cta && isset($validated['action']['sectionId'])) {
             $validated['action']['sectionId'] = trim($validated['action']['sectionId']);
@@ -151,12 +156,23 @@ final class WebsiteElementValidator
         if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::Date], true)) {
             $this->assertTextFontTuple($validated);
         }
-        if ($type === WebsiteElementType::Text) {
-            $validated['text'] = $this->normalizeText($validated['text']);
+        if (in_array($type, [WebsiteElementType::Text, WebsiteElementType::Date], true)) {
+            foreach ([['textShadow', 'textShadowColorId'], ['glow', 'glowColorId']] as [$effect, $color]) {
+                if (($validated['appearance'][$effect] ?? 'none') === 'none') {
+                    unset($validated['appearance'][$effect], $validated['appearance'][$color]);
+                }
+            }
         }
-        if ($type === WebsiteElementType::RichText) {
-            $this->assertRichTextDocument($validated['document']);
-            $this->assertRichTextFontWeight($validated);
+        if ($type === WebsiteElementType::Divider) {
+            foreach ([['shadow', 'shadowColorId'], ['glow', 'glowColorId']] as [$effect, $color]) {
+                if (($validated['appearance'][$effect] ?? 'none') === 'none') {
+                    unset($validated['appearance'][$effect], $validated['appearance'][$color]);
+                }
+            }
+        }
+        if ($type === WebsiteElementType::Text) {
+            $this->assertTextDocument($validated['document']);
+            $this->assertTextFontWeight($validated);
         }
         if ($type === WebsiteElementType::Accordion) {
             $ids = array_column($validated['items'], 'id');
@@ -228,24 +244,28 @@ final class WebsiteElementValidator
             'element' => ['required', 'array:id,type,editorName,isHidden,appearance'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:date'],
-            'element.appearance' => ['sometimes', 'array:format,showWeekday,alignment,textStyle,fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,textTransform,colorId,responsive'],
+            'element.appearance' => ['sometimes', 'array:format,showWeekday,alignment,textStyle,fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,textTransform,colorId,textShadow,textShadowColorId,glow,glowColorId,responsive'],
             'element.appearance.format' => ['sometimes', 'in:long,medium,short,numeric'],
             'element.appearance.showWeekday' => ['sometimes', 'boolean'],
             'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.textStyle' => ['sometimes', 'in:display,heading,subheading,eyebrow,body,caption'],
             'element.appearance.fontFamilyId' => ['sometimes', 'string', 'min:1'],
-            'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl,2xl,3xl,4xl,5xl'],
             'element.appearance.fontWeight' => ['sometimes', 'integer', 'in:400,600,700'],
             'element.appearance.lineHeight' => ['sometimes', 'in:tight,normal,relaxed'],
             'element.appearance.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
             'element.appearance.textTransform' => ['sometimes', 'in:none,uppercase,lowercase,capitalize'],
             'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
+            'element.appearance.textShadow' => ['sometimes', 'in:none,soft,medium,strong'],
+            'element.appearance.textShadowColorId' => ['sometimes', 'filled', 'string', 'min:1'],
+            'element.appearance.glow' => ['sometimes', 'in:none,soft,medium,strong'],
+            'element.appearance.glowColorId' => ['sometimes', 'filled', 'string', 'min:1'],
             'element.appearance.responsive' => ['sometimes', 'array:tablet,mobile'],
             'element.appearance.responsive.tablet' => ['sometimes', 'array:fontSize,alignment'],
-            'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl,2xl,3xl,4xl,5xl'],
             'element.appearance.responsive.tablet.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.responsive.mobile' => ['sometimes', 'array:fontSize,alignment'],
-            'element.appearance.responsive.mobile.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.responsive.mobile.fontSize' => ['sometimes', 'in:xs,s,m,l,xl,2xl,3xl,4xl,5xl'],
             'element.appearance.responsive.mobile.alignment' => ['sometimes', 'in:start,center,end'],
         ];
     }
@@ -312,28 +332,35 @@ final class WebsiteElementValidator
     private function textElementRules(): array
     {
         return [
-            'element' => ['required', 'array:id,type,editorName,text,appearance,isHidden'],
+            'element' => ['required', 'array:id,type,editorName,document,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:text'],
-            'element.text' => ['present', 'string', 'max:5000'],
-            'element.appearance' => ['sometimes', 'array:fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,alignment,colorId,italic,underline,strikethrough,textTransform,responsive'],
+            'element.document' => ['required', 'array:type,children'],
+            'element.document.type' => ['required', 'in:doc'],
+            'element.document.children' => ['required', 'array', 'list', 'min:1', 'max:100'],
+            'element.document.children.*' => ['required', 'array'],
+            'element.appearance' => ['sometimes', 'array:fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,alignment,colorId,italic,underline,strikethrough,textTransform,textShadow,textShadowColorId,glow,glowColorId,responsive'],
             'element.appearance.fontFamilyId' => ['sometimes', 'string', 'min:1'],
-            'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl,2xl,3xl,4xl,5xl'],
             'element.appearance.fontWeight' => ['sometimes', 'integer', 'in:400,600,700'],
             'element.appearance.lineHeight' => ['sometimes', 'in:tight,normal,relaxed'],
             'element.appearance.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
             'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
+            'element.appearance.textShadow' => ['sometimes', 'in:none,soft,medium,strong'],
+            'element.appearance.textShadowColorId' => ['sometimes', 'filled', 'string', 'min:1'],
+            'element.appearance.glow' => ['sometimes', 'in:none,soft,medium,strong'],
+            'element.appearance.glowColorId' => ['sometimes', 'filled', 'string', 'min:1'],
             'element.appearance.italic' => ['sometimes', 'boolean'],
             'element.appearance.underline' => ['sometimes', 'boolean'],
             'element.appearance.strikethrough' => ['sometimes', 'boolean'],
             'element.appearance.textTransform' => ['sometimes', 'in:none,uppercase,lowercase,capitalize'],
             'element.appearance.responsive' => ['sometimes', 'array:tablet,mobile'],
             'element.appearance.responsive.tablet' => ['sometimes', 'array:fontSize,alignment'],
-            'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl,2xl,3xl,4xl,5xl'],
             'element.appearance.responsive.tablet.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.responsive.mobile' => ['sometimes', 'array:fontSize,alignment'],
-            'element.appearance.responsive.mobile.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
+            'element.appearance.responsive.mobile.fontSize' => ['sometimes', 'in:xs,s,m,l,xl,2xl,3xl,4xl,5xl'],
             'element.appearance.responsive.mobile.alignment' => ['sometimes', 'in:start,center,end'],
         ];
     }
@@ -346,35 +373,6 @@ final class WebsiteElementValidator
     private function normalizeEditorName(string $name): string
     {
         return trim(preg_replace('/\s+/u', ' ', $name) ?? $name);
-    }
-
-    /** @return array<string, list<string>> */
-    private function richTextElementRules(): array
-    {
-        return [
-            'element' => ['required', 'array:id,type,editorName,document,appearance,isHidden'],
-            'element.id' => $this->idRules(),
-            'element.type' => ['required', 'in:richText'],
-            'element.document' => ['required', 'array:type,children'],
-            'element.document.type' => ['required', 'in:doc'],
-            'element.document.children' => ['required', 'array', 'list', 'min:1', 'max:100'],
-            'element.document.children.*' => ['required', 'array'],
-            'element.appearance' => ['sometimes', 'array:fontFamilyId,fontSize,fontWeight,lineHeight,letterSpacing,alignment,colorId,responsive'],
-            'element.appearance.fontFamilyId' => ['sometimes', 'string', 'min:1'],
-            'element.appearance.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
-            'element.appearance.fontWeight' => ['sometimes', 'integer', 'in:400,600,700'],
-            'element.appearance.lineHeight' => ['sometimes', 'in:tight,normal,relaxed'],
-            'element.appearance.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
-            'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
-            'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
-            'element.appearance.responsive' => ['sometimes', 'array:tablet,mobile'],
-            'element.appearance.responsive.tablet' => ['sometimes', 'array:fontSize,alignment'],
-            'element.appearance.responsive.tablet.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
-            'element.appearance.responsive.tablet.alignment' => ['sometimes', 'in:start,center,end'],
-            'element.appearance.responsive.mobile' => ['sometimes', 'array:fontSize,alignment'],
-            'element.appearance.responsive.mobile.fontSize' => ['sometimes', 'in:xs,s,m,l,xl'],
-            'element.appearance.responsive.mobile.alignment' => ['sometimes', 'in:start,center,end'],
-        ];
     }
 
     /** @param array<string, mixed> $element */
@@ -410,60 +408,67 @@ final class WebsiteElementValidator
             'element' => ['required', 'array:id,type,editorName,appearance,isHidden'],
             'element.id' => $this->idRules(),
             'element.type' => ['required', 'in:divider'],
-            'element.appearance' => ['sometimes', 'array:assetId,width,alignment,colorId,opacity'],
+            'element.appearance' => ['sometimes', 'array:assetId,width,alignment,colorId,opacity,shadow,shadowColorId,glow,glowColorId'],
             'element.appearance.assetId' => ['sometimes', 'string', 'min:1', 'max:100'],
             'element.appearance.width' => ['sometimes', 'string', 'in:small,medium,large,full'],
             'element.appearance.alignment' => ['sometimes', 'in:start,center,end'],
             'element.appearance.colorId' => ['sometimes', 'string', 'min:1'],
             'element.appearance.opacity' => ['sometimes', 'integer', 'between:25,100'],
+            'element.appearance.shadow' => ['sometimes', 'in:none,soft,medium,strong'],
+            'element.appearance.shadowColorId' => ['sometimes', 'filled', 'string', 'min:1'],
+            'element.appearance.glow' => ['sometimes', 'in:none,soft,medium,strong'],
+            'element.appearance.glowColorId' => ['sometimes', 'filled', 'string', 'min:1'],
         ];
     }
 
     /** @param array<string, mixed> $document */
-    private function assertRichTextDocument(array $document): void
+    private function assertTextDocument(array $document): void
     {
         $length = 0;
         foreach ($document['children'] as $blockIndex => $block) {
             $type = is_array($block) ? ($block['type'] ?? null) : null;
             if ($type !== 'paragraph') {
-                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text block.']);
+                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Text block.']);
             }
             $expected = ['type', 'children'];
             if (array_diff(array_keys($block), $expected) !== [] || array_diff($expected, array_keys($block)) !== []) {
-                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text block structure.']);
+                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Text block structure.']);
             }
             $collections = [$block['children']];
             if (! is_array($collections) || $collections === []) {
-                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Rich Text content is required.']);
+                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Text content is required.']);
             }
             foreach ($collections as $runs) {
                 if (! is_array($runs) || $runs === []) {
-                    throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Rich Text content is required.']);
+                    throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Text content is required.']);
                 }
                 foreach ($runs as $run) {
-                    if (! is_array($run) || ! array_key_exists('text', $run) || ! is_string($run['text']) || array_diff(array_keys($run), ['text', 'marks']) !== []) {
-                        throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text run.']);
+                    if (! is_array($run) || ! array_key_exists('text', $run) || ! is_string($run['text']) || array_diff(array_keys($run), ['text', 'marks', 'colorId']) !== []) {
+                        throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Text run.']);
                     }
                     $length += mb_strlen($run['text']);
                     if (array_key_exists('marks', $run)) {
-                        $this->assertRichTextMarks($run['marks'], $blockIndex);
+                        $this->assertTextMarks($run['marks'], $blockIndex);
+                    }
+                    if (array_key_exists('colorId', $run) && (! is_string($run['colorId']) || $run['colorId'] === '')) {
+                        throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Text run color must be a non-empty color ID.']);
                     }
                 }
             }
         }
         if ($length > 20000) {
-            throw ValidationException::withMessages(['element.document' => 'Rich Text cannot exceed 20000 characters.']);
+            throw ValidationException::withMessages(['element.document' => 'Text cannot exceed 20000 characters.']);
         }
     }
 
-    private function assertRichTextMarks(mixed $marks, int $blockIndex): void
+    private function assertTextMarks(mixed $marks, int $blockIndex): void
     {
         if (! is_array($marks) || array_diff(array_keys($marks), ['bold', 'italic', 'underline', 'strikethrough']) !== []) {
-            throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Rich Text marks.']);
+            throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Invalid Text marks.']);
         }
         foreach (['bold', 'italic', 'underline', 'strikethrough'] as $mark) {
             if (array_key_exists($mark, $marks) && ! is_bool($marks[$mark])) {
-                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Rich Text marks must be boolean.']);
+                throw ValidationException::withMessages(["element.document.children.{$blockIndex}" => 'Text marks must be boolean.']);
             }
         }
     }
@@ -490,7 +495,7 @@ final class WebsiteElementValidator
     }
 
     /** @param array<string, mixed> $element */
-    private function assertRichTextFontWeight(array $element): void
+    private function assertTextFontWeight(array $element): void
     {
         $appearance = $element['appearance'] ?? [];
         $fontId = $appearance['fontFamilyId'] ?? null;
@@ -500,10 +505,10 @@ final class WebsiteElementValidator
         $fonts = [...$this->fonts->platformFonts(), ...$this->fonts->classicLegacyFonts(), ...$this->fonts->modernLegacyFonts()];
         $font = collect($fonts)->first(fn ($candidate): bool => $candidate->id === $fontId);
         if ($font === null) {
-            throw ValidationException::withMessages(['element.appearance.fontFamilyId' => 'The Rich Text font family is not supported.']);
+            throw ValidationException::withMessages(['element.appearance.fontFamilyId' => 'The Text font family is not supported.']);
         }
         if (isset($appearance['fontWeight']) && ! in_array($appearance['fontWeight'], $font->weights, true)) {
-            throw ValidationException::withMessages(['element.appearance.fontWeight' => 'The Rich Text font weight is not supported by the selected family.']);
+            throw ValidationException::withMessages(['element.appearance.fontWeight' => 'The Text font weight is not supported by the selected family.']);
         }
     }
 
@@ -674,21 +679,6 @@ final class WebsiteElementValidator
         if (array_key_exists('interval', $carousel) && ! is_int($carousel['interval'])) {
             throw ValidationException::withMessages(['element.presentation.carousel.interval' => 'The field must be a JSON integer.']);
         }
-    }
-
-    /** @return array<string, list<string>> */
-    private function narrativeBlockRules(): array
-    {
-        return [
-            'element' => ['required', 'array:id,type,heading,body,media'],
-            'element.id' => $this->idRules(),
-            'element.type' => ['required', 'in:narrativeBlock'],
-            'element.heading' => ['sometimes', 'string', 'max:255'],
-            'element.body' => ['present', 'string', 'max:10000'],
-            'element.media' => ['sometimes', 'array:type,mediaId', 'required_array_keys:type,mediaId'],
-            'element.media.type' => ['required_with:element.media', 'in:image'],
-            'element.media.mediaId' => ['required_with:element.media', 'string', 'ulid'],
-        ];
     }
 
     /** @return list<string> */

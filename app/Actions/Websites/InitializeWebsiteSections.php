@@ -31,11 +31,9 @@ final class InitializeWebsiteSections
                     continue;
                 }
 
-                $content = $definition->defaultContent;
-                if ($definition->key === 'story' && $content['mediaFraming'] === []) {
-                    $content['mediaFraming'] = new \stdClass;
-                }
-
+                $content = $definition->key === 'hero'
+                    ? $this->initialHeroContent($website->event->name)
+                    : $definition->defaultContent;
                 $rows[] = [
                     'id' => (string) Str::ulid(),
                     'website_id' => $website->getKey(),
@@ -58,5 +56,22 @@ final class InitializeWebsiteSections
                 DB::table('website_sections')->insertOrIgnore($rows);
             }
         });
+    }
+
+    /** @return array<string, mixed> */
+    private function initialHeroContent(string $eventName): array
+    {
+        $headlineId = (string) Str::ulid();
+        $dateId = (string) Str::ulid();
+        $supportingId = (string) Str::ulid();
+
+        return ['childFlow' => [
+            'elements' => [
+                ['id' => $headlineId, 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => $eventName]]]]], 'appearance' => ['fontSize' => 'xl', 'fontWeight' => 700, 'alignment' => 'center']],
+                ['id' => $dateId, 'type' => 'date', 'editorName' => 'Date 1', 'appearance' => ['textStyle' => 'subheading', 'alignment' => 'center']],
+                ['id' => $supportingId, 'type' => 'text', 'editorName' => 'Text 2', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Together with their families']]]]], 'appearance' => ['alignment' => 'center']],
+            ],
+            'order' => array_map(fn (string $id): array => ['kind' => 'element', 'id' => $id], [$headlineId, $dateId, $supportingId]),
+        ]];
     }
 }

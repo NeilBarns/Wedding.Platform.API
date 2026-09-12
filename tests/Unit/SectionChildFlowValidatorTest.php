@@ -37,10 +37,11 @@ class SectionChildFlowValidatorTest extends TestCase
         ]);
     }
 
-    public function test_closed_sections_reject_child_flow(): void
+    public function test_hero_accepts_the_same_empty_generic_only_flow_as_blank(): void
     {
-        $this->expectException(ValidationException::class);
-        app(WebsiteSectionContentValidator::class)->validate('hero', ['headline' => 'Hello', 'subheadline' => '', 'childFlow' => $this->content()['childFlow']]);
+        $content = ['childFlow' => ['elements' => [], 'order' => []]];
+
+        $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate('hero', $content));
     }
 
     public function test_blank_accepts_empty_and_ordered_generic_only_flows(): void
@@ -49,9 +50,21 @@ class SectionChildFlowValidatorTest extends TestCase
         $empty = ['childFlow' => ['elements' => [], 'order' => []]];
         $this->assertSame($empty, $validator->validate('blank', $empty, ['text']));
 
-        $element = ['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello'];
+        $element = ['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Hello']]]]]];
         $ordered = ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => 'a']]]];
         $this->assertSame($ordered, $validator->validate('blank', $ordered, ['text']));
+    }
+
+    public function test_hero_and_blank_validate_inline_text_color_references(): void
+    {
+        $element = ['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => '&', 'colorId' => 'green']]]]]];
+        $content = ['childFlow' => ['elements' => [$element], 'order' => [['kind' => 'element', 'id' => 'a']]]];
+        foreach (['hero', 'blank'] as $sectionType) {
+            $this->assertSame($content, app(WebsiteSectionContentValidator::class)->validate($sectionType, $content, ['text'], null, ['green']));
+        }
+
+        $this->expectException(ValidationException::class);
+        app(WebsiteSectionContentValidator::class)->validate('blank', $content, ['text'], null, ['blue']);
     }
 
     public function test_date_block_is_valid_at_blank_root_and_nested_group_without_persisted_event_data(): void
@@ -76,7 +89,7 @@ class SectionChildFlowValidatorTest extends TestCase
         $validator = app(WebsiteSectionContentValidator::class);
         foreach ([
             ['elements' => [], 'order' => [['kind' => 'specialized', 'key' => 'content']]],
-            ['elements' => [['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Hello']], 'order' => [['kind' => 'element', 'id' => 'missing']]],
+            ['elements' => [['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Hello']]]]]]], 'order' => [['kind' => 'element', 'id' => 'missing']]],
         ] as $flow) {
             try {
                 $validator->validate('blank', ['childFlow' => $flow], ['text']);
@@ -93,7 +106,7 @@ class SectionChildFlowValidatorTest extends TestCase
             'heading' => 'When',
             'description' => 'Noon',
             'childFlow' => [
-                'elements' => [['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Before', 'appearance' => []]],
+                'elements' => [['id' => 'a', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Before']]]]], 'appearance' => []]],
                 'order' => [['kind' => 'element', 'id' => 'a'], ['kind' => 'specialized', 'key' => 'content']],
             ],
         ];

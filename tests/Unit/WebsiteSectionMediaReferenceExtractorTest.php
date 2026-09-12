@@ -20,51 +20,12 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
     {
         $this->assertSame([
             ['mediaId' => 'media-one', 'reference' => ['type' => 'sectionMedia']],
-        ], $this->extractor->extract('section', $type, ['media' => ['assetId' => 'media-one']]));
+        ], $this->extractor->extract('section', $type, ['backgroundMedia' => ['assetId' => 'media-one']]));
     }
 
     public static function sectionMediaCases(): array
     {
         return [['hero']];
-    }
-
-    public function test_extracts_pre_block_story_with_stable_synthetic_element_id(): void
-    {
-        $this->assertSame([
-            ['mediaId' => 'media-one', 'reference' => ['type' => 'storyNarrativeBlock', 'elementId' => 'story-legacy-section-one']],
-        ], $this->extractor->extract('section-one', 'story', ['media' => ['assetId' => 'media-one']]));
-    }
-
-    public function test_extracts_blocks_and_v2_story_with_canonical_context(): void
-    {
-        $blocks = ['blocks' => [
-            ['id' => 'one', 'heading' => '  ', 'media' => ['assetId' => 'media-one']],
-            ['id' => 'two', 'heading' => 'Proposal', 'media' => ['assetId' => 'media-two']],
-        ]];
-        $elements = ['elements' => [
-            ['id' => 'one', 'type' => 'narrativeBlock', 'media' => ['type' => 'image', 'mediaId' => 'media-one']],
-            ['id' => 'two', 'type' => 'narrativeBlock', 'heading' => 'Proposal', 'media' => ['type' => 'image', 'mediaId' => 'media-two']],
-        ]];
-        $expected = [
-            ['mediaId' => 'media-one', 'reference' => ['type' => 'storyNarrativeBlock', 'elementId' => 'one']],
-            ['mediaId' => 'media-two', 'reference' => ['type' => 'storyNarrativeBlock', 'elementId' => 'two', 'label' => 'Proposal']],
-        ];
-
-        $this->assertSame($expected, $this->extractor->extract('section', 'story', $blocks));
-        $this->assertSame($expected, $this->extractor->extract('section', 'story', $elements));
-    }
-
-    public function test_extracts_people_semantic_context_in_source_order(): void
-    {
-        $content = ['groups' => [['id' => 'family', 'name' => 'Family', 'people' => [
-            ['id' => 'jane', 'name' => 'Jane', 'media' => ['assetId' => 'media-one']],
-            ['id' => 'alex', 'name' => '', 'media' => ['assetId' => 'media-two']],
-        ]]]];
-
-        $this->assertSame([
-            ['mediaId' => 'media-one', 'reference' => ['type' => 'person', 'personId' => 'jane', 'label' => 'Jane', 'groupId' => 'family', 'groupLabel' => 'Family']],
-            ['mediaId' => 'media-two', 'reference' => ['type' => 'person', 'personId' => 'alex', 'groupId' => 'family', 'groupLabel' => 'Family']],
-        ], $this->extractor->extract('section', 'people', $content));
     }
 
     public function test_extracts_direct_and_nested_media_elements_but_not_direct_video_urls(): void
@@ -81,6 +42,21 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
             ['mediaId' => 'media-one', 'reference' => ['type' => 'sectionMedia']],
             ['mediaId' => 'media-two', 'reference' => ['type' => 'sectionMedia']],
         ], $this->extractor->extract('blank-section', 'blank', $content));
+    }
+
+    public function test_extracts_direct_and_nested_group_background_media(): void
+    {
+        $content = ['childFlow' => ['elements' => [[
+            'id' => 'outer', 'type' => 'compositionGroup', 'backgroundMedia' => ['assetId' => 'group-one', 'responsive' => ['tablet' => ['assetId' => 'group-tablet', 'zoom' => .7], 'mobile' => ['assetId' => 'group-mobile', 'zoom' => .4]]], 'children' => [[
+                'id' => 'inner', 'type' => 'compositionGroup', 'backgroundMedia' => ['assetId' => 'group-two'], 'children' => [],
+            ]],
+        ]]]];
+        $this->assertSame([
+            ['mediaId' => 'group-one', 'reference' => ['type' => 'sectionMedia', 'elementId' => 'outer']],
+            ['mediaId' => 'group-tablet', 'reference' => ['type' => 'sectionMedia', 'elementId' => 'outer']],
+            ['mediaId' => 'group-mobile', 'reference' => ['type' => 'sectionMedia', 'elementId' => 'outer']],
+            ['mediaId' => 'group-two', 'reference' => ['type' => 'sectionMedia', 'elementId' => 'inner']],
+        ], $this->extractor->extract('blank', 'blank', $content));
     }
 
     public function test_extracts_people_block_media_from_blank_and_group(): void
@@ -108,10 +84,6 @@ class WebsiteSectionMediaReferenceExtractorTest extends TestCase
     {
         return [
             ['hero', []],
-            ['story', ['media' => ['assetId' => 123]]],
-            ['story', ['blocks' => [['id' => 123, 'media' => ['assetId' => 'media']]]]],
-            ['story', ['elements' => [['id' => 'one', 'type' => 'text', 'editorName' => 'Text 1', 'media' => ['type' => 'image', 'mediaId' => 'media']]]]],
-            ['people', ['groups' => [['people' => [['id' => 123, 'media' => ['assetId' => 'media']]]]]]],
             ['gallery', ['items' => [['mediaId' => 'unwired']]]],
         ];
     }

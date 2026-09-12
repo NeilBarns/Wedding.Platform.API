@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Website\Elements\CompositionGroupValidator;
-use App\Website\Elements\WebsiteElementType;
 use App\Website\Elements\WebsiteElementValidator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -29,8 +28,8 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_generic_primitives_accept_and_preserve_hidden_state(): void
     {
         $elements = [
-            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Copy', 'isHidden' => true],
-            ['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
+            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
+            ['id' => 'rich', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]], 'isHidden' => true],
             ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1', 'isHidden' => true],
             ['id' => 'accordion', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => [], 'isHidden' => true],
             ['id' => 'schedule', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => [], 'isHidden' => true],
@@ -41,6 +40,41 @@ class WebsiteElementValidatorTest extends TestCase
 
         foreach ($elements as $element) {
             $this->assertSame($element, $this->validator->validate($element));
+        }
+    }
+
+    public function test_generic_blocks_accept_strict_responsive_outer_spacing_and_normalize_sparse_defaults(): void
+    {
+        $elements = [
+            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]],
+            ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1'],
+            ['id' => 'accordion', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => []],
+            ['id' => 'schedule', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => []],
+            ['id' => 'people', 'type' => 'people', 'editorName' => 'People 1', 'groups' => []],
+            ['id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => []],
+            ['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1'],
+        ];
+        $appearance = [
+            'outerSpacing' => ['top' => 'xs', 'right' => 's', 'bottom' => 'm', 'left' => 'xl'],
+            'responsive' => [
+                'tablet' => ['outerSpacing' => ['top' => 'l']],
+                'mobile' => ['outerSpacing' => ['right' => 'none', 'left' => 'xs']],
+            ],
+        ];
+        $expected = [
+            'outerSpacing' => $appearance['outerSpacing'],
+            'responsive' => [
+                'tablet' => ['outerSpacing' => ['top' => 'l']],
+                'mobile' => ['outerSpacing' => ['left' => 'xs']],
+            ],
+        ];
+
+        foreach ($elements as $element) {
+            $validated = $this->validator->validate([...$element, 'appearance' => $appearance]);
+            $this->assertSame($expected, $validated['appearance']);
+            $this->assertInvalid([...$element, 'appearance' => ['outerSpacing' => ['top' => 'huge']]]);
+            $this->assertInvalid([...$element, 'appearance' => ['outerSpacing' => ['horizontal' => 'm']]]);
+            $this->assertInvalid([...$element, 'appearance' => ['innerSpacing' => ['top' => 's']]]);
         }
     }
 
@@ -58,6 +92,18 @@ class WebsiteElementValidatorTest extends TestCase
         foreach (['format' => 'custom', 'alignment' => 'justify', 'textStyle' => 'custom'] as $key => $value) {
             $this->assertInvalid([...$element, 'appearance' => [$key => $value]]);
         }
+    }
+
+    public function test_date_and_divider_accept_distinct_effect_contracts_and_prune_inactive_colors(): void
+    {
+        $date = $this->validator->validate(['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1', 'appearance' => ['textShadow' => 'strong', 'textShadowColorId' => 'ink', 'glow' => 'medium', 'glowColorId' => 'gold']]);
+        $divider = $this->validator->validate(['id' => 'divider', 'type' => 'divider', 'editorName' => 'Divider 1', 'appearance' => ['shadow' => 'strong', 'shadowColorId' => 'ink', 'glow' => 'medium', 'glowColorId' => 'gold']]);
+        $this->assertSame('strong', $date['appearance']['textShadow']);
+        $this->assertSame('strong', $divider['appearance']['shadow']);
+        $this->assertSame([], $this->validator->validate(['id' => 'date-none', 'type' => 'date', 'editorName' => 'Date 1', 'appearance' => ['textShadow' => 'none', 'textShadowColorId' => 'ink']])['appearance']);
+        $this->assertSame([], $this->validator->validate(['id' => 'divider-none', 'type' => 'divider', 'editorName' => 'Divider 1', 'appearance' => ['shadow' => 'none', 'shadowColorId' => 'ink']])['appearance']);
+        $this->assertInvalid(['id' => 'date-bad', 'type' => 'date', 'editorName' => 'Date 1', 'appearance' => ['textShadow' => 'extreme']]);
+        $this->assertInvalid(['id' => 'divider-bad', 'type' => 'divider', 'editorName' => 'Divider 1', 'appearance' => ['shadow' => 'extreme']]);
     }
 
     public function test_accordion_is_strict_bounded_and_requires_unique_item_ids(): void
@@ -94,8 +140,8 @@ class WebsiteElementValidatorTest extends TestCase
     public function test_generic_editor_names_are_required_normalized_and_unicode_bounded(): void
     {
         $elements = [
-            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Copy'],
-            ['id' => 'rich', 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]],
+            ['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]],
+            ['id' => 'rich', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]],
             ['id' => 'date', 'type' => 'date', 'editorName' => 'Date 1'],
             ['id' => 'accordion', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => []],
             ['id' => 'schedule', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => []],
@@ -110,11 +156,11 @@ class WebsiteElementValidatorTest extends TestCase
             $this->assertInvalid($unnamed);
         }
 
-        $normalized = $this->validator->validate(['id' => 'text', 'type' => 'text', 'editorName' => "  Welcome\n  message  ", 'text' => 'Copy']);
+        $normalized = $this->validator->validate(['id' => 'text', 'type' => 'text', 'editorName' => "  Welcome\n  message  ", 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Copy']]]]]]);
         $this->assertSame('Welcome message', $normalized['editorName']);
-        $this->assertSame(str_repeat('😀', 80), $this->validator->validate(['id' => 'text', 'type' => 'text', 'editorName' => str_repeat('😀', 80), 'text' => ''])['editorName']);
-        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => str_repeat('😀', 81), 'text' => '']);
-        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => " \n ", 'text' => '']);
+        $this->assertSame(str_repeat('😀', 80), $this->validator->validate(['id' => 'text', 'type' => 'text', 'editorName' => str_repeat('😀', 80), 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => '']]]]]])['editorName']);
+        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => str_repeat('😀', 81), 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => '']]]]]]);
+        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => " \n ", 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => '']]]]]]]]]]]);
         $this->assertInvalid(['id' => 'heading', 'type' => 'heading', 'editorName' => 'Heading 1', 'text' => 'Heading']);
     }
 
@@ -124,7 +170,7 @@ class WebsiteElementValidatorTest extends TestCase
 
         return [
             'heading' => [['id' => 'heading-1', 'type' => 'heading', 'text' => 'Welcome']],
-            'text' => [['id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Body', 'appearance' => []]],
+            'text' => [['id' => 'text-1', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Body']]]]], 'appearance' => []]],
             'date' => [['id' => 'date-block-1', 'type' => 'date', 'editorName' => 'Date 1']],
             'accordion' => [['id' => 'accordion-1', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => [['id' => 'item-1', 'title' => 'Travel', 'content' => 'Allow extra time.']]]],
             'schedule' => [['id' => 'schedule-1', 'type' => 'schedule', 'editorName' => 'Schedule 1', 'items' => [['id' => 'item-1', 'time' => '15:30', 'title' => 'Ceremony', 'details' => 'Garden level']]]],
@@ -135,23 +181,10 @@ class WebsiteElementValidatorTest extends TestCase
             'quote' => [['id' => 'quote-1', 'type' => 'quote', 'text' => 'Always', 'attribution' => 'Us']],
             'cta' => [['id' => 'cta-1', 'type' => 'cta', 'label' => 'Respond', 'action' => ['type' => 'rsvp']]],
             'media collection' => [['id' => 'collection-1', 'type' => 'mediaCollection', 'items' => [['id' => 'item-1', 'mediaId' => $mediaId]]]],
-            'narrative block' => [['id' => 'narrative-1', 'type' => 'narrativeBlock', 'heading' => 'Then', 'body' => 'Our story', 'media' => ['type' => 'image', 'mediaId' => $mediaId]]],
             'event date' => [['id' => 'date-1', 'type' => 'eventDate']],
             'event time' => [['id' => 'time-1', 'type' => 'eventTime']],
             'countdown' => [['id' => 'countdown-1', 'type' => 'countdown']],
         ];
-    }
-
-    public function test_active_vocabulary_is_bounded_and_does_not_accept_deferred_types(): void
-    {
-        $this->assertSame([
-            'heading', 'text', 'richText', 'date', 'accordion', 'schedule', 'people', 'image', 'media', 'divider', 'quote', 'cta', 'mediaCollection',
-            'narrativeBlock', 'compositionGroup', 'eventDate', 'eventTime', 'countdown',
-        ], array_column(WebsiteElementType::cases(), 'value'));
-
-        foreach (['video', 'locationSummary', 'logoMonogram'] as $type) {
-            $this->assertInvalid(['id' => 'future-1', 'type' => $type]);
-        }
     }
 
     #[DataProvider('primitiveProvider')]
@@ -215,7 +248,7 @@ class WebsiteElementValidatorTest extends TestCase
     {
         $this->assertInvalid(['id' => 'heading', 'type' => 'heading']);
         $this->assertInvalid(['id' => 'heading', 'type' => 'heading', 'text' => str_repeat('x', 256)]);
-        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => str_repeat('x', 5001)]);
+        $this->assertInvalid(['id' => 'text', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => str_repeat('x', 20001)]]]]]]);
         $this->assertInvalid(['id' => 'quote', 'type' => 'quote', 'text' => str_repeat('x', 5001)]);
         $this->assertInvalid(['id' => 'quote', 'type' => 'quote', 'text' => 'Quote', 'attribution' => str_repeat('x', 256)]);
     }
@@ -325,24 +358,6 @@ class WebsiteElementValidatorTest extends TestCase
         $this->assertInvalid([...$carousel, 'motion' => ['type' => 'fade']]);
         $this->assertInvalid([...$carousel, 'appearance' => ['frameSize' => 'large']]);
         $this->assertInvalid([...$carousel, 'presentation' => ['responsive' => ['mobile' => ['alignment' => 'end']]]]);
-    }
-
-    public function test_narrative_block_enforces_canonical_media_and_body_contract(): void
-    {
-        $mediaId = (string) Str::ulid();
-        $base = ['id' => 'narrative', 'type' => 'narrativeBlock', 'body' => 'Body'];
-
-        $this->assertInvalid(['id' => 'narrative', 'type' => 'narrativeBlock']);
-        $this->assertInvalid([...$base, 'body' => str_repeat('x', 10001)]);
-        $this->assertInvalid([...$base, 'heading' => str_repeat('x', 256)]);
-        $this->assertInvalid([...$base, 'media' => json_decode('[]', true, flags: JSON_THROW_ON_ERROR)]);
-        $this->assertInvalid([...$base, 'media' => json_decode('{}', true, flags: JSON_THROW_ON_ERROR)]);
-        $this->assertInvalid([...$base, 'media' => ['mediaId' => $mediaId]]);
-        $this->assertInvalid([...$base, 'media' => ['type' => 'image']]);
-        $this->assertInvalid([...$base, 'media' => ['type' => 'video', 'mediaId' => $mediaId]]);
-        $this->assertInvalid([...$base, 'media' => ['type' => 'image', 'assetId' => $mediaId]]);
-        $this->assertInvalid([...$base, 'media' => ['type' => 'image', 'mediaId' => $mediaId, 'focalPoint' => ['x' => 0.5, 'y' => 0.5]]]);
-        $this->assertInvalid([...$base, 'media' => ['type' => 'image', 'mediaId' => $mediaId, 'zoom' => 2]]);
     }
 
     public function test_dynamic_elements_reject_copied_event_values(): void

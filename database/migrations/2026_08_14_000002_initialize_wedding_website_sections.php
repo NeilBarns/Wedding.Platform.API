@@ -11,8 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         $definitions = [
-            'hero' => [10, ['headline' => '', 'subheadline' => '']],
-            'story' => [30, ['heading' => '', 'intro' => null, 'blocks' => []]],
+            'hero' => [10, ['childFlow' => ['elements' => [], 'order' => []]]],
             'gallery' => [70, ['heading' => '', 'items' => []]],
             'rsvp' => [90, ['heading' => '', 'description' => '', 'buttonLabel' => '']],
         ];

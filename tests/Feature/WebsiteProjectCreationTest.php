@@ -36,12 +36,12 @@ class WebsiteProjectCreationTest extends TestCase
             ->assertJsonPath('data.eventId', $event->id)
             ->assertJsonPath('data.name', 'Ceremony Site')
             ->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
-            ->assertJsonCount(5, 'data.sections');
+            ->assertJsonCount(3, 'data.sections');
 
         $second = $this->actingAs($owner)->postJson($url, [
             'name' => 'Reception Site',
             'templateKey' => WebsiteTemplateRegistry::MODERN_EDITORIAL_V1,
-        ])->assertCreated()->assertJsonCount(5, 'data.sections');
+        ])->assertCreated()->assertJsonCount(3, 'data.sections');
 
         $third = $this->actingAs($owner)->postJson($url, [
             'name' => 'Reception Site',

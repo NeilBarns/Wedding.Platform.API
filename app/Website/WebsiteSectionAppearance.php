@@ -13,6 +13,8 @@ final class WebsiteSectionAppearance
         'headingAlignment',
         'bodyAlignment',
         'mediaSpacing',
+        'contentPosition',
+        'innerSpacing',
     ];
 
     public const DEFAULT = [

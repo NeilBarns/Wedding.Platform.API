@@ -14,7 +14,12 @@ class UpdateWebsiteSectionAppearanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'appearance' => ['required', 'array:headingAlignment,bodyAlignment,backgroundTreatment,emphasis,presentation,mediaPlacement,mediaSize,frameStyle,cornerStyle,shadowStyle,overlayStrength,foregroundColor,mediaSpacing,mediaContentGap,responsive,decorativeAppearance'],
+            'appearance' => ['required', 'array:headingAlignment,bodyAlignment,backgroundTreatment,emphasis,presentation,mediaPlacement,mediaSize,frameStyle,cornerStyle,shadowStyle,overlayStrength,foregroundColor,mediaSpacing,mediaContentGap,responsive,decorativeAppearance,backgroundImageOpacity,height,contentPosition,innerSpacing'],
+            'appearance.backgroundImageOpacity' => ['sometimes', 'integer', 'between:0,100'],
+            'appearance.height' => ['sometimes', 'in:auto,screen'],
+            'appearance.contentPosition' => ['sometimes', 'in:top-start,top-center,top-end,center-start,center,center-end,bottom-start,bottom-center,bottom-end'],
+            'appearance.innerSpacing' => ['sometimes', 'array:top,right,bottom,left'],
+            'appearance.innerSpacing.*' => ['sometimes', 'in:none,xs,s,m,l,xl'],
             'appearance.headingAlignment' => ['required', 'string'],
             'appearance.bodyAlignment' => ['required', 'string'],
             'appearance.backgroundTreatment' => ['required', 'string'],
@@ -45,8 +50,11 @@ class UpdateWebsiteSectionAppearanceRequest extends FormRequest
             'appearance.mediaSpacing.left' => ['required_with:appearance.mediaSpacing', 'string'],
             'appearance.mediaContentGap' => ['sometimes', 'string'],
             'appearance.responsive' => ['sometimes', 'array:tablet,mobile', 'min:1'],
-            'appearance.responsive.tablet' => ['sometimes', 'array:mediaPlacement,mediaSize,mediaContentGap,headingAlignment,bodyAlignment,mediaSpacing', 'min:1'],
-            'appearance.responsive.mobile' => ['sometimes', 'array:mediaPlacement,mediaSize,mediaContentGap,headingAlignment,bodyAlignment,mediaSpacing', 'min:1'],
+            'appearance.responsive.tablet' => ['sometimes', 'array:mediaPlacement,mediaSize,mediaContentGap,headingAlignment,bodyAlignment,mediaSpacing,contentPosition,innerSpacing', 'min:1'],
+            'appearance.responsive.mobile' => ['sometimes', 'array:mediaPlacement,mediaSize,mediaContentGap,headingAlignment,bodyAlignment,mediaSpacing,contentPosition,innerSpacing', 'min:1'],
+            'appearance.responsive.*.contentPosition' => ['sometimes', 'in:top-start,top-center,top-end,center-start,center,center-end,bottom-start,bottom-center,bottom-end'],
+            'appearance.responsive.*.innerSpacing' => ['sometimes', 'array:top,right,bottom,left', 'min:1'],
+            'appearance.responsive.*.innerSpacing.*' => ['sometimes', 'in:none,xs,s,m,l,xl'],
             'appearance.responsive.*.mediaPlacement' => ['sometimes', 'string'],
             'appearance.responsive.*.mediaSize' => ['sometimes', 'string'],
             'appearance.responsive.*.mediaContentGap' => ['sometimes', 'string'],

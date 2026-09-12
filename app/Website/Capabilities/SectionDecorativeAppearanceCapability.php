@@ -2,7 +2,7 @@
 
 namespace App\Website\Capabilities;
 
-final readonly class StoryDecorativeAppearanceCapability
+final readonly class SectionDecorativeAppearanceCapability
 {
     /**
      * @param  list<string>  $textures

@@ -59,7 +59,7 @@ class WebsiteProjectApiTest extends TestCase
             ->assertJsonPath('data.name', 'Main')
             ->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
             ->assertJsonPath('data.designSettings', $project->design_settings)
-            ->assertJsonCount(5, 'data.sections');
+            ->assertJsonCount(3, 'data.sections');
 
         $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$foreign->id}")->assertNotFound();
     }

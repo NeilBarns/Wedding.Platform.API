@@ -12,29 +12,6 @@ use Tests\TestCase;
 
 class DesignContextResolverTest extends TestCase
 {
-    public function test_section_context_is_sparse_inherits_and_does_not_mutate_parent(): void
-    {
-        $capabilities = app(WebsiteCapabilityResolver::class);
-        $resolver = app(DesignContextResolver::class);
-        $template = WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1;
-        $project = ResolvedDesignContext::fromProjectDefaults(
-            $capabilities->resolveProjectDesignDefaults($template, []),
-        );
-        $story = $capabilities->section($template, 'story');
-
-        $this->assertEquals($project, $resolver->resolveSection($project, $story, new ContextDefaultsIntent));
-        $changed = $resolver->resolveSection(
-            $project,
-            $story,
-            new ContextDefaultsIntent(headingColorId: 'terracotta-accent'),
-        );
-
-        $this->assertSame('terracotta-accent', $changed->headingColorId);
-        $this->assertSame($project->bodyColorId, $changed->bodyColorId);
-        $this->assertSame('terracotta-text', $project->headingColorId);
-        $this->assertEquals($project, $resolver->resolveSection($project, $story, new ContextDefaultsIntent));
-    }
-
     public function test_section_context_rejects_unsupported_roles_and_values(): void
     {
         $capabilities = app(WebsiteCapabilityResolver::class);

@@ -325,11 +325,7 @@ final class WebsiteCapabilityResolver
         return array_map(function (WebsiteElementType $type) use ($headingTypography, $bodyTypography, $headingColor, $textColor): ElementCapability {
             $appearance = match ($type) {
                 WebsiteElementType::Heading => new ElementAppearanceCapability([$headingTypography], [$headingColor]),
-                WebsiteElementType::Text, WebsiteElementType::RichText, WebsiteElementType::Quote => new ElementAppearanceCapability([$bodyTypography], [$textColor]),
-                WebsiteElementType::NarrativeBlock => new ElementAppearanceCapability(
-                    [$headingTypography, $bodyTypography],
-                    [$headingColor, $textColor],
-                ),
+                WebsiteElementType::Text, WebsiteElementType::Quote => new ElementAppearanceCapability([$bodyTypography], [$textColor]),
                 WebsiteElementType::Media => new ElementAppearanceCapability([], []),
                 default => null,
             };
@@ -435,15 +431,12 @@ final class WebsiteCapabilityResolver
             'backgroundTreatment' => 'backgroundTreatments',
             'emphasis' => 'emphasisOptions',
         ] as $id => $group) {
-            if ($sectionId === 'blank') {
-                continue;
-            }
-            if ($sectionId === 'story' && $id === 'emphasis') {
+            if (in_array($sectionId, ['blank', 'hero'], true)) {
                 continue;
             }
             if (isset($appearanceOptions[$group], $appearanceDefaults[$id])) {
                 $options = $appearanceOptions[$group];
-                if (in_array($sectionId, ['story', 'blank'], true) && $id === 'backgroundTreatment') {
+                if ($sectionId === 'blank' && $id === 'backgroundTreatment') {
                     $options = [
                         ['key' => 'inherit', 'displayName' => 'Use Template'],
                         ['key' => 'custom', 'displayName' => 'Custom'],
@@ -460,7 +453,7 @@ final class WebsiteCapabilityResolver
             }
         }
 
-        $presentationDefinition = $sectionId === 'story' ? null : $template->presentationCapabilityFor($sectionId);
+        $presentationDefinition = $template->presentationCapabilityFor($sectionId);
         $presentations = [];
         if ($presentationDefinition !== null) {
             $controls[] = $this->optionControl(
@@ -491,8 +484,7 @@ final class WebsiteCapabilityResolver
         }
 
         $allowedElements = match ($sectionId) {
-            'story' => [WebsiteElementType::NarrativeBlock->value],
-            'blank' => [WebsiteElementType::Text->value, WebsiteElementType::RichText->value, WebsiteElementType::Date->value, WebsiteElementType::Accordion->value, WebsiteElementType::Schedule->value, WebsiteElementType::People->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
+            'blank', 'hero' => [WebsiteElementType::Text->value, WebsiteElementType::Date->value, WebsiteElementType::Accordion->value, WebsiteElementType::Schedule->value, WebsiteElementType::People->value, WebsiteElementType::Divider->value, WebsiteElementType::Media->value, WebsiteElementType::CompositionGroup->value],
             default => null,
         };
 
@@ -501,14 +493,14 @@ final class WebsiteCapabilityResolver
             appearanceControls: $controls,
             defaultPresentation: $presentationDefinition['default'] ?? null,
             presentations: $presentations,
-            contextDefaults: $sectionId === 'blank' ? new ContextDefaultsCapability([], []) : $this->contextDefaultsForSection($template, $sectionId),
+            contextDefaults: in_array($sectionId, ['blank', 'hero'], true) ? new ContextDefaultsCapability([], []) : $this->contextDefaultsForSection($template, $sectionId),
             allowedElementTypes: $allowedElements,
             maximumElementCount: $allowedElements === null ? null : 20,
-            decorativeAppearance: in_array($sectionId, ['story', 'blank'], true) ? $this->sectionDecorativeAppearance($template) : null,
+            decorativeAppearance: in_array($sectionId, ['blank', 'hero'], true) ? $this->sectionDecorativeAppearance($template) : null,
         );
     }
 
-    private function sectionDecorativeAppearance(WebsiteTemplateDefinition $template): StoryDecorativeAppearanceCapability
+    private function sectionDecorativeAppearance(WebsiteTemplateDefinition $template): SectionDecorativeAppearanceCapability
     {
         $backgroundColorIds = collect($template->designLibrary->colors)
             ->filter(fn ($color): bool => in_array(ContainerColorRole::BackgroundColor, $color->allowedContainerRoles, true))
@@ -517,14 +509,14 @@ final class WebsiteCapabilityResolver
             ->all();
 
         return $template->key === 'classic-filipiniana-v1'
-            ? new StoryDecorativeAppearanceCapability(
+            ? new SectionDecorativeAppearanceCapability(
                 textures: ['none', 'paper', 'fabric', 'grain'],
                 patterns: ['none', 'botanical', 'heritage'],
                 overlays: ['none', 'soft', 'warm', 'deep'],
                 frames: ['none', 'fine', 'ornamental', 'corners'],
                 backgroundColorIds: $backgroundColorIds,
             )
-            : new StoryDecorativeAppearanceCapability(
+            : new SectionDecorativeAppearanceCapability(
                 textures: ['none', 'paper', 'grain'],
                 patterns: ['none', 'geometric', 'botanical'],
                 overlays: ['none', 'soft', 'deep'],

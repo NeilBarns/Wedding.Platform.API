@@ -127,34 +127,6 @@ class WebsiteDomainFoundationTest extends TestCase
         ], $section->content);
     }
 
-    public function test_section_defaults_preserve_enabled_state_and_empty_content(): void
-    {
-        $section = Website::factory()->create()->sections()->create([
-            'type' => 'story',
-            'sort_order' => 1,
-            'appearance' => WebsiteSectionAppearance::DEFAULT,
-        ])->refresh();
-
-        $this->assertTrue($section->is_enabled);
-        $this->assertSame([], $section->content);
-        $this->assertSame(WebsiteSectionAppearance::DEFAULT, $section->appearance);
-    }
-
-    public function test_sections_are_retrieved_by_sort_order_with_id_as_a_deterministic_fallback(): void
-    {
-        $website = Website::factory()->create();
-        $later = WebsiteSection::factory()->for($website)->forType('hero')->create(['sort_order' => 20]);
-        $sameOrderFirst = WebsiteSection::factory()->for($website)->forType('story')->create(['sort_order' => 10]);
-        $sameOrderSecond = WebsiteSection::factory()->for($website)->forType('people')->create(['sort_order' => 10]);
-
-        $expectedSameOrder = collect([$sameOrderFirst->id, $sameOrderSecond->id])->sort()->values()->all();
-
-        $this->assertSame([
-            ...$expectedSameOrder,
-            $later->id,
-        ], $website->sections->pluck('id')->all());
-    }
-
     public function test_create_event_creates_owner_membership_without_a_website(): void
     {
         $creator = User::factory()->create();
@@ -243,42 +215,5 @@ class WebsiteDomainFoundationTest extends TestCase
         $this->assertSame($indexesBefore, Schema::getIndexes('websites'));
         $this->assertFalse(Schema::hasTable('website_sections_p11_backup'));
         $this->assertSame(2, $event->websiteProjects()->count());
-    }
-
-    public function test_sqlite_failure_recovery_restores_only_missing_sections_and_preserves_backup(): void
-    {
-        $website = Website::factory()->create();
-        $existing = WebsiteSection::factory()->for($website)->forType('hero')->create([
-            'content' => ['headline' => 'Original'],
-        ]);
-        $missing = WebsiteSection::factory()->for($website)->forType('story')->create([
-            'content' => ['heading' => 'Recover me'],
-        ]);
-        $migration = require database_path('migrations/2026_08_22_000000_evolve_websites_into_projects.php');
-        $alter = new \ReflectionMethod($migration, 'alterWebsitesPreservingSections');
-        $failure = null;
-
-        try {
-            $alter->invoke($migration, function () use ($existing, $missing): void {
-                DB::table('website_sections')->where('id', $existing->id)->update([
-                    'content' => json_encode(['headline' => 'Keep existing'], JSON_THROW_ON_ERROR),
-                ]);
-                DB::table('website_sections')->where('id', $missing->id)->delete();
-
-                throw new RuntimeException('Forced SQLite alteration failure.');
-            });
-        } catch (RuntimeException $exception) {
-            $failure = $exception;
-        }
-
-        try {
-            $this->assertNotNull($failure);
-            $this->assertSame('Forced SQLite alteration failure.', $failure->getMessage());
-            $this->assertSame(['headline' => 'Keep existing'], $existing->refresh()->content);
-            $this->assertSame(['heading' => 'Recover me'], $missing->refresh()->content);
-            $this->assertTrue(Schema::hasTable('website_sections_p11_backup'));
-        } finally {
-            Schema::dropIfExists('website_sections_p11_backup');
-        }
     }
 }

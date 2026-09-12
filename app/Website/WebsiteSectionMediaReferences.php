@@ -15,10 +15,6 @@ final class WebsiteSectionMediaReferences
         return array_map(function (array $item): array {
             $reference = $item['reference'];
             $context = match ($reference['type']) {
-                'storyNarrativeBlock' => array_filter([
-                    'blockId' => $reference['elementId'],
-                    'blockHeading' => $reference['label'] ?? '',
-                ], fn (string $value): bool => $value !== ''),
                 'person' => array_filter([
                     'groupId' => $reference['groupId'] ?? '',
                     'groupName' => $reference['groupLabel'] ?? '',

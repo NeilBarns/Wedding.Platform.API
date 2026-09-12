@@ -4,14 +4,12 @@ namespace App\Website;
 
 use App\Website\Elements\DividerCatalog;
 use App\Website\Elements\SectionChildFlowValidator;
-use App\Website\Elements\WebsiteElementValidator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 final class WebsiteSectionContentValidator
 {
     public function __construct(
-        private readonly WebsiteElementValidator $elements,
         private readonly SectionChildFlowValidator $childFlows,
     ) {}
 
@@ -21,6 +19,9 @@ final class WebsiteSectionContentValidator
      */
     public function validate(string $sectionType, array $content, ?array $allowedElementTypes = null, ?array $allowedFontIds = null, ?array $allowedColorIds = null, ?string $templateKey = null): array
     {
+        if ($sectionType === 'hero') {
+            BackgroundMedia::assertJsonNumbers($content['backgroundMedia'] ?? null, 'content.backgroundMedia');
+        }
         $rules = $this->rulesFor($sectionType);
 
         if ($rules === null) {
@@ -29,15 +30,15 @@ final class WebsiteSectionContentValidator
             ]);
         }
 
-        if ($sectionType === 'story') {
-            return $this->validateStory($content, $rules);
-        }
         $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        if ($sectionType === 'blank' && isset($validated['childFlow'])) {
-            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'], false);
+        if ($sectionType === 'hero' && is_array($validated['backgroundMedia'] ?? null)) {
+            $validated['backgroundMedia'] = BackgroundMedia::normalize($validated['backgroundMedia']);
+        }
+        if (in_array($sectionType, ['blank', 'hero'], true) && isset($validated['childFlow'])) {
+            $validated['childFlow'] = $this->childFlows->validate($validated['childFlow'], $allowedElementTypes ?? ['text', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'], false);
             $textElements = [];
             $collectText = function (array $element, string $path) use (&$collectText, &$textElements): void {
-                if (in_array(($element['type'] ?? null), ['text', 'richText', 'date', 'divider'], true)) {
+                if (in_array(($element['type'] ?? null), ['text', 'date', 'divider'], true)) {
                     $textElements[] = [$element, $path];
                 }
                 if (($element['type'] ?? null) === 'compositionGroup') {
@@ -50,25 +51,37 @@ final class WebsiteSectionContentValidator
                 $collectText($element, "{$index}");
             }
             foreach ($textElements as [$element, $path]) {
-                if (! in_array(($element['type'] ?? null), ['text', 'richText', 'date', 'divider'], true)) {
+                if (! in_array(($element['type'] ?? null), ['text', 'date', 'divider'], true)) {
                     continue;
                 }
                 if ($element['type'] === 'divider' && isset($element['appearance']['assetId']) && $templateKey !== null
                     && ! in_array($element['appearance']['assetId'], DividerCatalog::assetIdsForTemplate($templateKey), true)) {
                     throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.assetId" => 'The selected Divider asset is not supported by this Template.']);
                 }
-                $fontId = in_array($element['type'], ['text', 'richText', 'date'], true) ? ($element['appearance']['fontFamilyId'] ?? null) : null;
+                $fontId = in_array($element['type'], ['text', 'date'], true) ? ($element['appearance']['fontFamilyId'] ?? null) : null;
                 if (is_string($fontId) && $allowedFontIds !== null && ! in_array($fontId, $allowedFontIds, true)) {
                     throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.fontFamilyId" => 'The selected Text font is not supported by this Template.']);
                 }
-                $colorId = $element['appearance']['colorId'] ?? null;
-                if (is_string($colorId) && $allowedColorIds !== null && ! in_array($colorId, $allowedColorIds, true)) {
-                    throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.colorId" => 'The selected Text color is not supported by this Website.']);
+                foreach (['colorId', 'textShadowColorId', 'shadowColorId', 'glowColorId'] as $appearanceColorField) {
+                    $colorId = $element['appearance'][$appearanceColorField] ?? null;
+                    if (is_string($colorId) && $allowedColorIds !== null && ! in_array($colorId, $allowedColorIds, true)) {
+                        throw ValidationException::withMessages(["content.childFlow.elements.{$path}.appearance.{$appearanceColorField}" => 'The selected Text color is not supported by this Website.']);
+                    }
+                }
+                if ($element['type'] === 'text') {
+                    foreach ($element['document']['children'] as $blockIndex => $block) {
+                        foreach ($block['children'] as $runIndex => $run) {
+                            $inlineColorId = $run['colorId'] ?? null;
+                            if (is_string($inlineColorId) && $allowedColorIds !== null && ! in_array($inlineColorId, $allowedColorIds, true)) {
+                                throw ValidationException::withMessages(["content.childFlow.elements.{$path}.document.children.{$blockIndex}.children.{$runIndex}.colorId" => 'The selected inline Text color is not supported by this Website.']);
+                            }
+                        }
+                    }
                 }
             }
         }
-        array_walk_recursive($validated, function (mixed &$value, string|int $key) use ($sectionType): void {
-            if ($value === null && $key !== 'media' && ! ($sectionType === 'people' && $key === 'role')) {
+        array_walk_recursive($validated, function (mixed &$value, string|int $key): void {
+            if ($value === null && $key !== 'media' && $key !== 'role') {
                 $value = '';
             }
         });
@@ -80,40 +93,10 @@ final class WebsiteSectionContentValidator
     private function rulesFor(string $sectionType): ?array
     {
         return match ($sectionType) {
-            'hero' => $this->singleMediaRules($this->stringContentRules(['headline' => 255, 'subheadline' => 500])),
+            'hero' => $this->heroRules(),
             'blank' => [
                 'content' => ['required', 'array:childFlow'],
                 'content.childFlow' => ['required', 'array'],
-            ],
-            'story' => [
-                'content' => ['required', 'array:eyebrow,eyebrowIsHidden,heading,intro,headingIsHidden,introIsHidden,singletonAppearance,elements,mediaFraming,structureOrder'],
-                'content.eyebrow' => ['sometimes', 'nullable', 'string', 'max:255'],
-                'content.eyebrowIsHidden' => ['sometimes', 'boolean'],
-                'content.heading' => ['present', 'nullable', 'string', 'max:255'],
-                'content.intro' => ['present', 'nullable', 'string', 'max:5000'],
-                'content.headingIsHidden' => ['sometimes', 'boolean'],
-                'content.introIsHidden' => ['sometimes', 'boolean'],
-                'content.singletonAppearance' => ['sometimes', 'array:eyebrow,heading,intro'],
-                'content.singletonAppearance.*' => ['sometimes', 'array:fontFamilyId,fontSize,lineSpacing,letterSpacing,colorId,alignment'],
-                'content.singletonAppearance.*.fontFamilyId' => ['sometimes', 'string', 'max:255', 'not_regex:/^\s*$/'],
-                'content.singletonAppearance.*.fontSize' => ['sometimes', 'array:desktop,tablet,mobile'],
-                'content.singletonAppearance.*.fontSize.*' => ['sometimes', 'in:xs,s,m,l,xl'],
-                'content.singletonAppearance.*.lineSpacing' => ['sometimes', 'in:tight,normal,relaxed'],
-                'content.singletonAppearance.*.letterSpacing' => ['sometimes', 'in:tight,normal,wide'],
-                'content.singletonAppearance.*.colorId' => ['sometimes', 'string', 'max:255', 'not_regex:/^\s*$/'],
-                'content.singletonAppearance.eyebrow.alignment' => ['sometimes', 'in:start,center,end'],
-                'content.singletonAppearance.heading.alignment' => ['sometimes', 'in:start,center,end'],
-                'content.singletonAppearance.intro.alignment' => ['sometimes', 'in:start,center,end'],
-                'content.elements' => ['present', 'array', 'list', 'max:20'],
-                'content.elements.*' => ['required', 'array'],
-                'content.mediaFraming' => ['present', 'array'],
-                'content.mediaFraming.*' => ['present', 'array:focalPoint,zoom'],
-                'content.mediaFraming.*.focalPoint' => ['sometimes', 'array:x,y', 'required_array_keys:x,y'],
-                'content.mediaFraming.*.focalPoint.x' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
-                'content.mediaFraming.*.focalPoint.y' => ['required_with:content.mediaFraming.*.focalPoint', 'numeric', 'between:0,1'],
-                'content.mediaFraming.*.zoom' => ['sometimes', 'numeric', 'between:1,3'],
-                'content.structureOrder' => ['sometimes', 'array', 'list', 'max:23'],
-                'content.structureOrder.*' => ['required', 'string'],
             ],
             'rsvp' => $this->stringContentRules([
                 'heading' => 255,
@@ -125,76 +108,8 @@ final class WebsiteSectionContentValidator
                 'content.heading' => ['present', 'nullable', 'string', 'max:255'],
                 'content.items' => ['present', 'array', 'size:0'],
             ],
-            'people' => [
-                'content' => ['required', 'array:heading,groups'],
-                'content.heading' => ['present', 'nullable', 'string', 'max:255'],
-                'content.groups' => ['present', 'array', 'max:30'],
-                'content.groups.*' => ['required', 'array:id,name,people'],
-                'content.groups.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
-                'content.groups.*.name' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'],
-                'content.groups.*.people' => ['present', 'array', 'max:100'],
-                'content.groups.*.people.*' => ['required', 'array:id,name,role,media'],
-                'content.groups.*.people.*.id' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/', 'distinct:strict'],
-                'content.groups.*.people.*.name' => ['required', 'string', 'max:255', 'not_regex:/^\s*$/'],
-                'content.groups.*.people.*.role' => ['sometimes', 'nullable', 'string', 'max:255'],
-                'content.groups.*.people.*.media' => ['sometimes', 'nullable', 'array:assetId,focalPoint,zoom'],
-                'content.groups.*.people.*.media.assetId' => ['required_with:content.groups.*.people.*.media', 'string', 'ulid'],
-                'content.groups.*.people.*.media.focalPoint' => ['sometimes', 'array:x,y'],
-                'content.groups.*.people.*.media.focalPoint.x' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
-                'content.groups.*.people.*.media.focalPoint.y' => ['required_with:content.groups.*.people.*.media.focalPoint', 'numeric', 'between:0,1'],
-                'content.groups.*.people.*.media.zoom' => ['sometimes', 'numeric', 'between:1,3'],
-            ],
             default => null,
         };
-    }
-
-    /**
-     * @param  array<string, mixed>  $content
-     * @param  array<string, list<string>>  $rules
-     * @return array<string, mixed>
-     */
-    private function validateStory(array $content, array $rules): array
-    {
-        if (array_key_exists('heading', $content) && $content['heading'] === null) {
-            $content['heading'] = '';
-        }
-        foreach ($content['elements'] ?? [] as $index => $element) {
-            if (is_array($element) && array_key_exists('body', $element) && $element['body'] === null) {
-                $content['elements'][$index]['body'] = '';
-            }
-        }
-        $validated = Validator::make(['content' => $content], $rules)->validate()['content'];
-        try {
-            $validated['elements'] = $this->elements->validateTree($validated['elements']);
-        } catch (ValidationException $exception) {
-            throw ValidationException::withMessages(['content.elements' => $exception->getMessage()]);
-        }
-
-        $imageElementIds = [];
-        foreach ($validated['elements'] as $index => $element) {
-            if (($element['type'] ?? null) !== 'narrativeBlock') {
-                throw ValidationException::withMessages([
-                    "content.elements.{$index}.type" => 'Story supports Narrative Block elements only.',
-                ]);
-            }
-            if (($element['media']['type'] ?? null) === 'image') {
-                $imageElementIds[(string) $element['id']] = true;
-            }
-        }
-        foreach ($validated['mediaFraming'] as $elementId => $_framing) {
-            if (! isset($imageElementIds[(string) $elementId])) {
-                throw ValidationException::withMessages([
-                    "content.mediaFraming.{$elementId}" => 'Framing must reference a Story element with image media.',
-                ]);
-            }
-        }
-        if (array_key_exists('structureOrder', $validated) && ! StoryStructureOrder::isCanonical($validated['structureOrder'], array_column($validated['elements'], 'id'))) {
-            throw ValidationException::withMessages([
-                'content.structureOrder' => 'Story structure order must be a complete canonical permutation.',
-            ]);
-        }
-
-        return $validated;
     }
 
     /**
@@ -235,5 +150,15 @@ final class WebsiteSectionContentValidator
         $rules['content.media.zoom'] = ['sometimes', 'numeric', 'between:1,3'];
 
         return $rules;
+    }
+
+    /** @return array<string, list<string>> */
+    private function heroRules(): array
+    {
+        return [
+            'content' => ['required', 'array:backgroundMedia,childFlow'],
+            'content.childFlow' => ['required', 'array'],
+            ...BackgroundMedia::rules('content.backgroundMedia'),
+        ];
     }
 }

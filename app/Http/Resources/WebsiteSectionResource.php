@@ -33,12 +33,11 @@ class WebsiteSectionResource extends JsonResource
         if ($template?->presentationFallbackFor($this->type, $appearance['presentation'] ?? '') !== null) {
             $appearance = $template->normalizeSectionAppearance($this->type, $appearance);
         }
-        if ($this->type === 'story') {
-            $appearance = $this->storyAuthoringAppearance($appearance);
-        }
         if ($this->type === 'blank') {
-            $appearance = array_intersect_key($appearance, array_flip(['backgroundTreatment', 'decorativeAppearance']));
+            $appearance = array_intersect_key($appearance, array_flip(['backgroundTreatment', 'decorativeAppearance', 'innerSpacing', 'responsive']));
             $decorativeAppearance = $appearance['decorativeAppearance'] ?? null;
+            $innerSpacing = $appearance['innerSpacing'] ?? null;
+            $responsive = $appearance['responsive'] ?? null;
             $appearance = [
                 'headingAlignment' => 'inherit',
                 'bodyAlignment' => 'inherit',
@@ -47,6 +46,12 @@ class WebsiteSectionResource extends JsonResource
             ];
             if (is_array($decorativeAppearance)) {
                 $appearance['decorativeAppearance'] = $decorativeAppearance;
+            }
+            if (is_array($innerSpacing) && $innerSpacing !== []) {
+                $appearance['innerSpacing'] = $innerSpacing;
+            }
+            if (is_array($responsive) && $responsive !== []) {
+                $appearance['responsive'] = $responsive;
             }
             $designDefaults = [];
         }
@@ -85,35 +90,14 @@ class WebsiteSectionResource extends JsonResource
             'appearanceOptions' => $template?->appearanceOptionsFor($this->type),
             'mediaCapability' => $template?->mediaCapabilityFor($this->type),
             'itemMediaCapability' => $template?->itemMediaCapabilityFor($this->type),
-            'presentationCapability' => $this->type === 'story' ? null : $template?->presentationCapabilityFor($this->type),
+            'presentationCapability' => $template?->presentationCapabilityFor($this->type),
         ];
-    }
-
-    /** @param array<string, mixed> $appearance */
-    private function storyAuthoringAppearance(array $appearance): array
-    {
-        $current = array_intersect_key($appearance, array_flip(['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'decorativeAppearance']));
-        $current['emphasis'] = 'inherit';
-        foreach ($appearance['responsive'] ?? [] as $viewport => $override) {
-            if (! is_array($override)) {
-                continue;
-            }
-            $alignment = array_intersect_key($override, array_flip(['headingAlignment', 'bodyAlignment']));
-            if ($alignment !== []) {
-                $current['responsive'][$viewport] = $alignment;
-            }
-        }
-
-        return $current;
     }
 
     /** @return array<string, mixed> */
     private function serializedContent(): array
     {
         $content = $this->normalizedContent;
-        if ($this->type === 'story' && ($content['mediaFraming'] ?? null) === []) {
-            $content['mediaFraming'] = new \stdClass;
-        }
 
         if (isset($content['childFlow']['elements'])) {
             $content['childFlow']['elements'] = DividerJsonShape::serializeElements($content['childFlow']['elements']);

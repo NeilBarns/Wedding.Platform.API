@@ -12,7 +12,6 @@ final class WebsiteDraftNormalizer
     public function __construct(
         private readonly WebsiteSectionContentNormalizer $sectionContent,
         private readonly WebsiteCapabilityResolver $capabilities,
-        private readonly StoryContentNormalizer $storyContent,
     ) {}
 
     /**
@@ -61,9 +60,7 @@ final class WebsiteDraftNormalizer
             ],
             'sections' => $website->sections->map(fn (WebsiteSection $section): array => [
                 'section' => $section,
-                'content' => $section->type === 'story'
-                    ? $this->storyContent->normalizeToCurrent($section->id, $section->content)
-                    : $this->sectionContent->normalize($section->id, $section->type, $section->content),
+                'content' => $this->sectionContent->normalize($section->id, $section->type, $section->content),
             ])->values()->all(),
         ];
     }

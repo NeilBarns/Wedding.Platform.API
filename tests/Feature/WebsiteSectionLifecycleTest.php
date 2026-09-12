@@ -40,7 +40,7 @@ class WebsiteSectionLifecycleTest extends TestCase
         $secondId = $blanks[1]['id'];
 
         $this->actingAs($owner)->putJson("{$base}/{$first['id']}/editor-name", ['editorName' => '  Travel   notes  '])
-            ->assertOk()->assertJsonPath('data.sections.5.editorName', 'Travel notes');
+            ->assertOk()->assertJsonPath('data.sections.3.editorName', 'Travel notes');
         $this->actingAs($owner)->putJson("{$base}/{$secondId}/editor-name", ['editorName' => 'Travel notes'])->assertOk();
         $this->assertSame($first['id'], $event->website->sections()->findOrFail($first['id'])->id);
 
@@ -71,7 +71,7 @@ class WebsiteSectionLifecycleTest extends TestCase
         $source->update([
             'is_enabled' => false,
             'content' => ['childFlow' => ['elements' => [[
-                'id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [[
+                'id' => 'group', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'backgroundMedia' => ['assetId' => $mediaId, 'focalPoint' => ['x' => .2, 'y' => .8], 'zoom' => 1.6, 'responsive' => ['tablet' => ['assetId' => $mediaId, 'zoom' => .7], 'mobile' => ['assetId' => $mediaId, 'focalPoint' => ['x' => .8, 'y' => .3], 'zoom' => .4]]], 'appearance' => ['backgroundImageOpacity' => 35], 'layout' => ['direction' => 'horizontal', 'division' => '60-40', 'gap' => 'm'], 'children' => [[
                     'id' => 'media', 'type' => 'media', 'editorName' => 'Media 1', 'items' => [[
                         'id' => 'item', 'type' => 'image', 'mediaId' => $mediaId, 'alt' => 'Photo',
                     ]],
@@ -91,6 +91,9 @@ class WebsiteSectionLifecycleTest extends TestCase
         $sourceGroup = $source->content['childFlow']['elements'][0];
         $copyGroup = $duplicate->content['childFlow']['elements'][0];
         $this->assertNotSame($sourceGroup['id'], $copyGroup['id']);
+        $this->assertSame($sourceGroup['backgroundMedia'], $copyGroup['backgroundMedia']);
+        $this->assertSame($sourceGroup['appearance'], $copyGroup['appearance']);
+        $this->assertSame($sourceGroup['layout'], $copyGroup['layout']);
         $this->assertNotSame($sourceGroup['children'][0]['id'], $copyGroup['children'][0]['id']);
         $this->assertNotSame($sourceGroup['children'][0]['items'][0]['id'], $copyGroup['children'][0]['items'][0]['id']);
         $this->assertSame($mediaId, $copyGroup['children'][0]['items'][0]['mediaId']);
@@ -116,6 +119,38 @@ class WebsiteSectionLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_hero_starter_blocks_can_all_be_deleted_saved_reloaded_and_are_not_reseeded(): void
+    {
+        [$event, $owner] = $this->event();
+        $hero = $event->website->sections()->where('type', 'hero')->sole();
+        $url = "/api/events/{$event->id}/websites/{$event->website->id}/sections/{$hero->id}";
+        $elements = $hero->content['childFlow']['elements'];
+
+        $this->assertSame(['text', 'date', 'text'], array_column($elements, 'type'));
+
+        foreach (array_column($elements, 'id') as $deletedId) {
+            $flow = $hero->refresh()->content['childFlow'];
+            $flow['elements'] = array_values(array_filter($flow['elements'], fn (array $element): bool => $element['id'] !== $deletedId));
+            $flow['order'] = array_values(array_filter($flow['order'], fn (array $reference): bool => $reference['id'] !== $deletedId));
+
+            $this->actingAs($owner)->putJson($url, ['content' => ['childFlow' => $flow]])->assertOk();
+            $this->assertNotContains($deletedId, array_column($hero->refresh()->content['childFlow']['elements'], 'id'));
+        }
+
+        $empty = ['elements' => [], 'order' => []];
+        $this->assertSame($empty, $hero->refresh()->content['childFlow']);
+        $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")
+            ->assertOk()->assertJsonPath('data.sections.0.content.childFlow', $empty);
+
+        app(InitializeWebsiteSections::class)->handle($event->website);
+        $this->assertSame($empty, $hero->refresh()->content['childFlow']);
+
+        $accordion = ['id' => 'accordion-after-empty', 'type' => 'accordion', 'editorName' => 'Accordion 1', 'items' => []];
+        $different = ['elements' => [$accordion], 'order' => [['kind' => 'element', 'id' => $accordion['id']]]];
+        $this->actingAs($owner)->putJson($url, ['content' => ['childFlow' => $different]])->assertOk();
+        $this->assertSame($different, $hero->refresh()->content['childFlow']);
+    }
+
     public function test_sync_restores_required_singletons_only_and_never_coalesces_repeatable_sections(): void
     {
         [$event, $owner] = $this->event();
@@ -130,6 +165,7 @@ class WebsiteSectionLifecycleTest extends TestCase
         $this->assertSame(1, $event->website->sections()->where('type', 'hero')->count());
         $this->assertFalse($event->website->sections()->where('type', 'hero')->sole()->is_enabled);
         $this->assertSame(2, $event->website->sections()->where('type', 'blank')->count());
+        $this->assertSame(0, $event->website->sections()->where('type', 'people')->count());
         $this->assertSame(0, $event->website->sections()->where('type', 'dressCode')->count());
     }
 

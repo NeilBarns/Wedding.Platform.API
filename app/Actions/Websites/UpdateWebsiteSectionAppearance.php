@@ -74,6 +74,49 @@ final class UpdateWebsiteSectionAppearance
             $this->validateSectionDecorativeAppearance($sectionCapability, $section->type, $appearance['decorativeAppearance'], $section->website->design_settings);
             $expectedKeys[] = 'decorativeAppearance';
         }
+        if (array_key_exists('height', $appearance)) {
+            if ($section->type !== 'hero' || ! in_array($appearance['height'], ['auto', 'screen'], true)) {
+                throw ValidationException::withMessages(['appearance.height' => 'Hero height must be auto or screen.']);
+            }
+            if ($appearance['height'] === 'auto') {
+                unset($appearance['height']);
+            } else {
+                $expectedKeys[] = 'height';
+            }
+        }
+        if (array_key_exists('backgroundImageOpacity', $appearance)) {
+            if ($section->type !== 'hero' || ! is_int($appearance['backgroundImageOpacity']) || $appearance['backgroundImageOpacity'] < 0 || $appearance['backgroundImageOpacity'] > 100) {
+                throw ValidationException::withMessages(['appearance.backgroundImageOpacity' => 'Hero background image opacity must be an integer between 0 and 100.']);
+            }
+            if ($appearance['backgroundImageOpacity'] === 100) {
+                unset($appearance['backgroundImageOpacity']);
+            } else {
+                $expectedKeys[] = 'backgroundImageOpacity';
+            }
+        }
+        if (array_key_exists('contentPosition', $appearance)) {
+            if ($section->type !== 'hero' || ! $this->validHeroContentPosition($appearance['contentPosition'])) {
+                throw ValidationException::withMessages(['appearance.contentPosition' => 'The selected Hero content position is invalid.']);
+            }
+            if ($appearance['contentPosition'] === 'center') {
+                unset($appearance['contentPosition']);
+            } else {
+                $expectedKeys[] = 'contentPosition';
+            }
+        }
+        if (array_key_exists('innerSpacing', $appearance)) {
+            if (! in_array($section->type, ['hero', 'blank'], true) || ! is_array($appearance['innerSpacing'])) {
+                throw ValidationException::withMessages(['appearance.innerSpacing' => 'Section inner spacing must use the shared four-sided spacing contract.']);
+            }
+            $appearance['innerSpacing'] = $this->normalizeInnerSpacing($appearance['innerSpacing']);
+            if ($appearance['innerSpacing'] === []) {
+                unset($appearance['innerSpacing']);
+            } else {
+                $expectedKeys[] = 'innerSpacing';
+            }
+        }
+
+        $actualKeys = array_keys($appearance);
 
         sort($expectedKeys);
         sort($actualKeys);
@@ -82,37 +125,31 @@ final class UpdateWebsiteSectionAppearance
         }
 
         foreach (['headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'emphasis'] as $setting) {
-            if ($section->type === 'blank') {
+            if (in_array($section->type, ['blank', 'hero'], true)) {
                 $allowed = $setting === 'backgroundTreatment' ? ['inherit', 'custom'] : ['inherit'];
                 if (! in_array($appearance[$setting] ?? null, $allowed, true)) {
-                    throw ValidationException::withMessages(["appearance.{$setting}" => "Blank does not support authored {$setting} overrides."]);
+                    throw ValidationException::withMessages(["appearance.{$setting}" => "This Section does not support authored {$setting} overrides."]);
                 }
 
                 continue;
             }
-            if ($section->type === 'story' && $setting === 'emphasis') {
-                if (($appearance[$setting] ?? null) !== 'inherit') {
-                    throw ValidationException::withMessages(['appearance.emphasis' => 'Story emphasis is no longer an authored appearance control.']);
-                }
-
-                continue;
-            }
-            $legacyStoryBackground = $section->type === 'story' && $setting === 'backgroundTreatment'
-                && in_array($appearance[$setting] ?? null, ['plain', 'soft', 'accent'], true);
-            if (! $legacyStoryBackground && ! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
+            if (! $this->validOption($desktopControls[$setting] ?? null, $appearance[$setting])) {
                 throw ValidationException::withMessages(["appearance.{$setting}" => "The selected {$setting} is invalid for this Section."]);
             }
-        }
-
-        if ($section->type === 'story') {
-            $appearance = $this->preserveLegacyStoryAppearance($section->appearance, $appearance);
         }
 
         if (isset($appearance['responsive'])) {
             foreach ($appearance['responsive'] as $viewport => &$override) {
                 $viewportControls = $this->controlsById($templateKey, $section->type, $activePresentation, $viewport);
                 foreach ($override as $setting => $value) {
-                    if ($value === ($viewportControls[$setting]->default ?? null)) {
+                    if ($setting === 'innerSpacing') {
+                        $override[$setting] = array_filter($value, fn (string $spacing, string $side): bool => $spacing !== ($appearance['innerSpacing'][$side] ?? 'none'), ARRAY_FILTER_USE_BOTH);
+                        if ($override[$setting] === []) {
+                            unset($override[$setting]);
+                        }
+                    } elseif ($setting === 'contentPosition' && $value === ($appearance['contentPosition'] ?? 'center')) {
+                        unset($override[$setting]);
+                    } elseif ($value === ($viewportControls[$setting]->default ?? null)) {
                         unset($override[$setting]);
                     }
                 }
@@ -135,33 +172,10 @@ final class UpdateWebsiteSectionAppearance
         return $section;
     }
 
-    /** @param array<string, mixed> $stored @param array<string, mixed> $authored */
-    private function preserveLegacyStoryAppearance(array $stored, array $authored): array
-    {
-        foreach (['emphasis', 'presentation', 'mediaPlacement', 'mediaSize', 'frameStyle', 'cornerStyle', 'shadowStyle', 'overlayStrength', 'foregroundColor', 'mediaSpacing', 'mediaContentGap'] as $key) {
-            if (array_key_exists($key, $stored)) {
-                $authored[$key] = $stored[$key];
-            } else {
-                unset($authored[$key]);
-            }
-        }
-        foreach ($stored['responsive'] ?? [] as $viewport => $override) {
-            if (! is_array($override)) {
-                continue;
-            }
-            $legacy = array_diff_key($override, array_flip(['headingAlignment', 'bodyAlignment']));
-            if ($legacy !== []) {
-                $authored['responsive'][$viewport] = [...$legacy, ...($authored['responsive'][$viewport] ?? [])];
-            }
-        }
-
-        return $authored;
-    }
-
     /** @param array<string, mixed> $designSettings */
     private function validateSectionDecorativeAppearance(SectionCapability $capability, string $sectionType, mixed $value, array $designSettings): void
     {
-        if (! in_array($sectionType, ['story', 'blank'], true) || $capability->decorativeAppearance === null || ! is_array($value)) {
+        if (! in_array($sectionType, ['blank', 'hero'], true) || $capability->decorativeAppearance === null || ! is_array($value)) {
             throw ValidationException::withMessages(['appearance.decorativeAppearance' => 'Decorative appearance is not supported by this Section.']);
         }
         $rootKeys = array_keys($value);
@@ -217,13 +231,45 @@ final class UpdateWebsiteSectionAppearance
                 if (! in_array($setting, WebsiteSectionAppearance::RESPONSIVE_SETTINGS, true)) {
                     throw ValidationException::withMessages(["appearance.responsive.{$viewport}.{$setting}" => 'This responsive appearance property is not supported.']);
                 }
-                if ($setting === 'mediaSpacing') {
+                if ($setting === 'innerSpacing') {
+                    if (! in_array($sectionType, ['hero', 'blank'], true) || ! is_array($value)) {
+                        throw ValidationException::withMessages(["appearance.responsive.{$viewport}.innerSpacing" => 'Section inner spacing must use the shared spacing contract.']);
+                    }
+                    $this->normalizeInnerSpacing($value);
+                } elseif ($setting === 'contentPosition') {
+                    if ($sectionType !== 'hero' || ! $this->validHeroContentPosition($value)) {
+                        throw ValidationException::withMessages(["appearance.responsive.{$viewport}.contentPosition" => 'The selected Hero content position is invalid.']);
+                    }
+                } elseif ($setting === 'mediaSpacing') {
                     $this->validateSpacing($controls[$setting] ?? null, $value, "appearance.responsive.{$viewport}.mediaSpacing", true);
                 } elseif (! $this->validOption($controls[$setting] ?? null, $value)) {
                     throw ValidationException::withMessages(["appearance.responsive.{$viewport}.{$setting}" => "The selected {$setting} is not supported for this viewport."]);
                 }
             }
         }
+    }
+
+    private function validHeroContentPosition(mixed $value): bool
+    {
+        return is_string($value) && in_array($value, ['top-start', 'top-center', 'top-end', 'center-start', 'center', 'center-end', 'bottom-start', 'bottom-center', 'bottom-end'], true);
+    }
+
+    /** @param array<string, mixed> $value */
+    private function normalizeInnerSpacing(array $value): array
+    {
+        if (array_diff(array_keys($value), ['top', 'right', 'bottom', 'left']) !== []) {
+            throw ValidationException::withMessages(['appearance.innerSpacing' => 'Section inner spacing contains unsupported sides.']);
+        }
+        foreach ($value as $side => $spacing) {
+            if (! is_string($spacing) || ! in_array($spacing, ['none', 'xs', 's', 'm', 'l', 'xl'], true)) {
+                throw ValidationException::withMessages(["appearance.innerSpacing.{$side}" => 'The selected inner spacing is invalid.']);
+            }
+            if ($spacing === 'none') {
+                unset($value[$side]);
+            }
+        }
+
+        return $value;
     }
 
     private function validateSpacing(?AppearanceControlCapability $control, mixed $value, string $path, bool $responsive): void

@@ -33,7 +33,7 @@ final class WebsiteTemplateRegistry
         }
 
         $sectionTypes = [
-            'hero', 'story', 'people', 'gallery', 'rsvp', 'blank',
+            'hero', 'gallery', 'rsvp', 'blank',
         ];
         $classicDesignLibrary = $this->classicDesignLibrary();
         $classic = new WebsiteTemplateDefinition(
@@ -64,29 +64,10 @@ final class WebsiteTemplateRegistry
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: [
                 'hero' => ['mode' => 'single'],
-                'story' => ['mode' => 'multiple'],
             ],
-            sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
-            sectionPresentationCapabilities: [
-                'hero' => $this->presentation('classic', [
-                    'classic' => ['Classic', 'Elegant centered composition with a restrained image.', 'contained'],
-                    'immersive' => ['Immersive', 'Image-forward composition with closely integrated text.', 'overlay'],
-                ], $this->mediaControls('classic', 'hero')),
-                'story' => $this->presentation('portraitStory', [
-                    'textFirst' => ['Text First', 'Story-led composition with supporting photography.', 'text'],
-                    'portraitStory' => ['Portrait Story', 'Portrait and narrative share the composition.', 'split'],
-                ], $this->mediaControls('classic', 'story')),
-                'people' => $this->presentation('medallions', [
-                    'medallions' => ['Medallions', 'Formal circular portraits with ceremonial character.', 'circles'],
-                    'portraitCards' => ['Portrait Cards', 'Elegant vertical portraits with names beneath.', 'cards'],
-                    'namesOnly' => ['Names Only', 'A polished text-only Wedding Party composition.', 'text'],
-                ]),
-            ],
-            sectionPresentationFallbacks: [
-                'hero' => ['framed' => ['presentation' => 'classic', 'frameStyle' => 'fineLine']],
-                'story' => ['framed' => ['presentation' => 'textFirst', 'frameStyle' => 'fineLine']],
-                'people' => ['framed' => ['presentation' => 'portraitCards']],
-            ],
+            sectionItemMediaCapabilities: [],
+            sectionPresentationCapabilities: [],
+            sectionPresentationFallbacks: [],
         );
 
         $modernDesignLibrary = $this->modernDesignLibrary();
@@ -118,29 +99,10 @@ final class WebsiteTemplateRegistry
             sectionAppearanceDefaults: array_fill_keys($sectionTypes, WebsiteSectionAppearance::DEFAULT),
             sectionMediaCapabilities: [
                 'hero' => ['mode' => 'single'],
-                'story' => ['mode' => 'multiple'],
             ],
-            sectionItemMediaCapabilities: ['people' => ['itemType' => 'person', 'mode' => 'single']],
-            sectionPresentationCapabilities: [
-                'hero' => $this->presentation('immersive', [
-                    'editorial' => ['Editorial', 'Asymmetric magazine-style image and typography.', 'split'],
-                    'immersive' => ['Immersive', 'A large image-led opening composition.', 'overlay'],
-                ], $this->mediaControls('modern', 'hero')),
-                'story' => $this->presentation('editorial', [
-                    'textFirst' => ['Text First', 'Narrative typography leads the composition.', 'text'],
-                    'editorial' => ['Editorial', 'Image and story form an asymmetric spread.', 'split'],
-                ], $this->mediaControls('modern', 'story')),
-                'people' => $this->presentation('editorialPortraits', [
-                    'editorialPortraits' => ['Editorial Portraits', 'Vertical portraits with bold editorial rhythm.', 'cards'],
-                    'squareGrid' => ['Square Grid', 'Structured square portraits in a clean grid.', 'grid'],
-                    'minimal' => ['Minimal', 'Restrained, image-light portraits with generous space.', 'minimal'],
-                    'namesOnly' => ['Names Only', 'A typographic Wedding Party composition.', 'text'],
-                ]),
-            ],
-            sectionPresentationFallbacks: [
-                'hero' => ['framed' => ['presentation' => 'editorial', 'frameStyle' => 'hairline']],
-                'story' => ['framed' => ['presentation' => 'textFirst', 'frameStyle' => 'hairline']],
-            ],
+            sectionItemMediaCapabilities: [],
+            sectionPresentationCapabilities: [],
+            sectionPresentationFallbacks: [],
         );
 
         return [$classic->key => $classic, $modern->key => $modern];
@@ -511,65 +473,6 @@ final class WebsiteTemplateRegistry
      * @param  array<string, array{string, string, string}>  $values
      * @return array{default: string, options: list<array{key: string, displayName: string, description: string, preview: string}>}
      */
-    private function presentation(string $default, array $values, array $controls = []): array
-    {
-        return [
-            'default' => $default,
-            'options' => array_map(
-                fn (string $key, array $metadata): array => [
-                    'key' => $key,
-                    'displayName' => $metadata[0],
-                    'description' => $metadata[1],
-                    'preview' => $metadata[2],
-                    'mediaControls' => $controls[$key] ?? null,
-                ],
-                array_keys($values),
-                array_values($values),
-            ),
-        ];
-    }
-
-    /** @return array<string, array<string, mixed>> */
-    private function mediaControls(string $template, string $section): array
-    {
-        $frames = $template === 'classic'
-            ? $this->options(['none' => 'None', 'fineLine' => 'Fine Line', 'doubleLine' => 'Double Line', 'inset' => 'Inset', 'outset' => 'Outset', 'heritage' => 'Heritage', 'ornamental' => 'Ornamental'])
-            : $this->options(['none' => 'None', 'hairline' => 'Hairline', 'offset' => 'Offset', 'gallery' => 'Gallery', 'boldEdge' => 'Bold Edge', 'outset' => 'Outset', 'editorialFrame' => 'Editorial Frame']);
-        $styles = fn (string $placement, string $frame = 'none', ?array $placements = null, ?string $mobilePlacement = null, ?array $tabletPlacements = null): array => [
-            'mediaPlacements' => ['default' => $placement, 'options' => $this->options($placements ?? (in_array($placement, ['left', 'right'], true) ? ['left' => 'Left', 'right' => 'Right'] : ['top' => 'Top', 'bottom' => 'Bottom']))],
-            'mediaSizes' => ['default' => 'balanced', 'options' => $this->options(['compact' => 'Compact', 'balanced' => 'Balanced', 'feature' => 'Feature'])],
-            'frameStyles' => ['default' => $frame, 'options' => $frames],
-            'cornerStyles' => ['default' => 'square', 'options' => $this->options(['square' => 'Square', 'soft' => 'Soft', 'rounded' => 'Rounded'])],
-            'shadowStyles' => ['default' => 'none', 'options' => $this->options(['none' => 'None', 'subtle' => 'Subtle', 'soft' => 'Soft', 'elevated' => 'Elevated'])],
-            'mediaSpacing' => [
-                'default' => ['top' => 'medium', 'right' => 'medium', 'bottom' => 'medium', 'left' => 'medium'],
-                'options' => $this->options(['none' => 'None', 'small' => 'Small', 'medium' => 'Medium', 'large' => 'Large']),
-            ],
-            'mediaContentGaps' => ['default' => 'comfortable', 'options' => $this->options(['tight' => 'Tight', 'comfortable' => 'Comfortable', 'spacious' => 'Spacious', 'generous' => 'Generous'])],
-            ...($mobilePlacement === null ? [] : ['responsive' => [
-                'tablet' => [
-                    'mediaPlacement' => ['default' => $mobilePlacement, 'options' => $this->options($tabletPlacements ?? ['top' => 'Top', 'bottom' => 'Bottom'])],
-                ],
-                'mobile' => [
-                    'mediaPlacement' => ['default' => $mobilePlacement, 'options' => $this->options(['top' => 'Top', 'bottom' => 'Bottom'])],
-                ],
-            ]]),
-        ];
-        $immersive = [
-            'overlayStrength' => ['default' => 0.5, 'min' => 0.2, 'max' => 0.8, 'step' => 0.1],
-            'foregroundColors' => ['default' => '#FFFFFF', 'options' => $this->options(['#FFFFFF' => 'Light', '#1F1713' => 'Dark'])],
-        ];
-
-        return match ([$section, $template]) {
-            ['hero', 'classic'] => ['classic' => $styles('top', 'none', ['top' => 'Top', 'right' => 'Right', 'bottom' => 'Bottom', 'left' => 'Left'], 'top'), 'immersive' => $immersive],
-            ['story', 'classic'] => ['textFirst' => $styles('bottom', 'none', null, 'bottom'), 'portraitStory' => $styles('left', 'none', null, 'top', ['top' => 'Top', 'bottom' => 'Bottom', 'left' => 'Left', 'right' => 'Right'])],
-            ['hero', 'modern'] => ['editorial' => $styles('left', 'none', null, 'top'), 'immersive' => $immersive],
-            ['story', 'modern'] => ['textFirst' => $styles('bottom', 'none', null, 'bottom'), 'editorial' => $styles('left', 'none', null, 'top')],
-            default => [],
-        };
-    }
-
-    /** @param  list<array{key: string, displayName: string}>  $options */
     private function assertOptionGroup(string $templateKey, string $group, array $options): void
     {
         $keys = array_column($options, 'key');

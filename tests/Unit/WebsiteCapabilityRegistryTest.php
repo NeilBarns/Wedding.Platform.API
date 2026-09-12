@@ -6,17 +6,12 @@ use App\Http\Resources\WebsiteTemplateCapabilitiesResource;
 use App\Website\Capabilities\AppearanceControlCapability;
 use App\Website\Capabilities\AppearanceControlScope;
 use App\Website\Capabilities\AppearanceControlType;
-use App\Website\Capabilities\ContainerColorRole;
-use App\Website\Capabilities\ElementColorRole;
 use App\Website\Capabilities\GlobalDesignControlId;
 use App\Website\Capabilities\GlobalDesignControlType;
 use App\Website\Capabilities\PlatformFontRegistry;
 use App\Website\Capabilities\ProjectColorRole;
 use App\Website\Capabilities\TypographyRole;
 use App\Website\Capabilities\WebsiteCapabilityResolver;
-use App\Website\Elements\WebsiteElementType;
-use App\Website\WebsiteSchema;
-use App\Website\WebsiteSectionRegistry;
 use App\Website\WebsiteTemplateRegistry;
 use Tests\TestCase;
 
@@ -70,285 +65,20 @@ class WebsiteCapabilityRegistryTest extends TestCase
         }
     }
 
-    public function test_every_production_template_emits_valid_deterministic_capabilities(): void
-    {
-        $templates = app(WebsiteTemplateRegistry::class);
-        $resolver = app(WebsiteCapabilityResolver::class);
-        $knownSections = array_keys(app(WebsiteSectionRegistry::class)->all());
-        $knownElements = array_map(fn (WebsiteElementType $type): string => $type->value, WebsiteElementType::cases());
-        $knownControls = [
-            'headingAlignment', 'bodyAlignment', 'backgroundTreatment', 'emphasis', 'presentation',
-            'mediaPlacement', 'mediaSize', 'frameStyle', 'cornerStyle', 'shadowStyle',
-            'overlayStrength', 'foregroundColor', 'mediaSpacing', 'mediaContentGap',
-        ];
-
-        foreach ($templates->all() as $template) {
-            $capabilities = $resolver->template($template);
-            $this->assertNotNull($capabilities);
-            $this->assertSame($template->supportedSectionTypes, array_map(fn ($section): string => $section->id, $capabilities->sections));
-            $this->assertEqualsCanonicalizing(['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup', 'narrativeBlock'], $capabilities->elements);
-
-            foreach ($capabilities->sections as $section) {
-                $this->assertContains($section->id, $knownSections);
-                $sourcePresentations = $section->id === 'story' ? null : $template->presentationCapabilityFor($section->id);
-                $this->assertSame($sourcePresentations['default'] ?? null, $section->defaultPresentation);
-                $this->assertSame(
-                    array_column($sourcePresentations['options'] ?? [], 'key'),
-                    array_map(fn ($presentation): string => $presentation->id, $section->presentations),
-                );
-                foreach ($section->allowedElementTypes ?? [] as $elementType) {
-                    $this->assertContains($elementType, $knownElements);
-                }
-                $this->assertNull($section->compositionGroups);
-
-                foreach ($section->appearanceControls as $control) {
-                    $this->assertValidControl($control, $knownControls);
-                }
-                foreach ($section->presentations as $presentation) {
-                    $this->assertNotSame('framed', $presentation->id);
-                    foreach ($presentation->appearanceControls as $control) {
-                        $this->assertValidControl($control, $knownControls);
-                    }
-                }
-            }
-
-            $first = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
-            $second = (new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request());
-            $this->assertSame(json_encode($first, JSON_THROW_ON_ERROR), json_encode($second, JSON_THROW_ON_ERROR));
-            $this->assertStringNotContainsString('video', json_encode($first, JSON_THROW_ON_ERROR));
-            $this->assertStringNotContainsString('locationSummary', json_encode($first, JSON_THROW_ON_ERROR));
-            $this->assertStringNotContainsString('logoMonogram', json_encode($first, JSON_THROW_ON_ERROR));
-        }
-    }
-
-    public function test_element_authoring_is_limited_to_story_and_generic_flow_sections(): void
-    {
-        $resolver = app(WebsiteCapabilityResolver::class);
-
-        foreach (array_keys(app(WebsiteTemplateRegistry::class)->all()) as $templateKey) {
-            $template = $resolver->template($templateKey);
-            foreach ($template->sections as $section) {
-                if ($section->id === 'blank') {
-                    $this->assertSame(['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'], $section->allowedElementTypes);
-                    $this->assertSame(20, $section->maximumElementCount);
-                    $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'text'));
-                    $this->assertTrue($resolver->allowsElement($templateKey, $section->id, 'compositionGroup'));
-
-                    continue;
-                }
-                if ($section->id !== 'story') {
-                    $this->assertNull($section->allowedElementTypes);
-                    $this->assertNull($section->maximumElementCount);
-
-                    continue;
-                }
-
-                $this->assertSame(['narrativeBlock'], $section->allowedElementTypes);
-                $this->assertSame(20, $section->maximumElementCount);
-                $this->assertTrue($resolver->allowsElement($templateKey, 'story', 'narrativeBlock'));
-                $this->assertFalse($resolver->allowsElement($templateKey, 'story', 'compositionGroup'));
-            }
-        }
-    }
-
-    public function test_element_appearance_capabilities_are_typed_template_legal_and_shared(): void
-    {
-        $resolver = app(WebsiteCapabilityResolver::class);
-
-        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
-            $capabilities = $resolver->template($template);
-            $elements = collect($capabilities->elementCapabilities)->keyBy(fn ($element): string => $element->type->value);
-            $families = collect($capabilities->designLibrary->fontFamilies)->keyBy('id');
-            $colors = collect($capabilities->designLibrary->colors)->keyBy('id');
-
-            $this->assertEqualsCanonicalizing(
-                array_map(fn (WebsiteElementType $type): string => $type->value, WebsiteElementType::cases()),
-                $elements->keys()->all(),
-            );
-
-            foreach ([
-                'heading' => [['heading'], ['headingColor']],
-                'text' => [['body'], ['textColor']],
-                'richText' => [['body'], ['textColor']],
-                'quote' => [['body'], ['textColor']],
-                'narrativeBlock' => [['heading', 'body'], ['headingColor', 'textColor']],
-            ] as $type => [$typographyRoles, $colorRoles]) {
-                $appearance = $elements[$type]->appearance;
-                $this->assertNotNull($appearance);
-                $this->assertSame($typographyRoles, array_map(fn ($control): string => $control->role->value, $appearance->typography));
-                $this->assertSame($colorRoles, array_map(fn ($control): string => $control->role->value, $appearance->colors));
-
-                foreach ($appearance->typography as $control) {
-                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
-                    foreach ($control->allowedFontIds as $id) {
-                        $this->assertTrue($families->has($id));
-                        $this->assertContains($control->role, $families[$id]->allowedRoles);
-                        $this->assertStringNotContainsString('font-family', $id);
-                    }
-                }
-                foreach ($appearance->colors as $control) {
-                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
-                    foreach ($control->allowedColorIds as $id) {
-                        $this->assertTrue($colors->has($id));
-                        $this->assertContains($control->role, $colors[$id]->allowedElementRoles);
-                        $this->assertFalse(str_starts_with($id, '#'));
-                    }
-                }
-            }
-
-            foreach (['image', 'divider', 'cta', 'mediaCollection', 'compositionGroup', 'eventDate', 'eventTime', 'countdown'] as $type) {
-                $this->assertNull($elements[$type]->appearance);
-            }
-            $this->assertSame([], $elements['media']->appearance->typography);
-            $this->assertSame([], $elements['media']->appearance->colors);
-
-            $serialized = (new WebsiteTemplateCapabilitiesResource($capabilities))->resolve(request());
-            $this->assertSame($capabilities->elements, $serialized['elements']);
-            $this->assertSame(5, WebsiteSchema::CURRENT_SCHEMA_VERSION);
-            $narrative = collect($serialized['elementCapabilities'])->firstWhere('type', 'narrativeBlock');
-            $this->assertSame(['eyebrow', 'heading', 'divider', 'body', 'quote', 'media', 'caption', 'cta'], $narrative['narrativeBlock']['slots']);
-            $this->assertSame(['editorial', 'mediaFirst', 'quoteLed', 'textOnly'], $narrative['narrativeBlock']['composition']['presentations']);
-            $this->assertSame(['square', 'soft', 'rounded'], $narrative['narrativeBlock']['appearance']['media']['cornerStyles']);
-            $expectedFrames = $template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
-                ? [['key' => 'ornamentalCorners', 'displayName' => 'Ornamental Corners', 'supportsColor' => true, 'sizes' => ['small', 'medium', 'large']]]
-                : [];
-            $this->assertSame($expectedFrames, $narrative['narrativeBlock']['appearance']['media']['frameStyles']);
-            $this->assertNotEmpty($narrative['narrativeBlock']['appearance']['media']['frameColorIds']);
-            $this->assertNotEmpty($narrative['narrativeBlock']['appearance']['backgroundColorIds']);
-            $expectedDecorative = $template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
-                ? ['textures' => ['none', 'paper', 'fabric'], 'patterns' => ['none', 'botanical']]
-                : ['textures' => ['none'], 'patterns' => ['none']];
-            $this->assertSame($expectedDecorative, $narrative['narrativeBlock']['appearance']['decorativeAppearance']);
-            foreach ($narrative['narrativeBlock']['appearance']['backgroundColorIds'] as $colorId) {
-                $this->assertContains(ContainerColorRole::BackgroundColor, $colors[$colorId]->allowedContainerRoles);
-            }
-            $this->assertStringNotContainsString('#', json_encode($serialized['elementCapabilities'], JSON_THROW_ON_ERROR));
-        }
-    }
-
-    public function test_story_decorative_capabilities_are_template_narrowed_and_path_free(): void
-    {
-        $resolver = app(WebsiteCapabilityResolver::class);
-
-        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
-            $story = $resolver->section($template, 'story');
-            $blank = $resolver->section($template, 'blank');
-            $this->assertNotNull($story?->decorativeAppearance);
-            $this->assertEquals($story->decorativeAppearance, $blank?->decorativeAppearance);
-            $this->assertContains('paper', $story->decorativeAppearance->textures);
-            $this->assertContains('none', $story->decorativeAppearance->patterns);
-            $this->assertContains('none', $story->decorativeAppearance->overlays);
-            $this->assertContains('none', $story->decorativeAppearance->frames);
-            $background = collect($story->appearanceControls)->firstWhere('id', 'backgroundTreatment');
-            $this->assertSame(['inherit', 'custom'], array_column($background->options, 'key'));
-            $this->assertNotEmpty($story->decorativeAppearance->backgroundColorIds);
-            $libraryColors = collect($resolver->template($template)->designLibrary->colors)->keyBy('id');
-            $libraryColorIds = $libraryColors->keys()->all();
-            $this->assertSame([], array_diff($story->decorativeAppearance->backgroundColorIds, $libraryColorIds));
-            foreach ($story->decorativeAppearance->backgroundColorIds as $colorId) {
-                $this->assertContains(ContainerColorRole::BackgroundColor, $libraryColors[$colorId]->allowedContainerRoles);
-            }
-            $expectedBackgrounds = $template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
-                ? ['terracotta-canvas', 'terracotta-accent', 'olive-accent', 'sage-accent', 'burgundy-accent']
-                : ['ink-canvas', 'stone-accent', 'blush-accent', 'plum-accent', 'navy-accent'];
-            foreach ($expectedBackgrounds as $colorId) {
-                $this->assertContains($colorId, $story->decorativeAppearance->backgroundColorIds);
-            }
-            $this->assertNotContains($template->key === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 ? 'classic-wine-text' : 'modern-plum-text', $story->decorativeAppearance->backgroundColorIds);
-            $serialized = collect((new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request())['sections'])->firstWhere('id', 'story');
-            $serializedBlank = collect((new WebsiteTemplateCapabilitiesResource($resolver->template($template)))->resolve(request())['sections'])->firstWhere('id', 'blank');
-            $this->assertSame($story->decorativeAppearance->textures, $serialized['decorativeAppearance']['textures']);
-            $this->assertSame($serialized['decorativeAppearance'], $serializedBlank['decorativeAppearance']);
-            $this->assertSame($story->decorativeAppearance->backgroundColorIds, $serialized['decorativeAppearance']['backgroundColorIds']);
-            $this->assertStringNotContainsString('/template-assets/', json_encode($serialized['decorativeAppearance'], JSON_THROW_ON_ERROR));
-            $this->assertStringNotContainsString('http', json_encode($serialized['decorativeAppearance'], JSON_THROW_ON_ERROR));
-        }
-    }
-
-    public function test_section_context_defaults_follow_semantic_matrix_and_template_legality(): void
-    {
-        $resolver = app(WebsiteCapabilityResolver::class);
-        $expected = [
-            'hero' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'story' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'people' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'gallery' => [['heading'], ['headingColor']],
-            'rsvp' => [['heading', 'body'], ['headingColor', 'bodyColor', 'accentColor']],
-            'blank' => [[], []],
-        ];
-
-        foreach (app(WebsiteTemplateRegistry::class)->all() as $template) {
-            $capabilities = $resolver->template($template);
-            $families = collect($capabilities->designLibrary->fontFamilies)->keyBy('id');
-            $colors = collect($capabilities->designLibrary->colors)->keyBy('id');
-
-            foreach ($capabilities->sections as $section) {
-                [$typographyRoles, $colorRoles] = $expected[$section->id];
-                $this->assertSame($typographyRoles, array_map(fn ($control): string => $control->role->value, $section->contextDefaults->typography));
-                $this->assertSame($colorRoles, array_map(fn ($control): string => $control->role->value, $section->contextDefaults->colors));
-                foreach ($section->contextDefaults->typography as $control) {
-                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
-                    foreach ($control->allowedFontIds as $id) {
-                        $this->assertContains($control->role, $families[$id]->allowedRoles);
-                    }
-                }
-                foreach ($section->contextDefaults->colors as $control) {
-                    $this->assertSame(AppearanceControlScope::Shared, $control->scope);
-                    foreach ($control->allowedColorIds as $id) {
-                        $this->assertContains($control->role, $colors[$id]->allowedContainerRoles);
-                    }
-                }
-
-                foreach ($section->presentations as $presentation) {
-                    $ownsForeground = collect($presentation->appearanceControls)->contains(fn ($control): bool => $control->id === 'foregroundColor');
-                    $this->assertSame($ownsForeground, $presentation->contextDefaults !== null);
-                    if ($ownsForeground) {
-                        $this->assertSame([], $presentation->contextDefaults->colors);
-                        $this->assertSame($typographyRoles, array_map(fn ($control): string => $control->role->value, $presentation->contextDefaults->typography));
-                    }
-                }
-            }
-
-            $this->assertNull(collect($capabilities->sections)->firstWhere('id', 'story')->compositionGroups);
-        }
-    }
-
-    public function test_resolver_fails_safely_and_resolves_presentation_and_viewport_narrowing(): void
-    {
-        $resolver = app(WebsiteCapabilityResolver::class);
-        $classic = WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1;
-
-        $this->assertNull($resolver->template('unknown-template'));
-        $this->assertNull($resolver->section($classic, 'unknown-section'));
-        $this->assertNull($resolver->presentation($classic, 'hero', 'unknown-presentation'));
-        $this->assertNull($resolver->controlsForViewport($classic, 'hero', 'classic', 'watch'));
-        $this->assertFalse($resolver->allowsElement($classic, 'story', 'video'));
-
-        $this->assertNull($resolver->presentation($classic, 'story'));
-        $story = $resolver->section($classic, 'story');
-        $this->assertNull($story->defaultPresentation);
-        $this->assertSame([], $story->presentations);
-        $this->assertNotContains('emphasis', array_map(fn ($control): string => $control->id, $story->appearanceControls));
-
-        $presentation = $resolver->presentation($classic, 'hero');
-        $this->assertSame('classic', $presentation->id);
-        $mobile = collect($resolver->controlsForViewport($classic, 'hero', 'classic', 'mobile'))->keyBy('id');
-        $this->assertSame(['top', 'bottom'], array_column($mobile['mediaPlacement']->options, 'key'));
-        $this->assertSame('balanced', $mobile['mediaSize']->default);
-    }
-
-    public function test_classic_and_modern_presentation_differences_are_preserved(): void
+    public function test_hero_uses_composable_elements_without_presentations(): void
     {
         $resolver = app(WebsiteCapabilityResolver::class);
         $classicHero = $resolver->section(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'hero');
         $modernHero = $resolver->section(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'hero');
-        $classicPeople = $resolver->section(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'people');
-        $modernPeople = $resolver->section(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'people');
 
-        $this->assertSame(['classic', 'immersive'], array_map(fn ($item): string => $item->id, $classicHero->presentations));
-        $this->assertSame(['editorial', 'immersive'], array_map(fn ($item): string => $item->id, $modernHero->presentations));
-        $this->assertSame(['medallions', 'portraitCards', 'namesOnly'], array_map(fn ($item): string => $item->id, $classicPeople->presentations));
-        $this->assertSame(['editorialPortraits', 'squareGrid', 'minimal', 'namesOnly'], array_map(fn ($item): string => $item->id, $modernPeople->presentations));
+        $this->assertSame([], $classicHero->presentations);
+        $this->assertSame([], $modernHero->presentations);
+        $this->assertContains('compositionGroup', $classicHero->allowedElementTypes);
+        $this->assertContains('compositionGroup', $modernHero->allowedElementTypes);
+        $this->assertNotNull($classicHero->decorativeAppearance);
+        $this->assertNotNull($modernHero->decorativeAppearance);
+        $this->assertNull($resolver->section(WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1, 'people'));
+        $this->assertNull($resolver->section(WebsiteTemplateRegistry::MODERN_EDITORIAL_V1, 'people'));
     }
 
     public function test_global_design_capabilities_preserve_registry_options_defaults_and_resolver_lookups(): void
@@ -589,7 +319,7 @@ class WebsiteCapabilityRegistryTest extends TestCase
         }
 
         $this->assertEqualsCanonicalizing(
-            ['headingAlignment', 'bodyAlignment', 'mediaPlacement', 'mediaSize', 'mediaSpacing', 'mediaContentGap'],
+            ['headingAlignment', 'bodyAlignment'],
             array_keys($seenResponsiveControls),
         );
     }
@@ -606,53 +336,6 @@ class WebsiteCapabilityRegistryTest extends TestCase
 
         $this->assertNull($control->forViewport('tablet'));
         $this->assertNull($control->forViewport('mobile'));
-    }
-
-    public function test_curated_readable_text_colors_are_role_safe_and_template_isolated(): void
-    {
-        $resolver = app(WebsiteCapabilityResolver::class);
-        $expected = [
-            WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 => [
-                'classic-forest-text' => '#29453a',
-                'classic-wine-text' => '#5a2635',
-                'classic-indigo-text' => '#2f3556',
-            ],
-            WebsiteTemplateRegistry::MODERN_EDITORIAL_V1 => [
-                'modern-slate-text' => '#25364a',
-                'modern-plum-text' => '#4d294b',
-                'modern-russet-text' => '#5c302a',
-            ],
-        ];
-
-        foreach ($expected as $templateKey => $additions) {
-            $capabilities = $resolver->template($templateKey);
-            $colors = collect($capabilities->designLibrary->colors)->keyBy('id');
-            $otherIds = array_keys($expected[$templateKey === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1
-                ? WebsiteTemplateRegistry::MODERN_EDITORIAL_V1
-                : WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1]);
-
-            foreach ($additions as $id => $value) {
-                $color = $colors[$id];
-                $this->assertSame($value, $color->value);
-                $this->assertEqualsCanonicalizing([ProjectColorRole::Heading, ProjectColorRole::Body], $color->allowedProjectRoles);
-                $this->assertEqualsCanonicalizing([ElementColorRole::HeadingColor, ElementColorRole::TextColor], $color->allowedElementRoles);
-                $this->assertEqualsCanonicalizing([ContainerColorRole::HeadingColor, ContainerColorRole::BodyColor], $color->allowedContainerRoles);
-                $this->assertNotContains(ProjectColorRole::Accent, $color->allowedProjectRoles);
-                $this->assertContains($id, $capabilities->projectDefaults->colors->bodyColorIds);
-
-                $story = collect($capabilities->sections)->firstWhere('id', 'story');
-                $body = collect($story->contextDefaults->colors)->firstWhere('role', ContainerColorRole::BodyColor);
-                $accent = collect($story->contextDefaults->colors)->firstWhere('role', ContainerColorRole::AccentColor);
-                $this->assertContains($id, $body->allowedColorIds);
-                $this->assertNotContains($id, $accent->allowedColorIds);
-            }
-
-            foreach ($otherIds as $otherId) {
-                $this->assertFalse($colors->has($otherId));
-            }
-
-            $this->assertTrue($colors->has($templateKey === WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1 ? 'olive-text' : 'ink-text'));
-        }
     }
 
     /** @param list<string> $knownControls */

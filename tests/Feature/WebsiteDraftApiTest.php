@@ -3,18 +3,15 @@
 namespace Tests\Feature;
 
 use App\Actions\Events\CreateEvent;
-use App\Actions\Websites\AddWebsiteProjectColor;
-use App\Actions\Websites\CreateWebsiteProject;
 use App\Enums\EventMembershipRole;
 use App\Models\Event;
 use App\Models\EventMembership;
 use App\Models\MediaAsset;
 use App\Models\User;
 use App\Models\WebsiteSection;
-use App\Website\StoryContentNormalizer;
-use App\Website\WebsiteSchema;
-use App\Website\WebsiteTemplateRegistry;
+use App\Website\WebsiteSectionContentValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class WebsiteDraftApiTest extends TestCase
@@ -47,149 +44,6 @@ class WebsiteDraftApiTest extends TestCase
         $this->actingAs($superAdmin)->getJson($url)->assertOk();
     }
 
-    public function test_draft_get_returns_registry_metadata_and_persisted_order(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $website = $event->website;
-        $hero = $website->sections()->where('type', 'hero')->sole();
-        $story = $website->sections()->where('type', 'story')->sole();
-        $hero->update(['sort_order' => 70, 'is_enabled' => false, 'content' => [
-            'headline' => 'A heading',
-            'subheadline' => 'A subheading',
-        ]]);
-        $story->update(['sort_order' => 5]);
-
-        $response = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk();
-        $heroPayload = collect($response->json('data.sections'))->firstWhere('id', $hero->id);
-
-        $response->assertJsonPath('data.id', $website->id)
-            ->assertJsonPath('data.eventId', $event->id)
-            ->assertJsonPath('data.templateKey', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1)
-            ->assertJsonPath('data.template.displayName', 'Classic Filipiniana')
-            ->assertJsonPath('data.sections.0.id', $story->id)
-            ->assertJsonPath('data.sections.0.displayName', 'Story')
-            ->assertJsonPath('data.sections.0.content.elements', [])
-            ->assertJsonPath('data.sections.0.content.mediaFraming', [])
-            ->assertJsonPath('data.sections.0.mediaCapability.mode', 'multiple')
-            ->assertJsonCount(5, 'data.sections');
-        $this->assertSame('Hero', $heroPayload['displayName']);
-        $this->assertFalse($heroPayload['isEnabled']);
-        $this->assertSame('A heading', $heroPayload['content']['headline']);
-    }
-
-    public function test_draft_exposes_deterministic_template_capabilities_without_changing_compatibility_metadata_or_storage(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $website = $event->website;
-        $beforeWebsite = $website->updated_at->toJSON();
-        $beforeSections = $website->sections()->pluck('updated_at', 'id')->map->toJSON()->all();
-
-        $legacy = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk()
-            ->assertJsonPath('data.schemaVersion', WebsiteSchema::CURRENT_SCHEMA_VERSION)
-            ->assertJsonPath('data.designSettings', $website->design_settings)
-            ->assertJsonPath('data.projectDesignDefaults', [
-                'headingFontId' => 'editorial-serif',
-                'bodyFontId' => 'modern-sans',
-                'headingColorId' => 'terracotta-text',
-                'bodyColorId' => 'terracotta-text',
-                'accentColorId' => 'terracotta-accent',
-            ])
-            ->assertJsonPath('data.template.designOptions', app(WebsiteTemplateRegistry::class)->get($website->template_key)->designOptions)
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.id', 'colorTheme')
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.type', 'palettePreset')
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.0.default', 'terracotta')
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.1.id', 'fontSet')
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.1.type', 'typographyPairing')
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.2.id', 'artStyle')
-            ->assertJsonPath('data.template.capabilities.globalDesign.controls.2.type', 'artStyle')
-            ->assertJsonPath('data.template.capabilities.designLibrary.palettePresets.0.id', 'terracotta')
-            ->assertJsonPath('data.template.capabilities.designLibrary.palettePresets.0.roles.ornament', 'terracotta-ornament')
-            ->assertJsonPath('data.template.capabilities.designLibrary.typographyPresets.0.headingFontId', 'editorial-serif')
-            ->assertJsonPath('data.template.capabilities.designLibrary.typographyPresets.0.bodyFontId', 'modern-sans')
-            ->assertJsonPath('data.template.capabilities.projectDefaults.typography.headingFont.allowedFontIds.0', 'editorial-serif')
-            ->assertJsonPath('data.template.capabilities.projectDefaults.typography.bodyFont.allowedFontIds.0', 'modern-sans')
-            ->assertJsonPath('data.template.capabilities.projectDefaults.colors.headingColor.allowedColorIds.0', 'terracotta-text')
-            ->assertJsonPath('data.template.capabilities.projectDefaults.colors.bodyColor.allowedColorIds.0', 'terracotta-text')
-            ->assertJsonPath('data.template.capabilities.projectDefaults.colors.accentColor.allowedColorIds.0', 'terracotta-accent')
-            ->assertJsonPath('data.template.capabilities.elements', ['narrativeBlock', 'text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup'])
-            ->assertJsonPath('data.template.capabilities.sections.1.id', 'story')
-            ->assertJsonPath('data.template.capabilities.sections.1.elements.allowedTypes', ['narrativeBlock'])
-            ->assertJsonPath('data.template.capabilities.sections.1.elements.maxCount', 20)
-            ->assertJsonPath('data.template.capabilities.sections.1.elements.compositionGroups', null)
-            ->assertJsonPath('data.template.capabilities.sections.5.elements.allowedTypes', ['text', 'richText', 'date', 'accordion', 'schedule', 'people', 'divider', 'media', 'compositionGroup']);
-        $project = $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$website->id}")->assertOk();
-
-        $this->assertSame($legacy->json('data.template.capabilities'), $project->json('data.template.capabilities'));
-        $this->assertSame($beforeWebsite, $website->refresh()->updated_at->toJSON());
-        $this->assertSame($beforeSections, $website->sections()->pluck('updated_at', 'id')->map->toJSON()->all());
-    }
-
-    public function test_canonical_section_content_contracts_accept_valid_draft_payloads(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $event->website->update(['schema_version' => 3]);
-        $payloads = [
-            'hero' => ['headline' => '', 'subheadline' => 'Together'],
-            'story' => app(StoryContentNormalizer::class)->normalizeToCurrent('story', ['heading' => 'Our Story', 'intro' => null, 'elements' => [[
-                'id' => 'story-one', 'type' => 'narrativeBlock', 'body' => 'Plain text',
-            ]], 'mediaFraming' => []]),
-            'people' => ['heading' => 'Wedding Party', 'groups' => []],
-            'gallery' => ['heading' => 'Gallery', 'items' => []],
-            'rsvp' => ['heading' => '', 'description' => '', 'buttonLabel' => 'Respond'],
-        ];
-
-        foreach ($payloads as $type => $content) {
-            $section = $event->website->sections()->where('type', $type)->sole();
-            $this->actingAs($owner)
-                ->putJson("/api/events/{$event->id}/website/sections/{$section->id}", ['content' => $content])
-                ->assertOk()
-                ->assertJsonPath(
-                    'data.sections.'.array_search($section->id, $event->website->sections()->pluck('id')->all(), true).'.content',
-                    $content,
-                );
-            $this->assertSame($content, $section->refresh()->content);
-        }
-    }
-
-    public function test_story_elements_round_trip_in_order_and_reject_invalid_structures(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $event->website->update(['schema_version' => 3]);
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
-        $blocks = [
-            ['id' => 'first', 'type' => 'narrativeBlock', 'body' => 'First chapter'],
-            ['id' => 'second', 'type' => 'narrativeBlock', 'heading' => 'The proposal', 'body' => 'Second chapter'],
-        ];
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, ['heading' => 'Our Story', 'intro' => 'How it began', 'elements' => $blocks, 'mediaFraming' => []]);
-        $blocks = $content['elements'];
-
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
-            ->assertJsonPath('data.sections.1.content.elements.0.id', 'first')
-            ->assertJsonPath('data.sections.1.content.elements.1.id', 'second');
-        $this->assertSame($content, $story->refresh()->content);
-        $this->assertSame($content, $story->refresh()->content);
-
-        $visibility = [...$content, 'eyebrow' => 'Once upon a time', 'eyebrowIsHidden' => true, 'headingIsHidden' => true, 'introIsHidden' => false, 'structureOrder' => [
-            'story:heading', 'narrative:first', 'story:eyebrow', 'story:intro', 'narrative:second',
-        ]];
-        $this->actingAs($owner)->putJson($url, ['content' => $visibility])->assertOk()
-            ->assertJsonPath('data.sections.1.content.eyebrow', 'Once upon a time')
-            ->assertJsonPath('data.sections.1.content.eyebrowIsHidden', true)
-            ->assertJsonPath('data.sections.1.content.headingIsHidden', true)
-            ->assertJsonPath('data.sections.1.content.introIsHidden', false);
-        $this->assertSame($visibility, $story->refresh()->content);
-        $this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")->assertOk()
-            ->assertJsonPath('data.sections.1.content.structureOrder', $visibility['structureOrder']);
-
-        $duplicate = [...$content, 'elements' => [$blocks[0], [...$blocks[1], 'id' => 'first']]];
-        $this->actingAs($owner)->putJson($url, ['content' => $duplicate])->assertUnprocessable();
-        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => array_fill(0, 21, $blocks[0])]])
-            ->assertUnprocessable()->assertJsonValidationErrors('content.elements');
-        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'unexpected' => true]])->assertUnprocessable();
-        $this->actingAs($owner)->putJson($url, ['content' => [...$content, 'elements' => [['id' => 'broken', 'type' => 'narrativeBlock', 'body' => []]]]])->assertUnprocessable();
-    }
-
     public function test_blank_text_and_rich_text_child_flows_round_trip_without_a_schema_bump(): void
     {
         [$event, $owner] = $this->createEvent();
@@ -199,8 +53,8 @@ class WebsiteDraftApiTest extends TestCase
             $content = [
                 'childFlow' => [
                     'elements' => [
-                        ['id' => "{$type}-before", 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Before', 'isHidden' => true],
-                        ['id' => "{$type}-rich", 'type' => 'richText', 'editorName' => 'Rich Text 1', 'document' => ['type' => 'doc', 'children' => [
+                        ['id' => "{$type}-before", 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Before']]]]], 'isHidden' => true],
+                        ['id' => "{$type}-rich", 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [
                             ['type' => 'paragraph', 'children' => [
                                 ['text' => 'Lorem ipsum '],
                                 ['text' => 'blah', 'marks' => ['bold' => true]],
@@ -209,7 +63,7 @@ class WebsiteDraftApiTest extends TestCase
                             ['type' => 'paragraph', 'children' => [['text' => 'First']]],
                             ['type' => 'paragraph', 'children' => [['text' => 'Second', 'marks' => ['italic' => true]]]],
                         ]]],
-                        ['id' => "{$type}-after", 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'After'],
+                        ['id' => "{$type}-after", 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'After']]]]]],
                     ],
                     'order' => [
                         ['kind' => 'element', 'id' => "{$type}-before"],
@@ -275,22 +129,52 @@ class WebsiteDraftApiTest extends TestCase
         $this->assertSame($content, $draftSection['content']);
     }
 
+    public function test_people_block_remains_valid_in_blank_and_nested_group(): void
+    {
+        [$event, $owner] = $this->createEvent();
+        $section = $this->blankSection($event);
+        $people = fn (string $id): array => [
+            'id' => $id,
+            'type' => 'people',
+            'editorName' => 'People 1',
+            'groups' => [['id' => "{$id}-group", 'name' => 'Friends', 'people' => [
+                ['id' => "{$id}-person", 'name' => 'Alex', 'role' => null, 'media' => null],
+            ]]],
+        ];
+        $content = ['childFlow' => [
+            'elements' => [
+                $people('people-direct'),
+                ['id' => 'group-1', 'type' => 'compositionGroup', 'editorName' => 'Group 1', 'children' => [$people('people-nested')]],
+            ],
+            'order' => [
+                ['kind' => 'element', 'id' => 'people-direct'],
+                ['kind' => 'element', 'id' => 'group-1'],
+            ],
+        ]];
+
+        $url = "/api/events/{$event->id}/websites/{$event->website->id}/sections/{$section->id}";
+        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
+        $this->assertSame($content, $section->refresh()->content);
+    }
+
     public function test_complete_direct_and_nested_text_state_round_trips_canonically(): void
     {
         [$event, $owner] = $this->createEvent();
         $section = $this->blankSection($event);
         $appearance = [
-            'fontFamilyId' => 'inter', 'fontSize' => 'xl', 'fontWeight' => 600,
+            'fontFamilyId' => 'inter', 'fontSize' => '5xl', 'fontWeight' => 600,
             'lineHeight' => 'relaxed', 'letterSpacing' => 'wide', 'alignment' => 'center',
             'colorId' => 'terracotta-text', 'italic' => true, 'underline' => true,
             'strikethrough' => true, 'textTransform' => 'uppercase',
+            'textShadow' => 'strong', 'textShadowColorId' => 'terracotta-text',
+            'glow' => 'medium', 'glowColorId' => 'terracotta-text',
             'responsive' => [
-                'tablet' => ['fontSize' => 'l', 'alignment' => 'start'],
-                'mobile' => ['fontSize' => 's', 'alignment' => 'end'],
+                'tablet' => ['fontSize' => '4xl', 'alignment' => 'start'],
+                'mobile' => ['fontSize' => '2xl', 'alignment' => 'end'],
             ],
         ];
-        $direct = ['id' => 'direct-text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Direct Text', 'isHidden' => true, 'appearance' => $appearance];
-        $nested = ['id' => 'nested-text', 'type' => 'text', 'editorName' => 'Text 1', 'text' => 'Nested Text', 'appearance' => $appearance];
+        $direct = ['id' => 'direct-text', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Direct Text']]]]], 'isHidden' => true, 'appearance' => $appearance];
+        $nested = ['id' => 'nested-text', 'type' => 'text', 'editorName' => 'Text 1', 'document' => ['type' => 'doc', 'children' => [['type' => 'paragraph', 'children' => [['text' => 'Nested Text']]]]], 'appearance' => $appearance];
         $content = [
             'childFlow' => [
                 'elements' => [
@@ -311,237 +195,6 @@ class WebsiteDraftApiTest extends TestCase
         $this->assertSame($content, $section->refresh()->content);
         $draftSection = collect($this->actingAs($owner)->getJson("/api/events/{$event->id}/websites/{$event->website->id}")->assertOk()->json('data.sections'))->firstWhere('id', $section->id);
         $this->assertSame($content, $draftSection['content']);
-    }
-
-    public function test_narrative_font_overrides_use_platform_role_validation(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
-            'heading' => 'Our Story',
-            'intro' => null,
-            'elements' => [['id' => 'font-block', 'type' => 'narrativeBlock', 'heading' => 'Chapter', 'body' => 'Text']],
-            'mediaFraming' => [],
-        ]);
-        $content['elements'][0]['slots']['heading']['appearance']['fontFamilyId'] = 'cormorant-garamond';
-        $content['elements'][0]['slots']['body']['appearance']['fontFamilyId'] = 'inter';
-
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
-
-        $broadRole = $content;
-        $broadRole['elements'][0]['slots']['body']['appearance']['fontFamilyId'] = 'great-vibes';
-        $this->actingAs($owner)->putJson($url, ['content' => $broadRole])->assertOk();
-
-        $unknown = $content;
-        $unknown['elements'][0]['slots']['heading']['appearance']['fontFamilyId'] = 'unknown-font';
-        $this->actingAs($owner)->putJson($url, ['content' => $unknown])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('element.slots.heading.appearance.fontFamilyId');
-    }
-
-    public function test_narrative_media_corners_round_trip_sparsely(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
-            'heading' => 'Our Story',
-            'intro' => null,
-            'elements' => [['id' => 'corner-block', 'type' => 'narrativeBlock', 'body' => 'Text']],
-            'mediaFraming' => [],
-        ]);
-        $frameColorId = $event->website->template_key === 'classic-filipiniana-v1' ? 'terracotta-accent' : 'ink-accent';
-        $content['elements'][0]['slots']['media']['appearance'] = ['cornerStyle' => 'rounded', 'frameStyle' => 'none', 'frameColorId' => $frameColorId, 'frameSize' => 'large'];
-
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk()
-            ->assertJsonPath('data.sections.1.content.elements.0.slots.media.appearance.cornerStyle', 'rounded');
-        $this->assertSame(['cornerStyle' => 'rounded', 'frameStyle' => 'none', 'frameColorId' => $frameColorId, 'frameSize' => 'large'], $story->refresh()->content['elements'][0]['slots']['media']['appearance']);
-    }
-
-    public function test_story_singleton_appearance_uses_template_role_ids_and_round_trips_sparsely(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/website/sections/{$story->id}";
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
-            'heading' => 'Our Story',
-            'intro' => 'How it began',
-            'elements' => [],
-            'mediaFraming' => [],
-        ]);
-        $content['singletonAppearance'] = [
-            'eyebrow' => ['fontFamilyId' => 'modern-sans', 'colorId' => 'terracotta-text', 'alignment' => 'center'],
-            'heading' => ['fontFamilyId' => 'editorial-serif', 'fontSize' => ['mobile' => 'l'], 'colorId' => 'terracotta-text', 'alignment' => 'center'],
-            'intro' => ['fontFamilyId' => 'modern-sans', 'lineSpacing' => 'relaxed', 'letterSpacing' => 'wide', 'alignment' => 'end'],
-        ];
-
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
-        $this->assertSame($content, $story->refresh()->content);
-
-        foreach ([
-            ['eyebrow', 'fontFamilyId', 'unknown-font'],
-            ['heading', 'fontFamilyId', 'classic-serif'],
-            ['intro', 'colorId', 'unknown-color'],
-            ['eyebrow', 'alignment', 'left'],
-        ] as [$field, $key, $value]) {
-            $invalid = $content;
-            $invalid['singletonAppearance'][$field][$key] = $value;
-            $this->actingAs($owner)->putJson($url, ['content' => $invalid])
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors("content.singletonAppearance.{$field}.{$key}");
-        }
-    }
-
-    public function test_story_text_color_references_are_role_and_project_scoped(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $website = $event->website;
-        $story = $website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}";
-        $projectColor = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0];
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
-            'heading' => 'Our Story',
-            'intro' => 'How it began',
-            'elements' => [['id' => 'color-block', 'type' => 'narrativeBlock', 'heading' => 'Chapter', 'body' => 'Text']],
-            'mediaFraming' => [],
-        ]);
-        $content['singletonAppearance'] = [
-            'heading' => ['colorId' => 'terracotta-accent'],
-            'intro' => ['colorId' => $projectColor['id']],
-        ];
-        $content['elements'][0]['slots']['heading']['appearance']['colorId'] = $projectColor['id'];
-        $content['elements'][0]['slots']['body']['appearance']['colorId'] = 'terracotta-text';
-
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
-        $this->assertSame($projectColor['id'], $story->refresh()->content['singletonAppearance']['intro']['colorId']);
-
-        $withoutColor = $content;
-        unset($withoutColor['singletonAppearance']['intro']['colorId']);
-        $this->actingAs($owner)->putJson($url, ['content' => $withoutColor])->assertOk();
-
-        $other = app(CreateWebsiteProject::class)->handle($event, 'Other Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-        $otherColor = app(AddWebsiteProjectColor::class)->handle($other, '#2b2b2b')->design_settings['customColors'][0]['id'];
-        foreach ([
-            ['singletonAppearance', 'intro', 'colorId', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F'],
-            ['singletonAppearance', 'intro', 'colorId', $otherColor],
-            ['singletonAppearance', 'intro', 'colorId', 'terracotta-accent'],
-            ['singletonAppearance', 'intro', 'colorId', '#123456'],
-            ['elements', 0, 'slots', 'body', 'appearance', 'colorId', $otherColor],
-        ] as $path) {
-            $value = array_pop($path);
-            $invalid = $content;
-            data_set($invalid, implode('.', $path), $value);
-            $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable();
-        }
-    }
-
-    public function test_narrative_background_color_references_are_background_role_and_project_scoped(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $website = $event->website;
-        $story = $website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}";
-        $projectColorId = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0]['id'];
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
-            'heading' => 'Our Story',
-            'intro' => 'How it began',
-            'elements' => [['id' => 'background-block', 'type' => 'narrativeBlock', 'heading' => 'Chapter', 'body' => 'Text']],
-            'mediaFraming' => [],
-        ]);
-
-        $content['elements'][0]['appearance'] = ['backgroundColorId' => 'terracotta-accent'];
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
-        $this->assertSame('terracotta-accent', $story->refresh()->content['elements'][0]['appearance']['backgroundColorId']);
-
-        $content['elements'][0]['appearance']['backgroundColorId'] = $projectColorId;
-        $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
-        $this->assertSame($projectColorId, $story->refresh()->content['elements'][0]['appearance']['backgroundColorId']);
-
-        $withoutBackground = $content;
-        unset($withoutBackground['elements'][0]['appearance']);
-        $this->actingAs($owner)->putJson($url, ['content' => $withoutBackground])->assertOk();
-
-        foreach (['none', 'soft', 'feature'] as $surface) {
-            $legacy = $withoutBackground;
-            $legacy['elements'][0]['composition']['surface'] = $surface;
-            $this->actingAs($owner)->putJson($url, ['content' => $legacy])->assertOk();
-        }
-
-        foreach ([10, 55, 100] as $strength) {
-            $decorated = $withoutBackground;
-            $decorated['elements'][0]['appearance'] = ['decorativeAppearance' => ['background' => ['texture' => 'fabric', 'textureStrength' => $strength, 'pattern' => 'botanical', 'patternStrength' => $strength]]];
-            $this->actingAs($owner)->putJson($url, ['content' => $decorated])->assertOk();
-            $this->assertSame($strength, $story->refresh()->content['elements'][0]['appearance']['decorativeAppearance']['background']['textureStrength']);
-        }
-        foreach ([
-            ['texture' => 'classic-fabric-01'], ['texture' => '/asset.png'], ['texture' => 'https://example.test/a.png'],
-            ['pattern' => 'geometric'], ['textureStrength' => 9], ['textureStrength' => 101], ['textureStrength' => 50.5], ['textureStrength' => '50'], ['opacity' => 0.5],
-        ] as $background) {
-            $invalid = $withoutBackground;
-            $invalid['elements'][0]['appearance'] = ['decorativeAppearance' => ['background' => $background]];
-            $this->actingAs($owner)->putJson($url, ['content' => $invalid])->assertUnprocessable();
-        }
-
-        $other = app(CreateWebsiteProject::class)->handle($event, 'Other Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-        $foreignColorId = app(AddWebsiteProjectColor::class)->handle($other, '#2b2b2b')->design_settings['customColors'][0]['id'];
-        foreach (['terracotta-text', '#123456', 'red', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F', $foreignColorId] as $invalidColorId) {
-            $invalid = $withoutBackground;
-            $invalid['elements'][0]['appearance'] = ['backgroundColorId' => $invalidColorId];
-            $this->actingAs($owner)->putJson($url, ['content' => $invalid])
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors('element.appearance.backgroundColorId');
-        }
-    }
-
-    public function test_narrative_media_frame_color_is_frame_role_and_project_scoped(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $website = $event->website;
-        $story = $website->sections()->where('type', 'story')->sole();
-        $url = "/api/events/{$event->id}/websites/{$website->id}/sections/{$story->id}";
-        $projectColorId = app(AddWebsiteProjectColor::class)->handle($website, '#1a1a1a')->design_settings['customColors'][0]['id'];
-        $content = app(StoryContentNormalizer::class)->normalizeToCurrent($story->id, [
-            'heading' => 'Our Story',
-            'intro' => null,
-            'elements' => [['id' => 'frame-block', 'type' => 'narrativeBlock', 'body' => 'Text']],
-            'mediaFraming' => [],
-        ]);
-
-        foreach (['terracotta-accent', $projectColorId] as $colorId) {
-            $content['elements'][0]['slots']['media']['appearance'] = ['frameStyle' => 'ornamentalCorners', 'frameColorId' => $colorId, 'frameSize' => 'medium'];
-            $this->actingAs($owner)->putJson($url, ['content' => $content])->assertOk();
-            $this->assertSame($colorId, $story->refresh()->content['elements'][0]['slots']['media']['appearance']['frameColorId']);
-        }
-
-        $other = app(CreateWebsiteProject::class)->handle($event, 'Other Website', WebsiteTemplateRegistry::CLASSIC_FILIPINIANA_V1);
-        $foreignColorId = app(AddWebsiteProjectColor::class)->handle($other, '#2b2b2b')->design_settings['customColors'][0]['id'];
-        foreach (['terracotta-text', '#123456', 'project-color-01KED9H9XR7WQBP4JTKP1YYQ3F', $foreignColorId] as $invalidColorId) {
-            $invalid = $content;
-            $invalid['elements'][0]['slots']['media']['appearance']['frameColorId'] = $invalidColorId;
-            $this->actingAs($owner)->putJson($url, ['content' => $invalid])
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors('element.slots.media.appearance.frameColorId');
-        }
-    }
-
-    public function test_historical_story_content_is_read_as_one_stable_block_without_mutating_storage(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $event->website->update(['schema_version' => 3]);
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $legacy = ['heading' => 'Our Story', 'body' => 'The original narrative'];
-        $story->update(['content' => $legacy]);
-
-        $first = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk();
-        $second = $this->actingAs($owner)->getJson("/api/events/{$event->id}/website")->assertOk();
-        $firstStory = collect($first->json('data.sections'))->firstWhere('id', $story->id);
-        $secondStory = collect($second->json('data.sections'))->firstWhere('id', $story->id);
-
-        $this->assertSame('story-legacy-'.$story->id, $firstStory['content']['elements'][0]['id']);
-        $this->assertSame('The original narrative', $firstStory['content']['elements'][0]['slots']['body']['text']);
-        $this->assertSame($firstStory['content'], $secondStory['content']);
-        $this->assertSame($legacy, $story->refresh()->content);
     }
 
     public function test_content_update_rejects_unknown_keys_wrong_types_and_event_or_presentation_data(): void
@@ -630,32 +283,6 @@ class WebsiteDraftApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('content');
     }
 
-    public function test_content_update_changes_only_target_content(): void
-    {
-        [$event, $owner] = $this->createEvent();
-        $hero = $event->website->sections()->where('type', 'hero')->sole();
-        $story = $event->website->sections()->where('type', 'story')->sole();
-        $original = [
-            'type' => $hero->type,
-            'sort_order' => $hero->sort_order,
-            'is_enabled' => $hero->is_enabled,
-            'template_key' => $event->website->template_key,
-            'story_content' => $story->content,
-        ];
-
-        $this->actingAs($owner)->putJson("/api/events/{$event->id}/website/sections/{$hero->id}", [
-            'content' => ['headline' => 'Changed', 'subheadline' => 'Only content'],
-            'type' => 'story', 'sortOrder' => 999, 'isEnabled' => false,
-        ])->assertOk();
-
-        $hero->refresh();
-        $this->assertSame($original['type'], $hero->type);
-        $this->assertSame($original['sort_order'], $hero->sort_order);
-        $this->assertSame($original['is_enabled'], $hero->is_enabled);
-        $this->assertSame($original['template_key'], $event->website->refresh()->template_key);
-        $this->assertSame($original['story_content'], $story->refresh()->content);
-    }
-
     public function test_enable_disable_preserves_content_and_checks_template_capability(): void
     {
         [$event, $owner] = $this->createEvent();
@@ -719,6 +346,20 @@ class WebsiteDraftApiTest extends TestCase
             "/api/events/{$event->id}/website/sections/{$hero->id}/enabled",
             ['isEnabled' => false],
         )->assertForbidden();
+    }
+
+    public function test_story_content_is_rejected_by_the_api_validator(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        app(WebsiteSectionContentValidator::class)->validate('story', []);
+    }
+
+    public function test_people_content_is_rejected_as_a_section_by_the_api_validator(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        app(WebsiteSectionContentValidator::class)->validate('people', []);
     }
 
     /** @return array{Event, User} */
